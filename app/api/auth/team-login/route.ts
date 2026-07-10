@@ -95,11 +95,7 @@ export async function POST(request: NextRequest) {
     try {
       const parseAny = (v: unknown) => {
         const obj = v as
-          | { _seconds?: number; toDate?: () => Date }
-          | string
-          | Date
-          | undefined
-          | null;
+          { _seconds?: number; toDate?: () => Date } | string | Date | undefined | null;
         if (!obj) return new Date('invalid');
         if (typeof obj === 'string') return new Date(obj);
         if (obj instanceof Date) return obj;
