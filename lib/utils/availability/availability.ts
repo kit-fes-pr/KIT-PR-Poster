@@ -3,9 +3,7 @@ export type AvailabilitySummary = 'morning' | 'afternoon' | 'both' | 'other';
 export const UNAVAILABLE_SLOT_KEY = 'unavailable' as const;
 export const ALL_AVAILABLE_SLOT_KEY = 'all_available' as const;
 export type AvailabilitySlotKey =
-  | `${string}_${'am' | 'pm'}`
-  | typeof UNAVAILABLE_SLOT_KEY
-  | typeof ALL_AVAILABLE_SLOT_KEY;
+  `${string}_${'am' | 'pm'}` | typeof UNAVAILABLE_SLOT_KEY | typeof ALL_AVAILABLE_SLOT_KEY;
 
 export interface AvailabilitySlotChoice {
   key: AvailabilitySlotKey;
