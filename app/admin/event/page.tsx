@@ -28,14 +28,6 @@ export default function AdminEventIndex() {
     distributionEndDate: string;
   }>({ year: '', eventName: '', distributionStartDate: '', distributionEndDate: '' });
   const [menuEventId, setMenuEventId] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editTarget, setEditTarget] = useState<Record<string, unknown> | null>(null);
-  const [editForm, setEditForm] = useState<{
-    eventName: string;
-    distributionStartDate: string;
-    distributionEndDate: string;
-  }>({ eventName: '', distributionStartDate: '', distributionEndDate: '' });
-  const editingTarget = isEditing ? editTarget : null;
 
   // Close popup menu on outside click
   useEffect(() => {
@@ -141,8 +133,8 @@ export default function AdminEventIndex() {
                       className="absolute inset-0 z-10 rounded-lg"
                       aria-label={`${String(ev.year)} 年度を開く`}
                     />
-                    <div className="relative z-0 flex items-start justify-between gap-3">
-                      <div className="pointer-events-none min-w-0 flex-1">
+                    <div className="pointer-events-none relative z-20 flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
                         <p className="text-base font-semibold">{String(ev.year)} 年度</p>
                         <p className="text-sm text-gray-500">
                           {String(ev.eventName) || '学外配布'} /{' '}
@@ -156,7 +148,7 @@ export default function AdminEventIndex() {
                           })()}
                         </p>
                       </div>
-                      <div className="relative z-20 shrink-0 pointer-events-auto" data-menu-root>
+                      <div className="pointer-events-auto relative z-30 shrink-0" data-menu-root>
                         <button
                           className="px-2 py-1 border rounded text-sm"
                           onClick={(e) => {
@@ -170,7 +162,7 @@ export default function AdminEventIndex() {
                           ≡
                         </button>
                         {menuEventId === ev.id && (
-                          <div className="absolute right-0 mt-2 w-32 bg-white border border-gray-200 rounded shadow-md z-10">
+                          <div className="absolute right-0 z-40 mt-2 w-32 rounded border border-gray-200 bg-white shadow-md">
                             <Link
                               href={`/admin/event/${ev.year}`}
                               className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
@@ -191,34 +183,16 @@ export default function AdminEventIndex() {
                             >
                               配布区域
                             </Link>
-                            <button
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setEditTarget(ev);
-                                const parse = (v: Record<string, unknown>) =>
-                                  (v?._seconds as number)
-                                    ? new Date((v._seconds as number) * 1000)
-                                    : new Date(v as unknown as Date);
-                                const s = ev.distributionStartDate
-                                  ? parse(ev.distributionStartDate as Record<string, unknown>)
-                                  : null;
-                                const endDate = ev.distributionEndDate
-                                  ? parse(ev.distributionEndDate as Record<string, unknown>)
-                                  : null;
-                                setEditForm({
-                                  eventName: String(ev.eventName) || '',
-                                  distributionStartDate: s ? s.toISOString().slice(0, 10) : '',
-                                  distributionEndDate: endDate
-                                    ? endDate.toISOString().slice(0, 10)
-                                    : '',
-                                });
-                                setIsEditing(true);
+                            <Link
+                              href={`/admin/event/${ev.year}/setting`}
+                              className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setMenuEventId(null);
                               }}
                             >
                               編集
-                            </button>
+                            </Link>
                             <button
                               className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                               onClick={async (e) => {
@@ -367,100 +341,6 @@ export default function AdminEventIndex() {
               disabled={!form.year || !form.distributionStartDate}
             >
               作成
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        open={Boolean(editingTarget)}
-        onClose={() => setIsEditing(false)}
-        panelClassName="max-w-md p-6"
-      >
-        <div className="w-full">
-          <h2 className="text-lg font-semibold mb-4">
-            イベントを編集（{String(editingTarget?.year)}年度）
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">イベント名</label>
-              <input
-                type="text"
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                value={editForm.eventName}
-                onChange={(e) => setEditForm({ ...editForm, eventName: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">配布開始日</label>
-                <input
-                  type="date"
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                  value={editForm.distributionStartDate}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      distributionStartDate: e.target.value,
-                      distributionEndDate: editForm.distributionEndDate || e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">配布終了日</label>
-                <input
-                  type="date"
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                  value={editForm.distributionEndDate}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, distributionEndDate: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-          </div>
-          <div className="mt-6 flex justify-end gap-3">
-            <button
-              onClick={() => setIsEditing(false)}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md"
-            >
-              キャンセル
-            </button>
-            <button
-              onClick={async () => {
-                try {
-                  const token = localStorage.getItem('authToken');
-                  const res = await fetch('/api/admin/events', {
-                    method: 'PATCH',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                      id: editingTarget?.id,
-                      eventName: editForm.eventName,
-                      distributionStartDate: editForm.distributionStartDate,
-                      distributionEndDate:
-                        editForm.distributionEndDate || editForm.distributionStartDate,
-                      distributionTimeZone: DEFAULT_TIME_ZONE,
-                    }),
-                  });
-                  const data = await res.json();
-                  if (!res.ok) throw new Error(data.error || '更新に失敗しました');
-                  const { events, latest } = await fetcher('/api/admin/events');
-                  setEvents(events || []);
-                  setLatest(latest || null);
-                  setIsEditing(false);
-                  setEditTarget(null);
-                } catch (error: unknown) {
-                  const message = error instanceof Error ? error.message : '更新に失敗しました';
-                  alert(message);
-                }
-              }}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md"
-            >
-              保存
             </button>
           </div>
         </div>
