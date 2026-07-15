@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 import {
   buildResponseExportRows,
   expandAvailabilitySlotsForStorage,
+  filterEditableFormFieldsForParticipant,
   filterVisibleFormFields,
   formatResponseExportAvailability,
   groupResponseExportRowsByGrade,
@@ -94,6 +95,27 @@ describe('forms utils', () => {
     assert.deepEqual(
       filterVisibleFormFields(fields, '3').map((field) => field.fieldId),
       ['availability', 'carUsage', 'remarks'],
+    );
+  });
+
+  test('filterEditableFormFieldsForParticipant keeps hidden fields with existing answers', () => {
+    const fields = [
+      { fieldId: 'availability' },
+      { fieldId: 'carUsage', visibleFromGrade: 3 },
+      { fieldId: 'remarks' },
+    ];
+
+    assert.deepEqual(
+      filterEditableFormFieldsForParticipant(fields, '2', ['2026-06-01_am'], {
+        carUsage: '運転できる',
+      }).map((field) => field.fieldId),
+      ['availability', 'carUsage', 'remarks'],
+    );
+    assert.deepEqual(
+      filterEditableFormFieldsForParticipant(fields, '2', ['2026-06-01_am'], {}).map(
+        (field) => field.fieldId,
+      ),
+      ['availability', 'remarks'],
     );
   });
 

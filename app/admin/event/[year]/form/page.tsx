@@ -20,7 +20,10 @@ import {
   ALL_AVAILABLE_SLOT_KEY,
 } from '@/lib/utils/availability/availability';
 import { normalizeGrade } from '@/lib/utils/grade/grade';
-import { filterVisibleFormFieldsForParticipant } from '@/lib/utils/forms/forms';
+import {
+  filterEditableFormFieldsForParticipant,
+  filterVisibleFormFieldsForParticipant,
+} from '@/lib/utils/forms/forms';
 import { FormField, FormResponse, ParticipantSurveyResponse, SurveyForm } from '@/types/forms';
 import type { AvailabilitySlotChoice } from '@/lib/utils/availability/availability';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
@@ -1114,10 +1117,11 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
           submitting={editSaving}
           maxWidthClassName="max-w-4xl"
         >
-          {filterVisibleFormFieldsForParticipant(
+          {filterEditableFormFieldsForParticipant(
             currentForm.fields,
             normalizeGrade(editFormData.participantGrade),
             editFormData.availability,
+            editFormData,
           )
             .sort((a, b) => a.order - b.order)
             .map((field) => (

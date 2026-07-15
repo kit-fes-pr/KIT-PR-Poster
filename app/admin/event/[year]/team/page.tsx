@@ -15,7 +15,10 @@ import {
   toggleAvailabilitySelection,
 } from '@/lib/utils/availability/availability';
 import { normalizeGrade } from '@/lib/utils/grade/grade';
-import { filterVisibleFormFieldsForParticipant } from '@/lib/utils/forms/forms';
+import {
+  filterEditableFormFieldsForParticipant,
+  filterVisibleFormFieldsForParticipant,
+} from '@/lib/utils/forms/forms';
 import { LoadingInline } from '@/components/ui/Loading';
 import { Modal } from '@/components/ui/Modal';
 import { MetricCard } from '@/components/ui/MetricCard';
@@ -1645,10 +1648,11 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                       </div>
                     </div>
 
-                    {filterVisibleFormFieldsForParticipant(
+                    {filterEditableFormFieldsForParticipant(
                       currentForm.fields,
                       normalizeGrade(responseEditValues?.participantGrade),
                       responseEditValues?.availability,
+                      responseEditValues,
                     )
                       .slice()
                       .sort((a, b) => a.order - b.order)

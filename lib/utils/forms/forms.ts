@@ -170,6 +170,27 @@ export function filterVisibleFormFieldsForParticipant<
   );
 }
 
+export function hasFormFieldAnswerValue(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim() !== '';
+  return value !== null && value !== undefined;
+}
+
+export function filterEditableFormFieldsForParticipant<
+  T extends { fieldId: string; visibleFromGrade?: number },
+>(
+  fields: T[],
+  participantGrade: unknown,
+  availabilityValue: unknown,
+  answerValues: Record<string, unknown>,
+): T[] {
+  return fields.filter(
+    (field) =>
+      isFormFieldVisibleForParticipant(field, participantGrade, availabilityValue) ||
+      hasFormFieldAnswerValue(answerValues[field.fieldId]),
+  );
+}
+
 export function filterVisibleFormFields<T extends { visibleFromGrade?: number }>(
   fields: T[],
   participantGrade: unknown,

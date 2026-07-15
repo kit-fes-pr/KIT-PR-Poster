@@ -6,6 +6,7 @@ import { validateAvailabilitySelection } from '@/lib/utils/availability/availabi
 import { getAvailabilityDateSlotKeys } from '@/lib/utils/availability/availability';
 import {
   expandAvailabilitySlotsForStorage,
+  filterEditableFormFieldsForParticipant,
   filterVisibleFormFieldsForParticipant,
   prepareAnswersForStorage,
   resolveResponseAvailabilitySlots,
@@ -94,10 +95,17 @@ export async function PATCH(
     const availableSlots = effectiveParticipantData
       ? resolveResponseAvailabilitySlots(answers, effectiveParticipantData.availableSlots)
       : [];
-    const visibleFields = filterVisibleFormFieldsForParticipant(
+    const existingAnswers = Array.isArray(responseData.answers)
+      ? (responseData.answers as FormAnswer[])
+      : [];
+    const answerValues = Object.fromEntries(
+      [...existingAnswers, ...answers].map((answer) => [answer.fieldId, answer.value]),
+    );
+    const visibleFields = filterEditableFormFieldsForParticipant(
       formData.fields,
       gradeNum,
       availableSlots,
+      answerValues,
     );
     const visibleFieldIds = new Set(visibleFields.map((field) => field.fieldId));
 
