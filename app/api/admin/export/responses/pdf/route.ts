@@ -70,17 +70,22 @@ function normalizeRows(value: unknown): ResponseExportRow[] {
 async function loadFontEntry(): Promise<FontEntry> {
   if (!fontEntryCache) {
     fontEntryCache = (async () => {
-      const fontPath = path.join(
-        process.cwd(),
-        'node_modules',
-        '@expo-google-fonts',
-        'noto-sans-jp',
-        '400Regular',
-        'NotoSansJP_400Regular.ttf',
-      );
-      return {
-        bytes: await readFile(fontPath),
-      };
+      try {
+        const fontPath = path.join(
+          process.cwd(),
+          'node_modules',
+          '@expo-google-fonts',
+          'noto-sans-jp',
+          '400Regular',
+          'NotoSansJP_400Regular.ttf',
+        );
+        return {
+          bytes: await readFile(fontPath),
+        };
+      } catch (error) {
+        fontEntryCache = null;
+        throw error;
+      }
     })();
   }
 
