@@ -5,7 +5,7 @@ import {
   buildAvailabilitySlotChoices,
   normalizeAvailabilitySlots,
 } from '@/lib/utils/availability/availability';
-import { buildDeletedTeamLogData } from '@/lib/utils/team/team-api';
+import { buildDeletedTeamLogData, shouldBlockTeamDeletion } from '@/lib/utils/team/team-api';
 import {
   buildTeamRouteUpdatePayload,
   normalizeTeamRouteAuthHeader,
@@ -161,6 +161,26 @@ export async function DELETE(
     }
 
     const teamData = doc.data();
+    const teamCode = typeof teamData?.teamCode === 'string' ? teamData.teamCode.trim() : '';
+    const eventId = typeof teamData?.eventId === 'string' ? teamData.eventId.trim() : '';
+
+    if (teamCode) {
+      const storesSnap = eventId
+        ? await adminDb
+            .collection('stores')
+            .where('eventId', '==', eventId)
+            .where('distributedBy', '==', teamCode)
+            .limit(1)
+            .get()
+        : await adminDb.collection('stores').where('distributedBy', '==', teamCode).limit(1).get();
+
+      if (shouldBlockTeamDeletion({ distributionStoresExist: !storesSnap.empty })) {
+        return NextResponse.json(
+          { error: '配布記録が存在するため、このチームは削除できません' },
+          { status: 409 },
+        );
+      }
+    }
 
     // バッチ処理で削除ログとチーム削除を実行
     const batch = adminDb.batch();

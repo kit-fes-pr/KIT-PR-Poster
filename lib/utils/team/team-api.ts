@@ -145,3 +145,7 @@ export function buildDeletedTeamLogData(input: {
     deletedBy: input.deletedBy,
   };
 }
+
+export function shouldBlockTeamDeletion(params: { distributionStoresExist: boolean }): boolean {
+  return params.distributionStoresExist;
+}

@@ -6,6 +6,7 @@ import {
   buildTeamUpdateData,
   normalizeTeamYear,
   resolveTeamAreaSelection,
+  shouldBlockTeamDeletion,
 } from '../../lib/utils/team/team-api';
 
 describe('team api utils', () => {
@@ -136,5 +137,10 @@ describe('team api utils', () => {
         deletedBy: 'admin-1',
       },
     );
+  });
+
+  test('shouldBlockTeamDeletion blocks teams with distribution stores', () => {
+    assert.equal(shouldBlockTeamDeletion({ distributionStoresExist: true }), true);
+    assert.equal(shouldBlockTeamDeletion({ distributionStoresExist: false }), false);
   });
 });
