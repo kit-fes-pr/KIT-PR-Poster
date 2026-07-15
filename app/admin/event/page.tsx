@@ -28,14 +28,6 @@ export default function AdminEventIndex() {
     distributionEndDate: string;
   }>({ year: '', eventName: '', distributionStartDate: '', distributionEndDate: '' });
   const [menuEventId, setMenuEventId] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editTarget, setEditTarget] = useState<Record<string, unknown> | null>(null);
-  const [editForm, setEditForm] = useState<{
-    eventName: string;
-    distributionStartDate: string;
-    distributionEndDate: string;
-  }>({ eventName: '', distributionStartDate: '', distributionEndDate: '' });
-  const editingTarget = isEditing ? editTarget : null;
 
   // Close popup menu on outside click
   useEffect(() => {
@@ -131,135 +123,122 @@ export default function AdminEventIndex() {
             <div className="bg-white p-6 rounded-lg shadow">
               <h2 className="text-lg font-medium mb-4">年度一覧</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {events.map((ev) => (
-                  <div
-                    key={ev.id as string}
-                    className="group relative border border-gray-200 rounded-lg bg-white p-4 transition transform duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-500 md:hover:-translate-y-1 md:hover:shadow-lg"
-                  >
-                    <Link
-                      href={`/admin/event/${ev.year}`}
-                      className="absolute inset-0 z-10 rounded-lg"
-                      aria-label={`${String(ev.year)} 年度を開く`}
-                    />
-                    <div className="relative z-0 flex items-start justify-between gap-3">
-                      <div className="pointer-events-none min-w-0 flex-1">
-                        <p className="text-base font-semibold">{String(ev.year)} 年度</p>
-                        <p className="text-sm text-gray-500">
-                          {String(ev.eventName) || '学外配布'} /{' '}
-                          {(() => {
-                            const s = ev.distributionStartDate;
-                            const e = ev.distributionEndDate;
-                            if (!s || !e) return '-';
-                            const sd = formatDateOnly(s as string | Date);
-                            const ed = formatDateOnly(e as string | Date);
-                            return sd === ed ? sd : `${sd} 〜 ${ed}`;
-                          })()}
-                        </p>
-                      </div>
-                      <div className="relative z-20 shrink-0 pointer-events-auto" data-menu-root>
-                        <button
-                          className="px-2 py-1 border rounded text-sm"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setMenuEventId(menuEventId === ev.id ? null : (ev.id as string));
-                          }}
-                          aria-label="メニュー"
-                          title="メニュー"
-                        >
-                          ≡
-                        </button>
-                        {menuEventId === ev.id && (
-                          <div className="absolute right-0 mt-2 w-32 bg-white border border-gray-200 rounded shadow-md z-10">
-                            <Link
-                              href={`/admin/event/${ev.year}`}
-                              className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMenuEventId(null);
-                              }}
-                            >
-                              開く
-                            </Link>
-                            <Link
-                              href="/admin/event/areas"
-                              className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMenuEventId(null);
-                              }}
-                            >
-                              配布区域
-                            </Link>
-                            <button
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setEditTarget(ev);
-                                const parse = (v: Record<string, unknown>) =>
-                                  (v?._seconds as number)
-                                    ? new Date((v._seconds as number) * 1000)
-                                    : new Date(v as unknown as Date);
-                                const s = ev.distributionStartDate
-                                  ? parse(ev.distributionStartDate as Record<string, unknown>)
-                                  : null;
-                                const endDate = ev.distributionEndDate
-                                  ? parse(ev.distributionEndDate as Record<string, unknown>)
-                                  : null;
-                                setEditForm({
-                                  eventName: String(ev.eventName) || '',
-                                  distributionStartDate: s ? s.toISOString().slice(0, 10) : '',
-                                  distributionEndDate: endDate
-                                    ? endDate.toISOString().slice(0, 10)
-                                    : '',
-                                });
-                                setIsEditing(true);
-                                setMenuEventId(null);
-                              }}
-                            >
-                              編集
-                            </button>
-                            <button
-                              className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (
-                                  !confirm(
-                                    `${ev.year}年度のイベントを削除しますか？関連データがある場合は削除できません。`,
-                                  )
-                                )
-                                  return;
-                                try {
-                                  const token = localStorage.getItem('authToken');
-                                  const res = await fetch('/api/admin/events', {
-                                    method: 'DELETE',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                      Authorization: `Bearer ${token}`,
-                                    },
-                                    body: JSON.stringify({ id: ev.id }),
-                                  });
-                                  const data = await res.json();
-                                  if (!res.ok) throw new Error(data.error || '削除に失敗しました');
-                                  const { events, latest } = await fetcher('/api/admin/events');
-                                  setEvents(events || []);
-                                  setLatest(latest || null);
+                {events.map((ev) => {
+                  const eventYear = String(ev.year);
+
+                  return (
+                    <div
+                      key={ev.id as string}
+                      className="group relative border border-gray-200 rounded-lg bg-white p-4 transition transform duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-500 md:hover:-translate-y-1 md:hover:shadow-lg"
+                    >
+                      <Link
+                        href={`/admin/event/${eventYear}`}
+                        className="absolute inset-0 z-10 rounded-lg"
+                        aria-label={`${eventYear} 年度を開く`}
+                      />
+                      <div className="pointer-events-none relative z-20 flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-base font-semibold">{eventYear} 年度</p>
+                          <p className="text-sm text-gray-500">
+                            {String(ev.eventName) || '学外配布'} /{' '}
+                            {(() => {
+                              const s = ev.distributionStartDate;
+                              const e = ev.distributionEndDate;
+                              if (!s || !e) return '-';
+                              const sd = formatDateOnly(s as string | Date);
+                              const ed = formatDateOnly(e as string | Date);
+                              return sd === ed ? sd : `${sd} 〜 ${ed}`;
+                            })()}
+                          </p>
+                        </div>
+                        <div className="pointer-events-auto relative z-30 shrink-0" data-menu-root>
+                          <button
+                            className="px-2 py-1 border rounded text-sm"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setMenuEventId(menuEventId === ev.id ? null : (ev.id as string));
+                            }}
+                            aria-label="メニュー"
+                            title="メニュー"
+                          >
+                            ≡
+                          </button>
+                          {menuEventId === ev.id && (
+                            <div className="absolute right-0 z-40 mt-2 w-32 rounded border border-gray-200 bg-white shadow-md">
+                              <Link
+                                href={`/admin/event/${eventYear}`}
+                                className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setMenuEventId(null);
-                                } catch (error: unknown) {
-                                  const message =
-                                    error instanceof Error ? error.message : '削除に失敗しました';
-                                  alert(message);
-                                }
-                              }}
-                            >
-                              削除
-                            </button>
-                          </div>
-                        )}
+                                }}
+                              >
+                                開く
+                              </Link>
+                              <Link
+                                href="/admin/event/areas"
+                                className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuEventId(null);
+                                }}
+                              >
+                                配布区域
+                              </Link>
+                              <Link
+                                href={`/admin/event/${eventYear}/setting`}
+                                className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuEventId(null);
+                                }}
+                              >
+                                編集
+                              </Link>
+                              <button
+                                className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (
+                                    !confirm(
+                                      `${eventYear}年度のイベントを削除しますか？関連データがある場合は削除できません。`,
+                                    )
+                                  )
+                                    return;
+                                  try {
+                                    const token = localStorage.getItem('authToken');
+                                    const res = await fetch('/api/admin/events', {
+                                      method: 'DELETE',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        Authorization: `Bearer ${token}`,
+                                      },
+                                      body: JSON.stringify({ id: ev.id }),
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok)
+                                      throw new Error(data.error || '削除に失敗しました');
+                                    const { events, latest } = await fetcher('/api/admin/events');
+                                    setEvents(events || []);
+                                    setLatest(latest || null);
+                                    setMenuEventId(null);
+                                  } catch (error: unknown) {
+                                    const message =
+                                      error instanceof Error ? error.message : '削除に失敗しました';
+                                    alert(message);
+                                  }
+                                }}
+                              >
+                                削除
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {events.length === 0 && (
                   <p className="text-sm text-gray-500">イベントが登録されていません</p>
                 )}
@@ -367,100 +346,6 @@ export default function AdminEventIndex() {
               disabled={!form.year || !form.distributionStartDate}
             >
               作成
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        open={Boolean(editingTarget)}
-        onClose={() => setIsEditing(false)}
-        panelClassName="max-w-md p-6"
-      >
-        <div className="w-full">
-          <h2 className="text-lg font-semibold mb-4">
-            イベントを編集（{String(editingTarget?.year)}年度）
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">イベント名</label>
-              <input
-                type="text"
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                value={editForm.eventName}
-                onChange={(e) => setEditForm({ ...editForm, eventName: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">配布開始日</label>
-                <input
-                  type="date"
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                  value={editForm.distributionStartDate}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      distributionStartDate: e.target.value,
-                      distributionEndDate: editForm.distributionEndDate || e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">配布終了日</label>
-                <input
-                  type="date"
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                  value={editForm.distributionEndDate}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, distributionEndDate: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-          </div>
-          <div className="mt-6 flex justify-end gap-3">
-            <button
-              onClick={() => setIsEditing(false)}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md"
-            >
-              キャンセル
-            </button>
-            <button
-              onClick={async () => {
-                try {
-                  const token = localStorage.getItem('authToken');
-                  const res = await fetch('/api/admin/events', {
-                    method: 'PATCH',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                      id: editingTarget?.id,
-                      eventName: editForm.eventName,
-                      distributionStartDate: editForm.distributionStartDate,
-                      distributionEndDate:
-                        editForm.distributionEndDate || editForm.distributionStartDate,
-                      distributionTimeZone: DEFAULT_TIME_ZONE,
-                    }),
-                  });
-                  const data = await res.json();
-                  if (!res.ok) throw new Error(data.error || '更新に失敗しました');
-                  const { events, latest } = await fetcher('/api/admin/events');
-                  setEvents(events || []);
-                  setLatest(latest || null);
-                  setIsEditing(false);
-                  setEditTarget(null);
-                } catch (error: unknown) {
-                  const message = error instanceof Error ? error.message : '更新に失敗しました';
-                  alert(message);
-                }
-              }}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md"
-            >
-              保存
             </button>
           </div>
         </div>
