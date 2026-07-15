@@ -17,11 +17,12 @@
     "prepare": "node -e \"if (require('fs').existsSync('.git') && require('fs').existsSync('node_modules/husky')) { process.exit(require('child_process').spawnSync('husky', { stdio: 'inherit', shell: true }).status || 0); }\""
   },
   "dependencies": {
+    "@expo-google-fonts/noto-sans-jp": "^0.4.3",
+    "@pdf-lib/fontkit": "^1.1.1",
     "firebase": "^12.15.0",
     "firebase-admin": "^14.1.0",
-    "html2canvas": "^1.4.1",
-    "jspdf": "^4.2.1",
     "next": "^16.2.9",
+    "pdf-lib": "^1.17.1",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-hook-form": "^7.80.0",

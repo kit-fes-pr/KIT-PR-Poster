@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { MutableRefObject } from 'react';
+import { auth } from '@/lib/firebase';
 import { formatDate } from '@/lib/utils/dateUtils';
 import { formatAvailabilitySlotLabel } from '@/lib/utils/availability/availability';
 import {
@@ -9,13 +10,7 @@ import {
   formatResponseExportAvailability,
   sortResponseExportRows,
 } from '@/lib/utils/forms/forms';
-import {
-  buildCsvContent,
-  downloadCsvFile,
-  openPdfViewerFromHtml,
-  sanitizeFileName,
-} from '@/lib/utils/export/export';
-import { buildResponseExportPdfHtml } from '@/components/forms/ResponseExportPdfDocument';
+import { buildCsvContent, downloadCsvFile, sanitizeFileName } from '@/lib/utils/export/export';
 import { ExportActionButtons } from '@/components/ui/ExportActionButtons';
 import { FormField, FormResponse, ParticipantSurveyResponse, SurveyForm } from '@/types/forms';
 
@@ -82,14 +77,45 @@ export function FormOverviewTab({
     );
   };
 
-  const handlePdfExport = () => {
-    void openPdfViewerFromHtml(
-      buildResponseExportPdfHtml({
+  const handlePdfExport = async () => {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) {
+      alert('PDF出力にはログインが必要です');
+      return;
+    }
+
+    const viewerWindow = window.open('', '_blank');
+    if (!viewerWindow) {
+      alert('PDFビューアを開けませんでした。ポップアップ設定を確認してください。');
+      return;
+    }
+    viewerWindow.document.write(
+      '<!doctype html><html><head><meta charset="utf-8"><title>PDF生成中</title></head><body style="font-family: sans-serif; padding: 24px;">PDFを生成しています...</body></html>',
+    );
+    viewerWindow.document.close();
+
+    const response = await fetch('/api/admin/export/responses/pdf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
         year,
         formTitle: currentForm.title,
         rows: exportRows,
       }),
-    );
+    });
+
+    if (!response.ok) {
+      viewerWindow.document.body.textContent = 'PDFの生成に失敗しました';
+      return;
+    }
+
+    const pdfBlob = await response.blob();
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    viewerWindow.location.href = pdfUrl;
+    window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
   };
 
   return (
