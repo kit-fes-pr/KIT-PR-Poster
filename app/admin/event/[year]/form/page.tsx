@@ -528,6 +528,7 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
     const participantResponse = response as ParticipantSurveyResponse;
     const formData: { [key: string]: string | string[] } = {
       participantName: participantResponse.participantData?.name || '',
+      participantNameKana: participantResponse.participantData?.nameKana || '',
       participantGrade: participantResponse.participantData?.grade?.toString() || '',
       participantSection: participantResponse.participantData?.section || '',
     };
@@ -576,6 +577,7 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
             answers,
             participantData: {
               name: String(editFormData.participantName || ''),
+              nameKana: String(editFormData.participantNameKana || ''),
               section: String(editFormData.participantSection || ''),
               grade: normalizeGrade(editFormData.participantGrade),
               availableSlots,
@@ -1092,10 +1094,14 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
           title="回答を編集"
           onClose={closeEditModal}
           name={String(editFormData.participantName || '')}
+          nameKana={String(editFormData.participantNameKana || '')}
           grade={String(editFormData.participantGrade || '')}
           section={String(editFormData.participantSection || '')}
           onNameChange={(value) =>
             setEditFormData((current) => ({ ...current, participantName: value }))
+          }
+          onNameKanaChange={(value) =>
+            setEditFormData((current) => ({ ...current, participantNameKana: value }))
           }
           onGradeChange={(value) =>
             setEditFormData((current) => ({ ...current, participantGrade: value }))

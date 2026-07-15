@@ -4,7 +4,11 @@ import Link from 'next/link';
 import { MutableRefObject } from 'react';
 import { formatDate } from '@/lib/utils/dateUtils';
 import { formatAvailabilitySlotLabel } from '@/lib/utils/availability/availability';
-import { buildResponseExportRows, sortResponseExportRows } from '@/lib/utils/forms/forms';
+import {
+  buildResponseExportRows,
+  formatResponseExportAvailability,
+  sortResponseExportRows,
+} from '@/lib/utils/forms/forms';
 import {
   buildCsvContent,
   downloadCsvFile,
@@ -45,11 +49,12 @@ function renderResponseValue(field: FormField, value: string | string[] | undefi
 }
 
 function buildResponseCsvContent(rows: ReturnType<typeof buildResponseExportRows>): string {
-  const header = ['名前', '学年', 'セクション', '回答日時'];
+  const header = ['名前', '学年', 'セクション', '参加可能日時', '回答日時'];
   const body = rows.map((row) => [
     row.name || '名前未入力',
     row.grade > 0 ? `${row.grade}年` : '',
     row.section,
+    formatResponseExportAvailability(row),
     formatDate(row.submittedAt),
   ]);
   return buildCsvContent([header, ...body]);

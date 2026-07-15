@@ -1,9 +1,11 @@
 import {
   ALL_AVAILABLE_SLOT_KEY,
   UNAVAILABLE_SLOT_KEY,
+  formatAvailabilitySlotLabel,
   normalizeAvailabilitySlots,
 } from '../availability/availability';
 import { normalizeGrade } from '../grade/grade';
+import { generateKana } from '../../kanaUtils';
 import type { FormAnswer, FormResponse, ParticipantSurveyResponse } from '@/types/forms';
 import { serializeDateTimeValue as serializeDate } from '../dateUtils';
 
@@ -178,8 +180,10 @@ export function filterVisibleFormFields<T extends { visibleFromGrade?: number }>
 export type ResponseExportRow = {
   responseId: string;
   name: string;
+  nameKana: string;
   grade: number;
   section: string;
+  availableSlots: string[];
   submittedAt: Date | string | number;
 };
 
@@ -196,23 +200,35 @@ export function buildResponseExportRows(
     return {
       responseId: response.responseId,
       name: participantData?.name?.trim() || '',
+      nameKana: participantData?.nameKana?.trim() || '',
       grade: normalizeGrade(participantData?.grade),
       section: participantData?.section?.trim() || '',
+      availableSlots: normalizeAvailabilitySlots(participantData?.availableSlots),
       submittedAt: response.submittedAt,
     };
   });
+}
+
+export function formatResponseExportAvailability(row: ResponseExportRow): string {
+  if (row.availableSlots.length === 0) return '-';
+  return row.availableSlots.map((slot) => formatAvailabilitySlotLabel(slot)).join(' ・ ');
 }
 
 export function sortResponseExportRows(rows: ResponseExportRow[]): ResponseExportRow[] {
   const collator = new Intl.Collator('ja');
 
   return [...rows].sort((a, b) => {
-    const aHasName = a.name.length > 0;
-    const bHasName = b.name.length > 0;
+    const aSortName = generateKana(a.nameKana || a.name);
+    const bSortName = generateKana(b.nameKana || b.name);
+    const aHasName = aSortName.length > 0;
+    const bHasName = bSortName.length > 0;
     if (aHasName !== bHasName) return aHasName ? -1 : 1;
 
-    const nameCompare = collator.compare(a.name, b.name);
+    const nameCompare = collator.compare(aSortName, bSortName);
     if (nameCompare !== 0) return nameCompare;
+
+    const displayNameCompare = collator.compare(a.name, b.name);
+    if (displayNameCompare !== 0) return displayNameCompare;
 
     if (a.grade !== b.grade) return a.grade - b.grade;
 

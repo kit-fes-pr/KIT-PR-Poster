@@ -62,6 +62,7 @@ export async function PATCH(
     const existingParticipantData = responseData.participantData as
       | {
           name: string;
+          nameKana?: string;
           section: string;
           grade: number;
           availableSlots?: string[];
@@ -110,6 +111,14 @@ export async function PATCH(
         effectiveParticipantData.name.trim() === ''
       ) {
         participantValidationErrors.push('お名前は必須です');
+      }
+
+      if (
+        effectiveParticipantData.nameKana != null &&
+        (typeof effectiveParticipantData.nameKana !== 'string' ||
+          effectiveParticipantData.nameKana.trim() === '')
+      ) {
+        participantValidationErrors.push('ふりがなの形式が正しくありません');
       }
 
       if (
@@ -264,6 +273,7 @@ export async function PATCH(
         answers: storedAnswers,
         participantData: {
           name: effectiveParticipantData.name,
+          nameKana: effectiveParticipantData.nameKana || '',
           section: effectiveParticipantData.section,
           grade: gradeNum,
           availableSlots: expandAvailabilitySlotsForStorage(

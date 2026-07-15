@@ -87,6 +87,7 @@ interface ResponseRecord {
   responseId: string;
   participantData?: {
     name: string;
+    nameKana?: string;
     grade: number;
     section: string;
     availableSlots?: string[];
@@ -261,6 +262,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     );
     setResponseEditValues({
       participantName: record?.participantData?.name || participant.name || '',
+      participantNameKana: record?.participantData?.nameKana || '',
       participantGrade: participantGradeValue > 0 ? String(participantGradeValue) : '',
       participantSection: record?.participantData?.section || participant.section || '',
       availability: normalizeAvailabilitySlots(
@@ -320,6 +322,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
           answers,
           participantData: {
             name: String(responseEditValues?.participantName || ''),
+            nameKana: String(responseEditValues?.participantNameKana || ''),
             grade: String(responseEditValues?.participantGrade || ''),
             section: String(responseEditValues?.participantSection || ''),
             availableSlots: availability,
@@ -680,6 +683,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
             responseId: string;
             participantData?: {
               name: string;
+              nameKana?: string;
               grade: number;
               section: string;
               availableSlots?: string[];

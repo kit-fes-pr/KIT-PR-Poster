@@ -153,6 +153,7 @@ export function buildFormResponseRecord(input: {
   submitterInfo?: Record<string, unknown>;
   participantData?: {
     name: string;
+    nameKana?: string;
     section: string;
     grade: unknown;
     availableSlots?: string[];
@@ -175,6 +176,7 @@ export function buildFormResponseRecord(input: {
       submitterInfo: input.submitterInfo || {},
       participantData: {
         name: input.participantData.name,
+        nameKana: input.participantData.nameKana || '',
         section: input.participantData.section,
         grade: normalizeGrade(input.participantData.grade),
         availableSlots: input.participantData.availableSlots || [],

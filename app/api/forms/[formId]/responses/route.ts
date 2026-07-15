@@ -118,6 +118,14 @@ export async function POST(
       }
 
       if (
+        !participantData.nameKana ||
+        typeof participantData.nameKana !== 'string' ||
+        participantData.nameKana.trim() === ''
+      ) {
+        participantValidationErrors.push('ふりがなは必須です');
+      }
+
+      if (
         !participantData.section ||
         typeof participantData.section !== 'string' ||
         participantData.section.trim() === ''
@@ -280,6 +288,7 @@ export async function POST(
         answers: storedAnswers,
         participantData: {
           name: participantData.name,
+          nameKana: participantData.nameKana,
           section: participantData.section,
           grade: gradeValidation.gradeNum,
           availableSlots: expandAvailabilitySlotsForStorage(

@@ -1,6 +1,10 @@
 import { formatDate } from '@/lib/utils/dateUtils';
 import { escapeHtml } from '@/lib/utils/export/export';
-import { groupResponseExportRowsByGrade, ResponseExportRow } from '@/lib/utils/forms/forms';
+import {
+  formatResponseExportAvailability,
+  groupResponseExportRowsByGrade,
+  ResponseExportRow,
+} from '@/lib/utils/forms/forms';
 
 type ResponseExportPdfDocumentInput = {
   year: string;
@@ -28,6 +32,7 @@ export function buildResponseExportPdfHtml({
               <tr>
                 <th>名前</th>
                 <th>セクション</th>
+                <th>参加可能日時</th>
                 <th>回答日時</th>
               </tr>
             </thead>
@@ -38,6 +43,7 @@ export function buildResponseExportPdfHtml({
                     <tr>
                       <td>${escapeHtml(row.name || '名前未入力')}</td>
                       <td>${escapeHtml(row.section)}</td>
+                      <td>${escapeHtml(formatResponseExportAvailability(row))}</td>
                       <td>${escapeHtml(formatDate(row.submittedAt))}</td>
                     </tr>
                   `,
@@ -146,18 +152,6 @@ export function buildResponseExportPdfHtml({
           th {
             background: #f3f4f6;
             font-weight: 700;
-          }
-          th:nth-child(1),
-          td:nth-child(1) {
-            width: 34%;
-          }
-          th:nth-child(2),
-          td:nth-child(2) {
-            width: 30%;
-          }
-          th:nth-child(3),
-          td:nth-child(3) {
-            width: 36%;
           }
           .empty {
             border: 1px solid #d1d5db;

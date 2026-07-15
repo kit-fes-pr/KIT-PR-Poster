@@ -4,6 +4,7 @@ import {
   buildResponseExportRows,
   expandAvailabilitySlotsForStorage,
   filterVisibleFormFields,
+  formatResponseExportAvailability,
   groupResponseExportRowsByGrade,
   normalizeFormEventContext,
   prepareAnswersForStorage,
@@ -158,29 +159,72 @@ describe('forms utils', () => {
       {
         responseId: '3',
         name: '',
+        nameKana: '',
         grade: 1,
         section: 'PR',
         submittedAt: '2026-03-03T00:00:00.000Z',
+        availableSlots: [],
       },
       {
         responseId: '2',
         name: 'いとう',
+        nameKana: '',
         grade: 2,
         section: '技術',
         submittedAt: '2026-03-02T00:00:00.000Z',
+        availableSlots: [],
       },
       {
         responseId: '1',
         name: 'あおき',
+        nameKana: '',
         grade: 1,
         section: '企画',
         submittedAt: '2026-03-01T00:00:00.000Z',
+        availableSlots: [],
       },
     ]);
 
     assert.deepEqual(
       rows.map((row) => row.responseId),
       ['1', '2', '3'],
+    );
+  });
+
+  test('sortResponseExportRows prefers full furigana over kanji display name', () => {
+    const rows = sortResponseExportRows([
+      {
+        responseId: '1',
+        name: '山田',
+        nameKana: 'やまだ',
+        grade: 1,
+        section: '企画',
+        submittedAt: '2026-03-01T00:00:00.000Z',
+        availableSlots: [],
+      },
+      {
+        responseId: '2',
+        name: '佐藤',
+        nameKana: 'さとう',
+        grade: 1,
+        section: '技術',
+        submittedAt: '2026-03-02T00:00:00.000Z',
+        availableSlots: [],
+      },
+      {
+        responseId: '3',
+        name: '青木',
+        nameKana: 'あおき',
+        grade: 1,
+        section: 'PR',
+        submittedAt: '2026-03-03T00:00:00.000Z',
+        availableSlots: [],
+      },
+    ]);
+
+    assert.deepEqual(
+      rows.map((row) => row.responseId),
+      ['3', '2', '1'],
     );
   });
 
@@ -193,9 +237,10 @@ describe('forms utils', () => {
         submittedAt: new Date('2026-03-01T00:00:00.000Z'),
         participantData: {
           name: ' 山田 ',
+          nameKana: ' やまだ ',
           grade: 3,
           section: ' PR ',
-          availableSlots: [],
+          availableSlots: ['2026-06-01_am', 'unavailable'],
         },
       },
     ];
@@ -204,11 +249,28 @@ describe('forms utils', () => {
       {
         responseId: 'response-1',
         name: '山田',
+        nameKana: 'やまだ',
         grade: 3,
         section: 'PR',
+        availableSlots: ['2026-06-01_am', 'unavailable'],
         submittedAt: new Date('2026-03-01T00:00:00.000Z'),
       },
     ]);
+  });
+
+  test('formatResponseExportAvailability formats selected availability slots', () => {
+    assert.equal(
+      formatResponseExportAvailability({
+        responseId: 'response-1',
+        name: '山田',
+        nameKana: 'やまだ',
+        grade: 3,
+        section: 'PR',
+        availableSlots: ['2026-06-01_am', 'unavailable'],
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+      }),
+      '6/1 午前 ・ 参加不可',
+    );
   });
 
   test('groupResponseExportRowsByGrade groups by ascending grade and sorts rows in each group', () => {
@@ -216,30 +278,38 @@ describe('forms utils', () => {
       {
         responseId: '4',
         name: '未設定',
+        nameKana: 'みせってい',
         grade: 0,
         section: '4年',
         submittedAt: '2026-03-04T00:00:00.000Z',
+        availableSlots: [],
       },
       {
         responseId: '2',
         name: 'いとう',
+        nameKana: '',
         grade: 1,
         section: '技術',
         submittedAt: '2026-03-02T00:00:00.000Z',
+        availableSlots: [],
       },
       {
         responseId: '3',
         name: 'あおき',
+        nameKana: '',
         grade: 2,
         section: '企画',
         submittedAt: '2026-03-03T00:00:00.000Z',
+        availableSlots: [],
       },
       {
         responseId: '1',
         name: 'あおき',
+        nameKana: '',
         grade: 1,
         section: '企画',
         submittedAt: '2026-03-01T00:00:00.000Z',
+        availableSlots: [],
       },
     ]);
 
