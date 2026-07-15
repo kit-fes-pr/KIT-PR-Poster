@@ -161,8 +161,8 @@ export async function DELETE(
     }
 
     const teamData = doc.data();
-    const teamCode = typeof teamData?.teamCode === 'string' ? teamData.teamCode : '';
-    const eventId = typeof teamData?.eventId === 'string' ? teamData.eventId : '';
+    const teamCode = typeof teamData?.teamCode === 'string' ? teamData.teamCode.trim() : '';
+    const eventId = typeof teamData?.eventId === 'string' ? teamData.eventId.trim() : '';
 
     if (teamCode) {
       const storesSnap = eventId
