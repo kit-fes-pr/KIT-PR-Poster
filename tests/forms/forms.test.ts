@@ -1,15 +1,19 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  buildResponseExportRows,
   expandAvailabilitySlotsForStorage,
   filterVisibleFormFields,
+  groupResponseExportRowsByGrade,
   normalizeFormEventContext,
   prepareAnswersForStorage,
   resolveResponseAvailabilitySlots,
   serializeDate,
+  sortResponseExportRows,
   toMillis,
   validateFormAnswersPayload,
 } from '../../lib/utils/forms/forms';
+import type { ParticipantSurveyResponse } from '../../types/forms';
 
 describe('forms utils', () => {
   test('normalizeFormEventContext prefers year and normalizes eventId', () => {
@@ -147,5 +151,105 @@ describe('forms utils', () => {
     assert.deepEqual(validateFormAnswersPayload([{ fieldId: 'remarks', value: 'ok' }]), {
       valid: true,
     });
+  });
+
+  test('sortResponseExportRows sorts by Japanese name and puts blank names last', () => {
+    const rows = sortResponseExportRows([
+      {
+        responseId: '3',
+        name: '',
+        grade: 1,
+        section: 'PR',
+        submittedAt: '2026-03-03T00:00:00.000Z',
+      },
+      {
+        responseId: '2',
+        name: 'いとう',
+        grade: 2,
+        section: '技術',
+        submittedAt: '2026-03-02T00:00:00.000Z',
+      },
+      {
+        responseId: '1',
+        name: 'あおき',
+        grade: 1,
+        section: '企画',
+        submittedAt: '2026-03-01T00:00:00.000Z',
+      },
+    ]);
+
+    assert.deepEqual(
+      rows.map((row) => row.responseId),
+      ['1', '2', '3'],
+    );
+  });
+
+  test('buildResponseExportRows extracts participant fields for export', () => {
+    const responses: ParticipantSurveyResponse[] = [
+      {
+        responseId: 'response-1',
+        formId: 'form-1',
+        answers: [],
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+        participantData: {
+          name: ' 山田 ',
+          grade: 3,
+          section: ' PR ',
+          availableSlots: [],
+        },
+      },
+    ];
+
+    assert.deepEqual(buildResponseExportRows(responses), [
+      {
+        responseId: 'response-1',
+        name: '山田',
+        grade: 3,
+        section: 'PR',
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+      },
+    ]);
+  });
+
+  test('groupResponseExportRowsByGrade groups by ascending grade and sorts rows in each group', () => {
+    const groups = groupResponseExportRowsByGrade([
+      {
+        responseId: '4',
+        name: '未設定',
+        grade: 0,
+        section: '4年',
+        submittedAt: '2026-03-04T00:00:00.000Z',
+      },
+      {
+        responseId: '2',
+        name: 'いとう',
+        grade: 1,
+        section: '技術',
+        submittedAt: '2026-03-02T00:00:00.000Z',
+      },
+      {
+        responseId: '3',
+        name: 'あおき',
+        grade: 2,
+        section: '企画',
+        submittedAt: '2026-03-03T00:00:00.000Z',
+      },
+      {
+        responseId: '1',
+        name: 'あおき',
+        grade: 1,
+        section: '企画',
+        submittedAt: '2026-03-01T00:00:00.000Z',
+      },
+    ]);
+
+    assert.deepEqual(
+      groups.map((group) => group.label),
+      ['1年', '2年', '学年未設定'],
+    );
+    assert.deepEqual(
+      groups[0].rows.map((row) => row.responseId),
+      ['1', '2'],
+    );
   });
 });

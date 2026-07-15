@@ -4,7 +4,7 @@ import {
   normalizeAvailabilitySlots,
 } from '../availability/availability';
 import { normalizeGrade } from '../grade/grade';
-import type { FormAnswer } from '@/types/forms';
+import type { FormAnswer, FormResponse, ParticipantSurveyResponse } from '@/types/forms';
 import { serializeDateTimeValue as serializeDate } from '../dateUtils';
 
 export { serializeDate };
@@ -173,4 +173,76 @@ export function filterVisibleFormFields<T extends { visibleFromGrade?: number }>
   participantGrade: unknown,
 ): T[] {
   return fields.filter((field) => isFormFieldVisibleForGrade(field, participantGrade));
+}
+
+export type ResponseExportRow = {
+  responseId: string;
+  name: string;
+  grade: number;
+  section: string;
+  submittedAt: Date | string | number;
+};
+
+function getSubmittedAtMillis(value: Date | string | number): number {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+export function buildResponseExportRows(
+  responses: (FormResponse | ParticipantSurveyResponse)[],
+): ResponseExportRow[] {
+  return responses.map((response) => {
+    const participantData = (response as ParticipantSurveyResponse).participantData;
+    return {
+      responseId: response.responseId,
+      name: participantData?.name?.trim() || '',
+      grade: normalizeGrade(participantData?.grade),
+      section: participantData?.section?.trim() || '',
+      submittedAt: response.submittedAt,
+    };
+  });
+}
+
+export function sortResponseExportRows(rows: ResponseExportRow[]): ResponseExportRow[] {
+  const collator = new Intl.Collator('ja');
+
+  return [...rows].sort((a, b) => {
+    const aHasName = a.name.length > 0;
+    const bHasName = b.name.length > 0;
+    if (aHasName !== bHasName) return aHasName ? -1 : 1;
+
+    const nameCompare = collator.compare(a.name, b.name);
+    if (nameCompare !== 0) return nameCompare;
+
+    if (a.grade !== b.grade) return a.grade - b.grade;
+
+    const sectionCompare = collator.compare(a.section, b.section);
+    if (sectionCompare !== 0) return sectionCompare;
+
+    return getSubmittedAtMillis(a.submittedAt) - getSubmittedAtMillis(b.submittedAt);
+  });
+}
+
+export function groupResponseExportRowsByGrade(
+  rows: ResponseExportRow[],
+): Array<{ grade: number | null; label: string; rows: ResponseExportRow[] }> {
+  const groups = new Map<number | null, ResponseExportRow[]>();
+
+  for (const row of rows) {
+    const grade = row.grade > 0 ? row.grade : null;
+    groups.set(grade, [...(groups.get(grade) || []), row]);
+  }
+
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => {
+      if (a === null && b === null) return 0;
+      if (a === null) return 1;
+      if (b === null) return -1;
+      return a - b;
+    })
+    .map(([grade, groupRows]) => ({
+      grade,
+      label: grade === null ? '学年未設定' : `${grade}年`,
+      rows: sortResponseExportRows(groupRows),
+    }));
 }

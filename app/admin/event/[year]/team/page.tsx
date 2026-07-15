@@ -20,11 +20,13 @@ import { LoadingInline } from '@/components/ui/Loading';
 import { Modal } from '@/components/ui/Modal';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { SectionCard } from '@/components/ui/SectionCard';
+import { ExportActionButtons } from '@/components/ui/ExportActionButtons';
 import YearPageSectionHeader from '@/components/admin/YearPageSectionHeader';
 import { Area } from '@/types';
 import type { FormAnswer } from '@/types/forms';
 import { clearDashboardCache } from '@/lib/utils/dashboard/dashboard-cache';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
+import { buildCsvContent, downloadCsvFile } from '@/lib/utils/export/export';
 
 interface Participant {
   responseId: string;
@@ -930,19 +932,10 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
     const header = ['チーム', '学年', '氏名'];
     const data = sorted.map((r) => [r.team, r.grade ? `${r.grade}` : '', r.name]);
-    const csvContent = [header, ...data]
-      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `チーム割り当て_${resolvedParams?.year || ''}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    downloadCsvFile(
+      `チーム割り当て_${resolvedParams?.year || ''}.csv`,
+      buildCsvContent([header, ...data]),
+    );
   };
 
   return (
@@ -1201,12 +1194,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2 flex-col">
                     <p className="border-gray-300 rounded-md text-sm text-gray-600">エクスポート</p>
-                    <button
-                      onClick={exportAssignmentsCsv}
-                      className="px-3 py-2 text-sm rounded-md border bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                    >
-                      CSV出力
-                    </button>
+                    <ExportActionButtons onCsvExport={exportAssignmentsCsv} />
                   </div>
                   <div className="flex items-center gap-2 flex-col">
                     <label className="text-sm text-gray-600">班で絞り込み</label>

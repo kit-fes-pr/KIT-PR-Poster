@@ -4,6 +4,15 @@ import Link from 'next/link';
 import { MutableRefObject } from 'react';
 import { formatDate } from '@/lib/utils/dateUtils';
 import { formatAvailabilitySlotLabel } from '@/lib/utils/availability/availability';
+import { buildResponseExportRows, sortResponseExportRows } from '@/lib/utils/forms/forms';
+import {
+  buildCsvContent,
+  downloadCsvFile,
+  openPrintableHtml,
+  sanitizeFileName,
+} from '@/lib/utils/export/export';
+import { buildResponseExportPdfHtml } from '@/components/forms/ResponseExportPdfDocument';
+import { ExportActionButtons } from '@/components/ui/ExportActionButtons';
 import { FormField, FormResponse, ParticipantSurveyResponse, SurveyForm } from '@/types/forms';
 
 type AvailabilityChoice = {
@@ -35,6 +44,17 @@ function renderResponseValue(field: FormField, value: string | string[] | undefi
   return values.join(' / ');
 }
 
+function buildResponseCsvContent(rows: ReturnType<typeof buildResponseExportRows>): string {
+  const header = ['名前', '学年', 'セクション', '回答日時'];
+  const body = rows.map((row) => [
+    row.name || '名前未入力',
+    row.grade > 0 ? `${row.grade}年` : '',
+    row.section,
+    formatDate(row.submittedAt),
+  ]);
+  return buildCsvContent([header, ...body]);
+}
+
 export function FormOverviewTab({
   year,
   currentForm,
@@ -48,6 +68,25 @@ export function FormOverviewTab({
   deleting,
   saveStatus,
 }: FormOverviewTabProps) {
+  const exportRows = sortResponseExportRows(buildResponseExportRows(responses));
+
+  const handleCsvExport = () => {
+    downloadCsvFile(
+      `${sanitizeFileName(currentForm.title)}_回答者一覧.csv`,
+      buildResponseCsvContent(exportRows),
+    );
+  };
+
+  const handlePdfExport = () => {
+    openPrintableHtml(
+      buildResponseExportPdfHtml({
+        year,
+        formTitle: currentForm.title,
+        rows: exportRows,
+      }),
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -86,20 +125,23 @@ export function FormOverviewTab({
           <div>
             <h3 className="text-lg font-semibold text-gray-900">回答</h3>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl bg-gray-50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-500">
-                回答数
-              </p>
-              <p className="mt-1 text-2xl font-semibold text-gray-900">{responses.length}</p>
-            </div>
-            <div className="rounded-2xl bg-gray-50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-500">
-                最新回答
-              </p>
-              <p className="mt-1 text-sm font-medium text-gray-900">
-                {latestResponse ? formatDate(latestResponse.submittedAt) : 'まだ回答がありません'}
-              </p>
+          <div className="flex flex-wrap items-start justify-end gap-3">
+            <ExportActionButtons onCsvExport={handleCsvExport} onPdfExport={handlePdfExport} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-500">
+                  回答数
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-gray-900">{responses.length}</p>
+              </div>
+              <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-500">
+                  最新回答
+                </p>
+                <p className="mt-1 text-sm font-medium text-gray-900">
+                  {latestResponse ? formatDate(latestResponse.submittedAt) : 'まだ回答がありません'}
+                </p>
+              </div>
             </div>
           </div>
         </div>
