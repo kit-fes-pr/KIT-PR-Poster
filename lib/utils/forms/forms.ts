@@ -130,6 +130,23 @@ export function prepareAnswersForStorage(
   );
 }
 
+export function mergeFormAnswers(
+  existingAnswers: FormAnswer[],
+  incomingAnswers: FormAnswer[],
+): FormAnswer[] {
+  const mergedByFieldId = new Map<string, FormAnswer>();
+
+  for (const answer of existingAnswers) {
+    mergedByFieldId.set(answer.fieldId, answer);
+  }
+
+  for (const answer of incomingAnswers) {
+    mergedByFieldId.set(answer.fieldId, answer);
+  }
+
+  return Array.from(mergedByFieldId.values());
+}
+
 export function isFormFieldVisibleForGrade(
   field: { visibleFromGrade?: number },
   participantGrade: unknown,

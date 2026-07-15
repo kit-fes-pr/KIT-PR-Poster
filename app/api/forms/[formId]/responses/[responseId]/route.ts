@@ -8,6 +8,7 @@ import {
   expandAvailabilitySlotsForStorage,
   filterEditableFormFieldsForParticipant,
   filterVisibleFormFieldsForParticipant,
+  mergeFormAnswers,
   prepareAnswersForStorage,
   resolveResponseAvailabilitySlots,
   validateFormAnswersPayload,
@@ -92,14 +93,15 @@ export async function PATCH(
         })
       : null;
     const gradeNum = gradeValidation?.gradeNum || 0;
-    const availableSlots = effectiveParticipantData
-      ? resolveResponseAvailabilitySlots(answers, effectiveParticipantData.availableSlots)
-      : [];
     const existingAnswers = Array.isArray(responseData.answers)
       ? (responseData.answers as FormAnswer[])
       : [];
+    const mergedAnswers = mergeFormAnswers(existingAnswers, answers);
+    const availableSlots = effectiveParticipantData
+      ? resolveResponseAvailabilitySlots(mergedAnswers, effectiveParticipantData.availableSlots)
+      : [];
     const answerValues = Object.fromEntries(
-      [...existingAnswers, ...answers].map((answer) => [answer.fieldId, answer.value]),
+      mergedAnswers.map((answer) => [answer.fieldId, answer.value]),
     );
     const visibleFields = filterEditableFormFieldsForParticipant(
       formData.fields,
@@ -161,7 +163,7 @@ export async function PATCH(
     const validationErrors: string[] = [];
 
     for (const field of visibleFields) {
-      const answer = answers.find((a: FormAnswer) => a.fieldId === field.fieldId);
+      const answer = mergedAnswers.find((a: FormAnswer) => a.fieldId === field.fieldId);
 
       // 必須フィールドのチェック
       if (field.required) {
@@ -256,7 +258,7 @@ export async function PATCH(
       (availabilityField?.options || []).map((option) => ({ key: option })),
     );
     const storedAnswers = prepareAnswersForStorage(
-      answers,
+      mergedAnswers,
       visibleFieldIds,
       availabilityDateSlotKeys,
     );

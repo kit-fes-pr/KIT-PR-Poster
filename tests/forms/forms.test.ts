@@ -7,6 +7,7 @@ import {
   filterVisibleFormFields,
   formatResponseExportAvailability,
   groupResponseExportRowsByGrade,
+  mergeFormAnswers,
   normalizeFormEventContext,
   prepareAnswersForStorage,
   resolveResponseAvailabilitySlots,
@@ -150,6 +151,28 @@ describe('forms utils', () => {
       [
         { fieldId: 'availability', value: ['2026-06-01_am', '2026-06-01_pm'] },
         { fieldId: 'remarks', value: 'ok' },
+      ],
+    );
+  });
+
+  test('mergeFormAnswers preserves omitted existing answers and overwrites submitted fields', () => {
+    assert.deepEqual(
+      mergeFormAnswers(
+        [
+          { fieldId: 'availability', value: ['2026-06-01_am'] },
+          { fieldId: 'remarks', value: 'before' },
+          { fieldId: 'carUsage', value: '運転できる' },
+        ],
+        [
+          { fieldId: 'remarks', value: 'after' },
+          { fieldId: 'newField', value: 'new' },
+        ],
+      ),
+      [
+        { fieldId: 'availability', value: ['2026-06-01_am'] },
+        { fieldId: 'remarks', value: 'after' },
+        { fieldId: 'carUsage', value: '運転できる' },
+        { fieldId: 'newField', value: 'new' },
       ],
     );
   });
