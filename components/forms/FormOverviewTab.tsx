@@ -78,12 +78,6 @@ export function FormOverviewTab({
   };
 
   const handlePdfExport = async () => {
-    const token = await auth.currentUser?.getIdToken();
-    if (!token) {
-      alert('PDF出力にはログインが必要です');
-      return;
-    }
-
     const viewerWindow = window.open('', '_blank');
     if (!viewerWindow) {
       alert('PDFビューアを開けませんでした。ポップアップ設定を確認してください。');
@@ -93,6 +87,12 @@ export function FormOverviewTab({
       '<!doctype html><html><head><meta charset="utf-8"><title>PDF生成中</title></head><body style="font-family: sans-serif; padding: 24px;">PDFを生成しています...</body></html>',
     );
     viewerWindow.document.close();
+
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) {
+      viewerWindow.document.body.textContent = 'PDF出力にはログインが必要です';
+      return;
+    }
 
     const response = await fetch('/api/admin/export/responses/pdf', {
       method: 'POST',
