@@ -196,6 +196,11 @@ export function FormOverviewTab({
                           <div className="font-medium">
                             {participantResponse.participantData?.name || '名前未入力'}
                           </div>
+                          {participantResponse.participantData?.nameKana && (
+                            <div className="mt-0.5 text-xs text-gray-400">
+                              {participantResponse.participantData.nameKana}
+                            </div>
+                          )}
                           <div className="mt-1 text-gray-500">
                             {participantResponse.participantData?.grade
                               ? `${participantResponse.participantData.grade}年 `
