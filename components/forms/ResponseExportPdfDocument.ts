@@ -13,44 +13,133 @@ type ResponseExportPdfDocumentInput = {
   generatedAt?: Date;
 };
 
+const FIRST_PAGE_ROW_LIMIT = 13;
+const CONTINUED_PAGE_ROW_LIMIT = 18;
+
+type PdfSection = {
+  label: string;
+  rows: ResponseExportRow[];
+  totalCount: number;
+  continued: boolean;
+};
+
+type PdfPage = {
+  sections: PdfSection[];
+};
+
+function paginateRows(rows: ResponseExportRow[]): PdfPage[] {
+  const groups = groupResponseExportRowsByGrade(rows);
+  const pages: PdfPage[] = [];
+  let currentPage: PdfPage = { sections: [] };
+  let currentCount = 0;
+  let currentLimit = FIRST_PAGE_ROW_LIMIT;
+
+  const pushPage = () => {
+    pages.push(currentPage);
+    currentPage = { sections: [] };
+    currentCount = 0;
+    currentLimit = CONTINUED_PAGE_ROW_LIMIT;
+  };
+
+  for (const group of groups) {
+    let cursor = 0;
+    while (cursor < group.rows.length) {
+      if (currentCount >= currentLimit) {
+        pushPage();
+      }
+
+      const remaining = currentLimit - currentCount;
+      const rowsForPage = group.rows.slice(cursor, cursor + remaining);
+      currentPage.sections.push({
+        label: group.label,
+        rows: rowsForPage,
+        totalCount: group.rows.length,
+        continued: cursor > 0,
+      });
+      currentCount += rowsForPage.length;
+      cursor += rowsForPage.length;
+    }
+  }
+
+  if (currentPage.sections.length > 0 || pages.length === 0) {
+    pages.push(currentPage);
+  }
+
+  return pages;
+}
+
 export function buildResponseExportPdfHtml({
   year,
   formTitle,
   rows,
   generatedAt = new Date(),
 }: ResponseExportPdfDocumentInput): string {
-  const groupedRows = groupResponseExportRowsByGrade(rows);
   const totalCount = rows.length;
   const documentHeader = `工大祭実行委員会-学外配布${year}`;
-  const groupSections = groupedRows
+  const pages = paginateRows(rows);
+  const pageCount = pages.length;
+  const pageHtml = pages
     .map(
-      (group) => `
-        <section class="grade-section">
-          <h2>${escapeHtml(group.label)} <span>${group.rows.length}名</span></h2>
-          <table>
-            <thead>
-              <tr>
-                <th>名前</th>
-                <th>セクション</th>
-                <th>参加可能日時</th>
-                <th>回答日時</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${group.rows
-                .map(
-                  (row) => `
-                    <tr>
-                      <td>${escapeHtml(row.name || '名前未入力')}</td>
-                      <td>${escapeHtml(row.section)}</td>
-                      <td>${escapeHtml(formatResponseExportAvailability(row))}</td>
-                      <td>${escapeHtml(formatDate(row.submittedAt))}</td>
-                    </tr>
-                  `,
-                )
-                .join('')}
-            </tbody>
-          </table>
+      (page, pageIndex) => `
+        <section class="pdf-page" data-pdf-page>
+          <div class="page-header">${escapeHtml(documentHeader)}</div>
+          <main>
+            ${
+              pageIndex === 0
+                ? `
+                  <header class="document-title">
+                    <h1>回答者一覧</h1>
+                    <div class="meta">
+                      <span>フォーム: ${escapeHtml(formTitle)}</span>
+                      <span>回答数: ${totalCount}名</span>
+                      <span>出力日時: ${escapeHtml(formatDate(generatedAt))}</span>
+                    </div>
+                  </header>
+                `
+                : ''
+            }
+            ${
+              totalCount > 0
+                ? page.sections
+                    .map(
+                      (section) => `
+                        <section class="grade-section">
+                          <h2>${escapeHtml(section.label)}${section.continued ? '（続き）' : ''} <span>${section.totalCount}名</span></h2>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>名前</th>
+                                <th>セクション</th>
+                                <th>参加可能日時</th>
+                                <th>回答日時</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              ${section.rows
+                                .map(
+                                  (row) => `
+                                    <tr>
+                                      <td>${escapeHtml(row.name || '名前未入力')}</td>
+                                      <td>${escapeHtml(row.section)}</td>
+                                      <td>${escapeHtml(formatResponseExportAvailability(row))}</td>
+                                      <td>${escapeHtml(formatDate(row.submittedAt))}</td>
+                                    </tr>
+                                  `,
+                                )
+                                .join('')}
+                            </tbody>
+                          </table>
+                        </section>
+                      `,
+                    )
+                    .join('')
+                : '<div class="empty">回答がありません</div>'
+            }
+          </main>
+          <footer class="page-footer">
+            <span>PR系</span>
+            <span>[${pageIndex + 1}/${pageCount}]</span>
+          </footer>
         </section>
       `,
     )
@@ -90,12 +179,45 @@ export function buildResponseExportPdfHtml({
           }
           body {
             margin: 0;
+            background: #ffffff;
             color: #111827;
             font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
             font-size: 11px;
             line-height: 1.45;
           }
-          header {
+          .pdf-page {
+            background: #ffffff;
+            height: 1123px;
+            overflow: hidden;
+            padding: 68px 45px;
+            position: relative;
+            width: 794px;
+          }
+          .page-header {
+            color: #374151;
+            font-size: 10px;
+            font-weight: 700;
+            left: 45px;
+            position: absolute;
+            right: 45px;
+            text-align: left;
+            top: 24px;
+          }
+          .page-footer {
+            align-items: center;
+            bottom: 24px;
+            color: #374151;
+            display: flex;
+            font-size: 10px;
+            justify-content: space-between;
+            left: 45px;
+            position: absolute;
+            right: 45px;
+          }
+          main {
+            display: block;
+          }
+          .document-title {
             border-bottom: 1px solid #d1d5db;
             margin-bottom: 14px;
             padding-bottom: 10px;
@@ -111,16 +233,8 @@ export function buildResponseExportPdfHtml({
             flex-wrap: wrap;
             gap: 8px 16px;
           }
-          .document-header {
-            color: #374151;
-            font-size: 10px;
-            font-weight: 700;
-            margin-bottom: 6px;
-          }
           .grade-section {
-            break-inside: avoid;
             margin-bottom: 14px;
-            page-break-inside: avoid;
           }
           h2 {
             align-items: baseline;
@@ -162,22 +276,7 @@ export function buildResponseExportPdfHtml({
         </style>
       </head>
       <body>
-        <header>
-          <div class="document-header">${escapeHtml(documentHeader)}</div>
-          <h1>回答者一覧</h1>
-          <div class="meta">
-            <span>フォーム: ${escapeHtml(formTitle)}</span>
-            <span>回答数: ${totalCount}名</span>
-            <span>出力日時: ${escapeHtml(formatDate(generatedAt))}</span>
-          </div>
-        </header>
-        ${totalCount > 0 ? groupSections : '<div class="empty">回答がありません</div>'}
-        <script>
-          window.addEventListener('load', () => {
-            window.focus();
-            window.print();
-          });
-        </script>
+        ${pageHtml}
       </body>
     </html>
   `;

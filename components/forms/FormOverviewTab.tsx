@@ -12,7 +12,7 @@ import {
 import {
   buildCsvContent,
   downloadCsvFile,
-  openPrintableHtml,
+  openPdfViewerFromHtml,
   sanitizeFileName,
 } from '@/lib/utils/export/export';
 import { buildResponseExportPdfHtml } from '@/components/forms/ResponseExportPdfDocument';
@@ -83,7 +83,7 @@ export function FormOverviewTab({
   };
 
   const handlePdfExport = () => {
-    openPrintableHtml(
+    void openPdfViewerFromHtml(
       buildResponseExportPdfHtml({
         year,
         formTitle: currentForm.title,
