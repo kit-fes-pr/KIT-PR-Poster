@@ -974,33 +974,39 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     );
     viewerWindow.document.close();
 
-    const token = await user?.getIdToken();
-    if (!token) {
-      viewerWindow.document.body.textContent = 'PDF出力にはログインが必要です';
-      return;
-    }
+    try {
+      const token = await user?.getIdToken();
+      if (!token) {
+        viewerWindow.document.body.textContent = 'PDF出力にはログインが必要です';
+        return;
+      }
 
-    const response = await fetch('/api/admin/export/assignments/pdf', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        year: resolvedParams?.year || '',
-        rows: buildAssignmentExportRows(),
-      }),
-    });
+      const response = await fetch('/api/admin/export/assignments/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          year: resolvedParams?.year || '',
+          rows: buildAssignmentExportRows(),
+        }),
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        viewerWindow.document.body.textContent = 'PDFの生成に失敗しました';
+        return;
+      }
+
+      const pdfBlob = await response.blob();
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      viewerWindow.location.href = pdfUrl;
+      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
+    } catch (error) {
+      console.error('チーム割り当てPDF出力エラー:', error);
+      setError('PDFの生成に失敗しました');
       viewerWindow.document.body.textContent = 'PDFの生成に失敗しました';
-      return;
     }
-
-    const pdfBlob = await response.blob();
-    const pdfUrl = URL.createObjectURL(pdfBlob);
-    viewerWindow.location.href = pdfUrl;
-    window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
   };
 
   return (
