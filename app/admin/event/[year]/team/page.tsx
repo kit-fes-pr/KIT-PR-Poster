@@ -59,6 +59,12 @@ interface Assignment {
   timeSlot: string;
 }
 
+type AssignmentExportRow = {
+  team: string;
+  grade: number;
+  name: string;
+};
+
 interface FormField {
   fieldId: string;
   type: 'text' | 'select' | 'radio' | 'checkbox' | 'textarea' | 'number';
@@ -910,39 +916,97 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     return collator.compare(an, bn);
   });
 
+  const buildAssignmentExportRows = (): AssignmentExportRow[] => {
+    const collator = new Intl.Collator('ja');
+    const rows = assignments
+      .map((assignment) => {
+        const participant = participants.find((item) => item.responseId === assignment.responseId);
+        const team = teams.find((item) => item.teamId === assignment.teamId);
+        if (!participant || !team) return null;
+        const teamLabel = team.teamName || team.assignedArea || team.teamId;
+        return {
+          team: teamLabel,
+          grade: normalizeGrade(participant.grade),
+          name: participant.name || '',
+        };
+      })
+      .filter(Boolean) as AssignmentExportRow[];
+
+    return rows.sort((a, b) => {
+      const teamCompare = collator.compare(a.team, b.team);
+      if (teamCompare !== 0) return teamCompare;
+      if (b.grade !== a.grade) return b.grade - a.grade;
+      return collator.compare(a.name, b.name);
+    });
+  };
+
   const exportAssignmentsCsv = () => {
     if (assignments.length === 0) {
       setError('出力できる割り当てがありません');
       return;
     }
-    const collator = new Intl.Collator('ja');
-    const rows = assignments
-      .map((a) => {
-        const p = participants.find((p) => p.responseId === a.responseId);
-        const t = teams.find((t) => t.teamId === a.teamId);
-        if (!p || !t) return null;
-        const teamLabel = t.teamName || t.assignedArea || t.teamId;
-        return {
-          team: teamLabel,
-          grade: normalizeGrade(p.grade),
-          name: p.name || '',
-        };
-      })
-      .filter(Boolean) as Array<{ team: string; grade: number; name: string }>;
-
-    const sorted = rows.sort((a, b) => {
-      const tc = collator.compare(a.team, b.team);
-      if (tc !== 0) return tc;
-      if (b.grade !== a.grade) return b.grade - a.grade;
-      return collator.compare(a.name, b.name);
-    });
 
     const header = ['チーム', '学年', '氏名'];
-    const data = sorted.map((r) => [r.team, r.grade ? `${r.grade}` : '', r.name]);
+    const data = buildAssignmentExportRows().map((r) => [
+      r.team,
+      r.grade ? `${r.grade}` : '',
+      r.name,
+    ]);
     downloadCsvFile(
       `チーム割り当て_${resolvedParams?.year || ''}.csv`,
       buildCsvContent([header, ...data]),
     );
+  };
+
+  const exportAssignmentsPdf = async () => {
+    if (assignments.length === 0) {
+      setError('出力できる割り当てがありません');
+      return;
+    }
+
+    const viewerWindow = window.open('', '_blank');
+    if (!viewerWindow) {
+      setError('PDFビューアを開けませんでした。ポップアップ設定を確認してください。');
+      return;
+    }
+    viewerWindow.document.write(
+      '<!doctype html><html><head><meta charset="utf-8"><title>PDF生成中</title></head><body style="font-family: sans-serif; padding: 24px;">PDFを生成しています...</body></html>',
+    );
+    viewerWindow.document.close();
+
+    try {
+      const token = await user?.getIdToken();
+      if (!token) {
+        viewerWindow.document.body.textContent = 'PDF出力にはログインが必要です';
+        return;
+      }
+
+      const response = await fetch('/api/admin/export/assignments/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          year: resolvedParams?.year || '',
+          rows: buildAssignmentExportRows(),
+        }),
+      });
+
+      if (!response.ok) {
+        viewerWindow.document.body.textContent = 'PDFの生成に失敗しました';
+        return;
+      }
+
+      const pdfBlob = await response.blob();
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      viewerWindow.location.href = pdfUrl;
+      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
+    } catch (error) {
+      console.error('チーム割り当てPDF出力エラー:', error);
+      setError('PDFの生成に失敗しました');
+      viewerWindow.document.body.textContent = 'PDFの生成に失敗しました';
+    }
   };
 
   return (
@@ -1201,7 +1265,10 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2 flex-col">
                     <p className="border-gray-300 rounded-md text-sm text-gray-600">エクスポート</p>
-                    <ExportActionButtons onCsvExport={exportAssignmentsCsv} />
+                    <ExportActionButtons
+                      onCsvExport={exportAssignmentsCsv}
+                      onPdfExport={exportAssignmentsPdf}
+                    />
                   </div>
                   <div className="flex items-center gap-2 flex-col">
                     <label className="text-sm text-gray-600">班で絞り込み</label>
