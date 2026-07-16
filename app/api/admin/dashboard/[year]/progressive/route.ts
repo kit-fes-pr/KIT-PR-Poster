@@ -102,7 +102,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
         if (includeMembers) {
           try {
             const memberCountSnapshot = await adminDb
-              .collection('members')
+              .collection('assignments')
+              .where('year', '==', yearNum)
               .where('teamId', '==', doc.id)
               .count()
               .get();

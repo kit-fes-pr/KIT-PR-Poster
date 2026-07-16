@@ -110,9 +110,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
             'quick-stats',
           );
 
-          // 4. 並列でメンバー数もカウント
+          // 4. 並列で割り当て数もカウント
           const membersCountQuery = adminDb
-            .collection('members')
+            .collection('assignments')
             .where('year', '==', yearNum)
             .count();
 
