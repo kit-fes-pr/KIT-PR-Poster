@@ -2,6 +2,9 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
+    '/api/admin/export/assignments/pdf': [
+      './node_modules/@expo-google-fonts/noto-sans-jp/400Regular/NotoSansJP_400Regular.ttf',
+    ],
     '/api/admin/export/responses/pdf': [
       './node_modules/@expo-google-fonts/noto-sans-jp/400Regular/NotoSansJP_400Regular.ttf',
     ],
