@@ -285,7 +285,7 @@ async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
         y,
         size: TITLE_FONT_SIZE,
       });
-      y -= 20;
+      y -= 28;
       drawText({
         page,
         font,
@@ -296,12 +296,12 @@ async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
         color: rgb(0.29, 0.33, 0.39),
       });
       page.drawLine({
-        start: { x: MARGIN_X, y: y - 8 },
-        end: { x: PAGE_WIDTH - MARGIN_X, y: y - 8 },
+        start: { x: MARGIN_X, y: y - 14 },
+        end: { x: PAGE_WIDTH - MARGIN_X, y: y - 14 },
         thickness: 0.5,
         color: rgb(0.82, 0.84, 0.88),
       });
-      y -= 28;
+      y -= 40;
     }
 
     let x = MARGIN_X;
