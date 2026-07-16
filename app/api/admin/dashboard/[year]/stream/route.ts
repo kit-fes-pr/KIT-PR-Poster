@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
+import { loadAreaMap } from '@/lib/server/team-area';
 
 function serializeDateValue(value: unknown): string | unknown {
   if (!value) return value;
@@ -126,16 +127,27 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
             .limit(20); // 最初は20件だけ
 
           const teamsSnapshot = await teamsQuery.get();
+          const areaMap = await loadAreaMap();
 
-          const teams = teamsSnapshot.docs.map((doc) => ({
-            teamId: doc.id,
-            ...doc.data(),
-            createdAt: serializeDateValue(doc.data().createdAt),
-            updatedAt: serializeDateValue(doc.data().updatedAt),
-            validStartDate: serializeDateValue(doc.data().validStartDate),
-            validEndDate: serializeDateValue(doc.data().validEndDate),
-            validDate: serializeDateValue(doc.data().validDate),
-          }));
+          const teams = teamsSnapshot.docs.map((doc) => {
+            const data = doc.data();
+            const areaId = String(data.areaId || '');
+            const assignedArea = String(data.assignedArea || '');
+            const area =
+              areaMap.byId.get(areaId) ||
+              areaMap.byId.get(assignedArea) ||
+              areaMap.byCode.get(assignedArea);
+            return {
+              teamId: doc.id,
+              ...data,
+              assignedAreaName: area?.areaName || '',
+              createdAt: serializeDateValue(data.createdAt),
+              updatedAt: serializeDateValue(data.updatedAt),
+              validStartDate: serializeDateValue(data.validStartDate),
+              validEndDate: serializeDateValue(data.validEndDate),
+              validDate: serializeDateValue(data.validDate),
+            };
+          });
 
           // チーム詳細データを送信
           sendChunk(
@@ -165,7 +177,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
           // 8. 最終統計
           const areaStats = teams.reduce(
             (acc, team) => {
-              const area = String((team as Record<string, unknown>).assignedArea || '未設定');
+              const area = String((team as Record<string, unknown>).assignedAreaName || '未設定');
               if (!acc[area]) {
                 acc[area] = { teamCount: 0 };
               }

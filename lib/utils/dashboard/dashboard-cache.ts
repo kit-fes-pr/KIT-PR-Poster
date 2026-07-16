@@ -5,12 +5,14 @@ export interface DashboardTeam {
   teamCode: string;
   teamName: string;
   assignedArea: string;
+  assignedAreaName?: string;
   memberCount?: number;
   validStartDate?: string;
   validEndDate?: string;
 }
 
 export interface ProgressiveDashboardCache {
+  cacheVersion?: number;
   minimalData: {
     event: {
       id: string;
@@ -48,6 +50,7 @@ export interface ProgressiveDashboardCache {
 }
 
 const DASHBOARD_CACHE_PREFIX = 'kitpr_dashboard_cache_';
+const DASHBOARD_CACHE_VERSION = 2;
 
 function getKey(year: number) {
   return `${DASHBOARD_CACHE_PREFIX}${year}`;
@@ -61,6 +64,11 @@ export function readDashboardCache(year: number): ProgressiveDashboardCache | nu
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as ProgressiveDashboardCache;
+    if (parsed.cacheVersion !== DASHBOARD_CACHE_VERSION) {
+      clearDashboardCache(year);
+      return null;
+    }
+
     if (!parsed?.cachedAt || Date.now() - parsed.cachedAt > 30 * 60 * 1000) {
       clearDashboardCache(year);
       return null;
@@ -84,6 +92,7 @@ export function writeDashboardCache(
       getKey(year),
       JSON.stringify({
         ...cache,
+        cacheVersion: DASHBOARD_CACHE_VERSION,
         cachedAt: Date.now(),
       }),
     );

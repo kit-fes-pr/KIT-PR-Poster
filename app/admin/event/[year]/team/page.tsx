@@ -605,16 +605,19 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
   const getAreaLabel = (area?: Area | null) => {
     if (!area) return '-';
-    return `${area.areaName}（${area.areaCode}）`;
+    return area.areaName || '-';
   };
 
   const getTeamAreaLabel = (team?: Team | null) => {
     if (!team) return '-';
     const matched = areas.find(
-      (area) => area.areaId === team.areaId || area.areaCode === team.assignedArea,
+      (area) =>
+        area.areaId === team.areaId ||
+        area.areaId === team.assignedArea ||
+        area.areaCode === team.assignedArea,
     );
     if (matched) return getAreaLabel(matched);
-    return team.assignedArea || '-';
+    return '-';
   };
 
   const resolveAssignmentSlot = (team: Team | null | undefined) => {
@@ -924,7 +927,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         const participant = participants.find((item) => item.responseId === assignment.responseId);
         const team = teams.find((item) => item.teamId === assignment.teamId);
         if (!participant || !team) return null;
-        const teamLabel = team.teamName || team.assignedArea || team.teamId;
+        const teamLabel = team.teamName || getTeamAreaLabel(team);
         return {
           team: teamLabel,
           grade: normalizeGrade(participant.grade),
@@ -1123,14 +1126,6 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         {/* 設定セクション */}
         <div className="bg-white shadow rounded-lg p-6 mb-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">割り当て設定</h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm font-medium text-gray-700 mb-1">対象フォーム</p>
-              <p className="text-sm text-gray-900">{selectedFormTitle || 'フォームが未設定です'}</p>
-            </div>
-          </div>
-
           {/* 自動割り当て実行ボタン */}
           <div className="mt-6 flex flex-col gap-3">
             <button

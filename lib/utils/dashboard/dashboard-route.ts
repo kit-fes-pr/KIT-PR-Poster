@@ -103,7 +103,7 @@ export function buildDashboardAreaStats(input: {
 }): Record<string, { teamCount: number; memberCount: number; teams: string[] }> {
   return input.teams.reduce(
     (acc, team) => {
-      const area = String(team.assignedArea || '未設定');
+      const area = String(team.assignedAreaName || '未設定');
       if (!acc[area]) {
         acc[area] = { teamCount: 0, memberCount: 0, teams: [] as string[] };
       }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
+import { loadAreaMap } from '@/lib/server/team-area';
 
 /**
  * 段階的データ読み込みAPI - チャンク単位でデータを追加取得
@@ -85,12 +86,20 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
       .sort((a, b) => (b.updatedAtMs || b.createdAtMs) - (a.updatedAtMs || a.createdAtMs));
 
     const pagedDocs = orderedTeams.slice(offset, offset + limit).map((item) => item.doc);
+    const areaMap = await loadAreaMap();
     const teams = await Promise.all(
       pagedDocs.map(async (doc) => {
         const raw = doc.data();
+        const areaId = String(raw.areaId || '');
+        const assignedArea = String(raw.assignedArea || '');
+        const area =
+          areaMap.byId.get(areaId) ||
+          areaMap.byId.get(assignedArea) ||
+          areaMap.byCode.get(assignedArea);
         const teamData = {
           teamId: doc.id,
           ...raw,
+          assignedAreaName: area?.areaName || '',
           createdAt: serializeDateTimeValue(raw.createdAt),
           updatedAt: serializeDateTimeValue(raw.updatedAt),
           validStartDate: serializeDateTimeValue(raw.validStartDate),
@@ -120,7 +129,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
     // エリア統計の更新
     const areaStats = teams.reduce(
       (acc, team) => {
-        const area = String((team as Record<string, unknown>).assignedArea || '未設定');
+        const area = String((team as Record<string, unknown>).assignedAreaName || '未設定');
         if (!acc[area]) {
           acc[area] = { teamCount: 0, memberCount: 0 };
         }

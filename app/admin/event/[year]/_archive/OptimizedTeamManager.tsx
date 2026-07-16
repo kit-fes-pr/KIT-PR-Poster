@@ -14,7 +14,13 @@ interface OptimizedTeamManagerProps {
   year: number;
   isAdmin: boolean;
   onTeamUpdate?: (
-    teams: Array<{ teamId: string; teamCode: string; teamName: string; assignedArea: string }>,
+    teams: Array<{
+      teamId: string;
+      teamCode: string;
+      teamName: string;
+      assignedArea: string;
+      assignedAreaName?: string;
+    }>,
   ) => void;
 }
 
@@ -163,7 +169,7 @@ export default function OptimizedTeamManager({
                       {team.teamName}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {team.assignedArea}
+                      {team.assignedAreaName || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {(() => {

@@ -39,11 +39,6 @@ export function AssignmentStatusSummary({
     <div className={compact ? 'text-xs' : 'text-sm'}>
       {!compact && <div className="font-medium text-gray-900">{team.teamName}</div>}
       {areaLabel && !compact && <div className="text-gray-500">{areaLabel}</div>}
-      {assignment.timeSlot && !compact && (
-        <div className="text-xs text-gray-400">
-          配布枠: {formatAvailabilitySlotLabel(assignment.timeSlot)}
-        </div>
-      )}
       <div className={compact ? 'mt-1 flex flex-wrap gap-1' : 'mt-1 flex flex-wrap gap-2'}>
         <span
           className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
