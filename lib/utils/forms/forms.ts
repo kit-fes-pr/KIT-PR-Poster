@@ -1,10 +1,12 @@
 import {
   ALL_AVAILABLE_SLOT_KEY,
   UNAVAILABLE_SLOT_KEY,
+  formatAvailabilitySlotLabel,
   normalizeAvailabilitySlots,
 } from '../availability/availability';
 import { normalizeGrade } from '../grade/grade';
-import type { FormAnswer } from '@/types/forms';
+import { generateKana } from '../../kanaUtils';
+import type { FormAnswer, FormResponse, ParticipantSurveyResponse } from '@/types/forms';
 import { serializeDateTimeValue as serializeDate } from '../dateUtils';
 
 export { serializeDate };
@@ -128,6 +130,23 @@ export function prepareAnswersForStorage(
   );
 }
 
+export function mergeFormAnswers(
+  existingAnswers: FormAnswer[],
+  incomingAnswers: FormAnswer[],
+): FormAnswer[] {
+  const mergedByFieldId = new Map<string, FormAnswer>();
+
+  for (const answer of existingAnswers) {
+    mergedByFieldId.set(answer.fieldId, answer);
+  }
+
+  for (const answer of incomingAnswers) {
+    mergedByFieldId.set(answer.fieldId, answer);
+  }
+
+  return Array.from(mergedByFieldId.values());
+}
+
 export function isFormFieldVisibleForGrade(
   field: { visibleFromGrade?: number },
   participantGrade: unknown,
@@ -168,9 +187,116 @@ export function filterVisibleFormFieldsForParticipant<
   );
 }
 
+export function hasFormFieldAnswerValue(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim() !== '';
+  return value !== null && value !== undefined;
+}
+
+export function filterEditableFormFieldsForParticipant<
+  T extends { fieldId: string; visibleFromGrade?: number },
+>(
+  fields: T[],
+  participantGrade: unknown,
+  availabilityValue: unknown,
+  answerValues: Record<string, unknown>,
+): T[] {
+  return fields.filter(
+    (field) =>
+      isFormFieldVisibleForParticipant(field, participantGrade, availabilityValue) ||
+      hasFormFieldAnswerValue(answerValues[field.fieldId]),
+  );
+}
+
 export function filterVisibleFormFields<T extends { visibleFromGrade?: number }>(
   fields: T[],
   participantGrade: unknown,
 ): T[] {
   return fields.filter((field) => isFormFieldVisibleForGrade(field, participantGrade));
+}
+
+export type ResponseExportRow = {
+  responseId: string;
+  name: string;
+  nameKana: string;
+  grade: number;
+  section: string;
+  availableSlots: string[];
+  submittedAt: Date | string | number;
+};
+
+function getSubmittedAtMillis(value: Date | string | number): number {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+export function buildResponseExportRows(
+  responses: (FormResponse | ParticipantSurveyResponse)[],
+): ResponseExportRow[] {
+  return responses.map((response) => {
+    const participantData = (response as ParticipantSurveyResponse).participantData;
+    return {
+      responseId: response.responseId,
+      name: participantData?.name?.trim() || '',
+      nameKana: participantData?.nameKana?.trim() || '',
+      grade: normalizeGrade(participantData?.grade),
+      section: participantData?.section?.trim() || '',
+      availableSlots: normalizeAvailabilitySlots(participantData?.availableSlots),
+      submittedAt: response.submittedAt,
+    };
+  });
+}
+
+export function formatResponseExportAvailability(row: ResponseExportRow): string {
+  if (row.availableSlots.length === 0) return '-';
+  return row.availableSlots.map((slot) => formatAvailabilitySlotLabel(slot)).join(' ・ ');
+}
+
+export function sortResponseExportRows(rows: ResponseExportRow[]): ResponseExportRow[] {
+  const collator = new Intl.Collator('ja');
+
+  return [...rows].sort((a, b) => {
+    const aSortName = generateKana(a.nameKana || a.name);
+    const bSortName = generateKana(b.nameKana || b.name);
+    const aHasName = aSortName.length > 0;
+    const bHasName = bSortName.length > 0;
+    if (aHasName !== bHasName) return aHasName ? -1 : 1;
+
+    const nameCompare = collator.compare(aSortName, bSortName);
+    if (nameCompare !== 0) return nameCompare;
+
+    const displayNameCompare = collator.compare(a.name, b.name);
+    if (displayNameCompare !== 0) return displayNameCompare;
+
+    if (a.grade !== b.grade) return a.grade - b.grade;
+
+    const sectionCompare = collator.compare(a.section, b.section);
+    if (sectionCompare !== 0) return sectionCompare;
+
+    return getSubmittedAtMillis(a.submittedAt) - getSubmittedAtMillis(b.submittedAt);
+  });
+}
+
+export function groupResponseExportRowsByGrade(
+  rows: ResponseExportRow[],
+): Array<{ grade: number | null; label: string; rows: ResponseExportRow[] }> {
+  const groups = new Map<number | null, ResponseExportRow[]>();
+
+  for (const row of rows) {
+    const grade = row.grade > 0 ? row.grade : null;
+    groups.set(grade, [...(groups.get(grade) || []), row]);
+  }
+
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => {
+      if (a === null && b === null) return 0;
+      if (a === null) return 1;
+      if (b === null) return -1;
+      return a - b;
+    })
+    .map(([grade, groupRows]) => ({
+      grade,
+      label: grade === null ? '学年未設定' : `${grade}年`,
+      rows: sortResponseExportRows(groupRows),
+    }));
 }

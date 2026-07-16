@@ -6,7 +6,9 @@ import { validateAvailabilitySelection } from '@/lib/utils/availability/availabi
 import { getAvailabilityDateSlotKeys } from '@/lib/utils/availability/availability';
 import {
   expandAvailabilitySlotsForStorage,
+  filterEditableFormFieldsForParticipant,
   filterVisibleFormFieldsForParticipant,
+  mergeFormAnswers,
   prepareAnswersForStorage,
   resolveResponseAvailabilitySlots,
   validateFormAnswersPayload,
@@ -62,6 +64,7 @@ export async function PATCH(
     const existingParticipantData = responseData.participantData as
       | {
           name: string;
+          nameKana?: string;
           section: string;
           grade: number;
           availableSlots?: string[];
@@ -90,13 +93,21 @@ export async function PATCH(
         })
       : null;
     const gradeNum = gradeValidation?.gradeNum || 0;
-    const availableSlots = effectiveParticipantData
-      ? resolveResponseAvailabilitySlots(answers, effectiveParticipantData.availableSlots)
+    const existingAnswers = Array.isArray(responseData.answers)
+      ? (responseData.answers as FormAnswer[])
       : [];
-    const visibleFields = filterVisibleFormFieldsForParticipant(
+    const mergedAnswers = mergeFormAnswers(existingAnswers, answers);
+    const availableSlots = effectiveParticipantData
+      ? resolveResponseAvailabilitySlots(mergedAnswers, effectiveParticipantData.availableSlots)
+      : [];
+    const answerValues = Object.fromEntries(
+      mergedAnswers.map((answer) => [answer.fieldId, answer.value]),
+    );
+    const visibleFields = filterEditableFormFieldsForParticipant(
       formData.fields,
       gradeNum,
       availableSlots,
+      answerValues,
     );
     const visibleFieldIds = new Set(visibleFields.map((field) => field.fieldId));
 
@@ -110,6 +121,14 @@ export async function PATCH(
         effectiveParticipantData.name.trim() === ''
       ) {
         participantValidationErrors.push('お名前は必須です');
+      }
+
+      if (
+        effectiveParticipantData.nameKana != null &&
+        (typeof effectiveParticipantData.nameKana !== 'string' ||
+          effectiveParticipantData.nameKana.trim() === '')
+      ) {
+        participantValidationErrors.push('ふりがなの形式が正しくありません');
       }
 
       if (
@@ -144,7 +163,7 @@ export async function PATCH(
     const validationErrors: string[] = [];
 
     for (const field of visibleFields) {
-      const answer = answers.find((a: FormAnswer) => a.fieldId === field.fieldId);
+      const answer = mergedAnswers.find((a: FormAnswer) => a.fieldId === field.fieldId);
 
       // 必須フィールドのチェック
       if (field.required) {
@@ -239,7 +258,7 @@ export async function PATCH(
       (availabilityField?.options || []).map((option) => ({ key: option })),
     );
     const storedAnswers = prepareAnswersForStorage(
-      answers,
+      mergedAnswers,
       visibleFieldIds,
       availabilityDateSlotKeys,
     );
@@ -264,6 +283,7 @@ export async function PATCH(
         answers: storedAnswers,
         participantData: {
           name: effectiveParticipantData.name,
+          nameKana: effectiveParticipantData.nameKana || '',
           section: effectiveParticipantData.section,
           grade: gradeNum,
           availableSlots: expandAvailabilitySlotsForStorage(

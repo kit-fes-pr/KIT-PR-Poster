@@ -9,10 +9,12 @@ type ResponseEditModalProps = {
   title: string;
   description?: string;
   name: string;
+  nameKana: string;
   grade: string;
   section: string;
   onClose: () => void;
   onNameChange: (value: string) => void;
+  onNameKanaChange: (value: string) => void;
   onGradeChange: (value: string) => void;
   onSectionChange: (value: string) => void;
   onSubmit: () => void;
@@ -28,10 +30,12 @@ export function ResponseEditModal({
   title,
   description,
   name,
+  nameKana,
   grade,
   section,
   onClose,
   onNameChange,
+  onNameKanaChange,
   onGradeChange,
   onSectionChange,
   onSubmit,
@@ -80,9 +84,11 @@ export function ResponseEditModal({
         <div className="space-y-6">
           <ParticipantIdentityFields
             name={name}
+            nameKana={nameKana}
             grade={grade}
             section={section}
             onNameChange={onNameChange}
+            onNameKanaChange={onNameKanaChange}
             onGradeChange={onGradeChange}
             onSectionChange={onSectionChange}
           />

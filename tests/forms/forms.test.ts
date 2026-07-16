@@ -1,15 +1,22 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  buildResponseExportRows,
   expandAvailabilitySlotsForStorage,
+  filterEditableFormFieldsForParticipant,
   filterVisibleFormFields,
+  formatResponseExportAvailability,
+  groupResponseExportRowsByGrade,
+  mergeFormAnswers,
   normalizeFormEventContext,
   prepareAnswersForStorage,
   resolveResponseAvailabilitySlots,
   serializeDate,
+  sortResponseExportRows,
   toMillis,
   validateFormAnswersPayload,
 } from '../../lib/utils/forms/forms';
+import type { ParticipantSurveyResponse } from '../../types/forms';
 
 describe('forms utils', () => {
   test('normalizeFormEventContext prefers year and normalizes eventId', () => {
@@ -92,6 +99,27 @@ describe('forms utils', () => {
     );
   });
 
+  test('filterEditableFormFieldsForParticipant keeps hidden fields with existing answers', () => {
+    const fields = [
+      { fieldId: 'availability' },
+      { fieldId: 'carUsage', visibleFromGrade: 3 },
+      { fieldId: 'remarks' },
+    ];
+
+    assert.deepEqual(
+      filterEditableFormFieldsForParticipant(fields, '2', ['2026-06-01_am'], {
+        carUsage: '運転できる',
+      }).map((field) => field.fieldId),
+      ['availability', 'carUsage', 'remarks'],
+    );
+    assert.deepEqual(
+      filterEditableFormFieldsForParticipant(fields, '2', ['2026-06-01_am'], {}).map(
+        (field) => field.fieldId,
+      ),
+      ['availability', 'remarks'],
+    );
+  });
+
   test('expandAvailabilitySlotsForStorage converts all available into date slots', () => {
     assert.deepEqual(
       expandAvailabilitySlotsForStorage(
@@ -127,6 +155,28 @@ describe('forms utils', () => {
     );
   });
 
+  test('mergeFormAnswers preserves omitted existing answers and overwrites submitted fields', () => {
+    assert.deepEqual(
+      mergeFormAnswers(
+        [
+          { fieldId: 'availability', value: ['2026-06-01_am'] },
+          { fieldId: 'remarks', value: 'before' },
+          { fieldId: 'carUsage', value: '運転できる' },
+        ],
+        [
+          { fieldId: 'remarks', value: 'after' },
+          { fieldId: 'newField', value: 'new' },
+        ],
+      ),
+      [
+        { fieldId: 'availability', value: ['2026-06-01_am'] },
+        { fieldId: 'remarks', value: 'after' },
+        { fieldId: 'carUsage', value: '運転できる' },
+        { fieldId: 'newField', value: 'new' },
+      ],
+    );
+  });
+
   test('validateFormAnswersPayload rejects invalid answer entries', () => {
     assert.deepEqual(validateFormAnswersPayload(null), {
       valid: false,
@@ -147,5 +197,174 @@ describe('forms utils', () => {
     assert.deepEqual(validateFormAnswersPayload([{ fieldId: 'remarks', value: 'ok' }]), {
       valid: true,
     });
+  });
+
+  test('sortResponseExportRows sorts by Japanese name and puts blank names last', () => {
+    const rows = sortResponseExportRows([
+      {
+        responseId: '3',
+        name: '',
+        nameKana: '',
+        grade: 1,
+        section: 'PR',
+        submittedAt: '2026-03-03T00:00:00.000Z',
+        availableSlots: [],
+      },
+      {
+        responseId: '2',
+        name: 'いとう',
+        nameKana: '',
+        grade: 2,
+        section: '技術',
+        submittedAt: '2026-03-02T00:00:00.000Z',
+        availableSlots: [],
+      },
+      {
+        responseId: '1',
+        name: 'あおき',
+        nameKana: '',
+        grade: 1,
+        section: '企画',
+        submittedAt: '2026-03-01T00:00:00.000Z',
+        availableSlots: [],
+      },
+    ]);
+
+    assert.deepEqual(
+      rows.map((row) => row.responseId),
+      ['1', '2', '3'],
+    );
+  });
+
+  test('sortResponseExportRows prefers full furigana over kanji display name', () => {
+    const rows = sortResponseExportRows([
+      {
+        responseId: '1',
+        name: '山田',
+        nameKana: 'やまだ',
+        grade: 1,
+        section: '企画',
+        submittedAt: '2026-03-01T00:00:00.000Z',
+        availableSlots: [],
+      },
+      {
+        responseId: '2',
+        name: '佐藤',
+        nameKana: 'さとう',
+        grade: 1,
+        section: '技術',
+        submittedAt: '2026-03-02T00:00:00.000Z',
+        availableSlots: [],
+      },
+      {
+        responseId: '3',
+        name: '青木',
+        nameKana: 'あおき',
+        grade: 1,
+        section: 'PR',
+        submittedAt: '2026-03-03T00:00:00.000Z',
+        availableSlots: [],
+      },
+    ]);
+
+    assert.deepEqual(
+      rows.map((row) => row.responseId),
+      ['3', '2', '1'],
+    );
+  });
+
+  test('buildResponseExportRows extracts participant fields for export', () => {
+    const responses: ParticipantSurveyResponse[] = [
+      {
+        responseId: 'response-1',
+        formId: 'form-1',
+        answers: [],
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+        participantData: {
+          name: ' 山田 ',
+          nameKana: ' やまだ ',
+          grade: 3,
+          section: ' PR ',
+          availableSlots: ['2026-06-01_am', 'unavailable'],
+        },
+      },
+    ];
+
+    assert.deepEqual(buildResponseExportRows(responses), [
+      {
+        responseId: 'response-1',
+        name: '山田',
+        nameKana: 'やまだ',
+        grade: 3,
+        section: 'PR',
+        availableSlots: ['2026-06-01_am', 'unavailable'],
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+      },
+    ]);
+  });
+
+  test('formatResponseExportAvailability formats selected availability slots', () => {
+    assert.equal(
+      formatResponseExportAvailability({
+        responseId: 'response-1',
+        name: '山田',
+        nameKana: 'やまだ',
+        grade: 3,
+        section: 'PR',
+        availableSlots: ['2026-06-01_am', 'unavailable'],
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+      }),
+      '6/1 午前 ・ 参加不可',
+    );
+  });
+
+  test('groupResponseExportRowsByGrade groups by ascending grade and sorts rows in each group', () => {
+    const groups = groupResponseExportRowsByGrade([
+      {
+        responseId: '4',
+        name: '未設定',
+        nameKana: 'みせってい',
+        grade: 0,
+        section: '4年',
+        submittedAt: '2026-03-04T00:00:00.000Z',
+        availableSlots: [],
+      },
+      {
+        responseId: '2',
+        name: 'いとう',
+        nameKana: '',
+        grade: 1,
+        section: '技術',
+        submittedAt: '2026-03-02T00:00:00.000Z',
+        availableSlots: [],
+      },
+      {
+        responseId: '3',
+        name: 'あおき',
+        nameKana: '',
+        grade: 2,
+        section: '企画',
+        submittedAt: '2026-03-03T00:00:00.000Z',
+        availableSlots: [],
+      },
+      {
+        responseId: '1',
+        name: 'あおき',
+        nameKana: '',
+        grade: 1,
+        section: '企画',
+        submittedAt: '2026-03-01T00:00:00.000Z',
+        availableSlots: [],
+      },
+    ]);
+
+    assert.deepEqual(
+      groups.map((group) => group.label),
+      ['1年', '2年', '学年未設定'],
+    );
+    assert.deepEqual(
+      groups[0].rows.map((row) => row.responseId),
+      ['1', '2'],
+    );
   });
 });

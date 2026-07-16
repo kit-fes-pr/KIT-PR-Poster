@@ -72,6 +72,7 @@ export interface FormUpdateData {
 export interface ParticipantSurveyResponse extends FormResponse {
   participantData: {
     name: string;
+    nameKana?: string;
     section: string; // 所属セクション
     grade: number; // 学年
     availableSlots?: string[]; // 参加可能日時の複数選択

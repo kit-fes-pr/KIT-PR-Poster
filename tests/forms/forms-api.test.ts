@@ -180,6 +180,7 @@ describe('forms api utils', () => {
         submitterInfo: {},
         participantData: {
           name: '山田',
+          nameKana: '',
           section: '1年',
           grade: 3,
           availableSlots: ['2026-06-01_am'],

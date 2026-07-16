@@ -13,6 +13,7 @@ interface FormData {
   [fieldId: string]: string | string[];
   // 参加者必須情報
   participantName: string;
+  participantNameKana: string;
   participantGrade: string;
   participantSection: string;
 }
@@ -153,6 +154,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ id: str
           answers,
           participantData: {
             name: data.participantName,
+            nameKana: data.participantNameKana,
             section: data.participantSection,
             grade: data.participantGrade,
             availableSlots,
