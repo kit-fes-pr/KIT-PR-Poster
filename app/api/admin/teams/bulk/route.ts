@@ -18,6 +18,32 @@ type TeamBulkUpdate = {
   year?: unknown;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeBulkUpdates(updates: unknown[]): TeamBulkUpdate[] | { error: string } {
+  const updateByTeamId = new Map<string, TeamBulkUpdate>();
+
+  for (const update of updates) {
+    if (!isRecord(update)) {
+      return { error: 'updates の各要素はオブジェクトである必要があります' };
+    }
+
+    const teamId = typeof update.teamId === 'string' ? update.teamId.trim() : '';
+    if (!teamId) {
+      return { error: 'teamId は必須です' };
+    }
+
+    updateByTeamId.set(teamId, {
+      ...update,
+      teamId,
+    });
+  }
+
+  return Array.from(updateByTeamId.values());
+}
+
 type EventAvailabilitySlotCache = {
   byEventId: Map<string, Promise<string[]>>;
   eventIdByYear: Map<number, Promise<string | null>>;
@@ -113,13 +139,15 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const requestedUpdates = body.updates as TeamBulkUpdate[];
+    const normalizedUpdates = normalizeBulkUpdates(body.updates);
+    if ('error' in normalizedUpdates) {
+      return NextResponse.json({ error: normalizedUpdates.error }, { status: 400 });
+    }
+
+    const requestedUpdates = normalizedUpdates;
     const teamIds = requestedUpdates.map((update) =>
       typeof update.teamId === 'string' ? update.teamId.trim() : '',
     );
-    if (teamIds.some((teamId) => !teamId)) {
-      return NextResponse.json({ error: 'teamId は必須です' }, { status: 400 });
-    }
 
     const refs = teamIds.map((teamId) => adminDb.collection('teams').doc(teamId));
     const docs = await adminDb.getAll(...refs);
