@@ -160,7 +160,7 @@ export async function PATCH(request: NextRequest) {
       eventIdByYear: new Map(),
     };
     const batchUpdates: Array<{
-      ref: FirebaseFirestore.DocumentReference;
+      ref: any;
       update: Record<string, unknown>;
       team: Record<string, unknown>;
       previousYear?: number;
