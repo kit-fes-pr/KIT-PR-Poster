@@ -13,7 +13,7 @@ import {
   VerifiedAuthUser,
 } from '@/lib/utils/auth-fetcher';
 
-type Mode = 'self' | 'all' | 'team';
+type Mode = 'self' | 'all' | 'teams';
 type DashboardTeam = {
   teamId: string;
   teamCode: string;
@@ -37,7 +37,7 @@ export default function DashboardContent({
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
   const [authUser, setAuthUser] = useState<VerifiedAuthUser | null>(null);
-  const readOnly = mode === 'all' || mode === 'team';
+  const readOnly = mode === 'all' || mode === 'teams';
   const yearQuery = year ? `year=${encodeURIComponent(String(year))}` : '';
   const withYearQuery = (url: string) => {
     if (!yearQuery) return url;
@@ -48,7 +48,7 @@ export default function DashboardContent({
   const swrKey =
     mode === 'all'
       ? withYearQuery('/api/stores?scope=all')
-      : mode === 'team' && teamId
+      : mode === 'teams' && teamId
         ? withYearQuery(`/api/stores?teamId=${encodeURIComponent(teamId)}`)
         : mode === 'self'
           ? withYearQuery('/api/stores')
@@ -121,7 +121,7 @@ export default function DashboardContent({
           }
         }
 
-        if ((mode === 'all' || mode === 'team') && !user.isAdmin && user.role !== 'team') {
+        if ((mode === 'all' || mode === 'teams') && !user.isAdmin && user.role !== 'team') {
           router.replace('/');
           return;
         }
@@ -167,13 +167,13 @@ export default function DashboardContent({
   const teams = teamsData?.teams || [];
   const ownTeam = teams.find((team) => team.teamId === authUser?.teamId || team.isOwnTeam);
   const currentTeam =
-    mode === 'team'
+    mode === 'teams'
       ? teams.find((team) => team.teamId === teamId)
       : mode === 'self'
         ? ownTeam
         : undefined;
   const isViewingOtherTeam =
-    mode === 'team' && !!currentTeam && !!ownTeam && currentTeam.teamId !== ownTeam.teamId;
+    mode === 'teams' && !!currentTeam && !!ownTeam && currentTeam.teamId !== ownTeam.teamId;
 
   const onSubmitStore = async (data: StoreFormData) => {
     try {
@@ -370,13 +370,13 @@ export default function DashboardContent({
                 <p className="text-sm text-gray-500">{filteredStores.length}件表示中</p>
               </div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-[10rem_minmax(16rem,1fr)] lg:grid-cols-[12rem_10rem_minmax(16rem,1fr)_auto]">
-                {(mode === 'all' || mode === 'team') && (
+                {(mode === 'all' || mode === 'teams') && (
                   <div>
                     <label className="mb-1 block text-xs font-medium text-gray-600">
                       表示する班
                     </label>
                     <select
-                      value={mode === 'team' ? teamId || '' : 'all'}
+                      value={mode === 'teams' ? teamId || '' : 'all'}
                       onChange={(e) => {
                         const nextTeamId = e.target.value;
                         router.push(nextTeamId === 'all' ? allHref : teamHref(nextTeamId));

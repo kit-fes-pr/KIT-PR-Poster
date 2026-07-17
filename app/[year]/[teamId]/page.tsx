@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import DashboardContent from '@/components/dashboard/DashboardContent';
 import { getDashboardTeamForYear, parseDashboardYear } from '@/lib/server/dashboard-year';
 
-const RESERVED_YEAR_PATHS = new Set(['all', 'teams']);
+const RESERVED_YEAR_PATHS = new Set(['all', 'teams', 'stores']);
 
 export default async function YearTeamDashboardPage({
   params,
@@ -19,5 +19,5 @@ export default async function YearTeamDashboardPage({
     notFound();
   }
 
-  return <DashboardContent mode="team" teamId={teamId} year={year} />;
+  return <DashboardContent mode="teams" teamId={teamId} year={year} />;
 }

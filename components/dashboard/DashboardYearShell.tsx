@@ -4,7 +4,7 @@ import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import useSWR from 'swr';
-import DashboardHeader from '@/components/dashboard/DashboardHeader';
+import DashboardHeader, { HeaderMode } from '@/components/dashboard/DashboardHeader';
 import DashboardModeGuide from '@/components/dashboard/DashboardModeGuide';
 import { auth } from '@/lib/firebase';
 import {
@@ -15,7 +15,7 @@ import {
 } from '@/lib/utils/auth-fetcher';
 import { removeLocalStorageItem } from '@/lib/utils/browser-storage';
 
-type DashboardMode = 'self' | 'all' | 'team' | 'teams';
+type DashboardRouteMode = 'self' | 'all' | 'teams';
 
 type DashboardTeam = {
   teamId: string;
@@ -67,14 +67,13 @@ export default function DashboardYearShell({
     const afterYear = parts[1];
     if (!afterYear) return { mode: 'self' as const };
     if (afterYear === 'all') return { mode: 'all' as const };
-    if (afterYear === 'teams') return { mode: 'teams' as const };
-    return { mode: 'team' as const, teamId: afterYear };
+    return { mode: 'teams' as const, teamId: afterYear };
   }, [pathname]);
 
   const teams = teamsData?.teams || [];
   const ownTeam = teams.find((team) => team.teamId === authUser?.teamId || team.isOwnTeam);
   const currentTeam =
-    routeState.mode === 'team'
+    routeState.mode === 'teams'
       ? teams.find((team) => team.teamId === routeState.teamId)
       : routeState.mode === 'self'
         ? ownTeam
@@ -84,7 +83,9 @@ export default function DashboardYearShell({
     routeState.mode === 'all'
       ? '全班の配布店舗'
       : routeState.mode === 'teams'
-        ? '班を選ぶ'
+        ? currentTeam
+          ? `${currentTeam.teamName} の配布店舗`
+          : '班を選ぶ'
         : currentTeam
           ? `${currentTeam.teamName} の配布店舗`
           : '自班の配布店舗';
@@ -114,11 +115,10 @@ export default function DashboardYearShell({
         <>
           <DashboardHeader
             year={year}
-            mode={routeState.mode as DashboardMode}
+            mode={routeState.mode as HeaderMode}
             title={title}
             authUser={authUser}
             ownTeam={ownTeam}
-            currentTeam={currentTeam}
             isLoggingOut={isLoggingOut}
             onLogout={handleLogout}
           />
@@ -126,7 +126,7 @@ export default function DashboardYearShell({
           <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8">
             <DashboardModeGuide
               year={year}
-              mode={routeState.mode as DashboardMode}
+              mode={routeState.mode as HeaderMode}
               canUseSelf={authUser?.role === 'team' && !!ownTeam}
             />
           </div>

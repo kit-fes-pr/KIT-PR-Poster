@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { VerifiedAuthUser } from '@/lib/utils/auth-fetcher';
 
-type HeaderMode = 'self' | 'all' | 'team' | 'teams';
+export type HeaderMode = 'self' | 'all' | 'teams';
 
 type HeaderTeam = {
   teamId: string;
@@ -17,7 +17,6 @@ export default function DashboardHeader({
   title,
   authUser,
   ownTeam,
-  currentTeam,
   isLoggingOut,
   onLogout,
 }: {
@@ -26,13 +25,10 @@ export default function DashboardHeader({
   title: string;
   authUser: VerifiedAuthUser | null;
   ownTeam?: HeaderTeam;
-  currentTeam?: HeaderTeam;
   isLoggingOut: boolean;
   onLogout: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const isViewingOtherTeam =
-    mode === 'team' && !!ownTeam && !!currentTeam && ownTeam.teamId !== currentTeam.teamId;
   const roleLabel = authUser?.isAdmin ? '管理者' : 'ユーザー';
   const navItems = [
     ...(authUser?.role === 'team' && ownTeam
@@ -42,7 +38,7 @@ export default function DashboardHeader({
     {
       href: `/${year}/teams`,
       label: '班を選ぶ',
-      active: mode === 'teams' || mode === 'team',
+      active: mode === 'teams',
     },
   ];
 
@@ -52,7 +48,7 @@ export default function DashboardHeader({
         <div className="flex items-start justify-between gap-3 py-4 lg:items-center">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="min-w-0 text-base font-semibold text-gray-900 sm:text-xl">{title}</h1>-
+              <h1 className="min-w-0 text-base font-semibold text-gray-900 sm:text-xl">{title}</h1>
               <span className="font-medium text-gray-700">{year}年度</span>
               <div className="hidden items-center gap-2 md:flex">
                 <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-medium text-indigo-700">
