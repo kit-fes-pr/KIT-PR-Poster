@@ -125,20 +125,16 @@ export function isWithinTeamAccessWindow(input: {
   validEndDate?: unknown;
   validDate?: unknown;
 }): boolean | null {
-  if (
-    isDateOnlyString(input.validStartDate) ||
-    isDateOnlyString(input.validEndDate) ||
-    isDateOnlyString(input.validDate)
-  ) {
+  if (isDateOnlyString(input.validStartDate) || isDateOnlyString(input.validEndDate)) {
     return null;
   }
 
-  const start = parseDateLike(input.validStartDate || input.validDate);
-  const end = parseDateLike(input.validEndDate || input.validDate);
-  if (!start && !end) return null;
+  const start = parseDateLike(input.validStartDate);
+  const end = parseDateLike(input.validEndDate);
+  if (!start || !end) return null;
 
   const time = input.now.getTime();
-  if (start && time < start.getTime()) return false;
-  if (end && time > end.getTime()) return false;
+  if (time < start.getTime()) return false;
+  if (time > end.getTime()) return false;
   return true;
 }

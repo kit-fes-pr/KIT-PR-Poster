@@ -204,6 +204,27 @@ describe('team api utils', () => {
       }),
       null,
     );
+    assert.equal(
+      isWithinTeamAccessWindow({
+        now: new Date('2026-06-01T12:30:00.000Z'),
+        validDate: '2026-06-01T08:00:00+09:00',
+      }),
+      null,
+    );
+    assert.equal(
+      isWithinTeamAccessWindow({
+        now: new Date('2026-06-01T12:30:00.000Z'),
+        validStartDate: '2026-06-01T08:00:00+09:00',
+      }),
+      null,
+    );
+    assert.equal(
+      isWithinTeamAccessWindow({
+        now: new Date('2026-06-01T12:30:00.000Z'),
+        validEndDate: '2026-06-01T21:00:00+09:00',
+      }),
+      null,
+    );
   });
 
   test('buildTeamUpdateData rejects invalid timeSlot', () => {
