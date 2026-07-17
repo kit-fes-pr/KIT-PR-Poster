@@ -18,6 +18,16 @@ export default function Home() {
     formState: { errors },
   } = useForm<LoginFormData>();
 
+  const resolveDashboardPath = (result: { teamData?: { year?: unknown } }) => {
+    const year =
+      typeof result.teamData?.year === 'number'
+        ? result.teamData.year
+        : typeof result.teamData?.year === 'string' && /^\d{4}$/.test(result.teamData.year)
+          ? Number(result.teamData.year)
+          : null;
+    return year ? `/${year}` : '/';
+  };
+
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     setError('');
@@ -46,7 +56,7 @@ export default function Home() {
             );
             const idToken = await getIdToken(cred.user);
             localStorage.setItem('authToken', idToken);
-            router.replace('/dashboard');
+            router.replace(resolveDashboardPath(result));
             return;
           }
 
@@ -56,7 +66,7 @@ export default function Home() {
             const cred = await signInWithCustomToken(auth, result.customToken);
             const idToken = await getIdToken(cred.user);
             localStorage.setItem('authToken', idToken);
-            router.replace('/dashboard');
+            router.replace(resolveDashboardPath(result));
             return;
           }
 

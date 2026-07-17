@@ -3,6 +3,11 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { generateKana } from '@/lib/kanaUtils';
 import { Store } from '@/types';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
+import {
+  getDashboardEventIdForYear,
+  parseDashboardYear,
+  teamBelongsToDashboardYear,
+} from '@/lib/server/dashboard-year';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,8 +31,15 @@ export async function GET(request: NextRequest) {
     const q = searchParams.get('q');
     const scope = (searchParams.get('scope') || '').toLowerCase();
     const requestedTeamId = searchParams.get('teamId');
+    const yearParam = searchParams.get('year');
+    const targetYear = yearParam ? parseDashboardYear(yearParam) : null;
+    if (yearParam && !targetYear) {
+      return NextResponse.json({ error: 'year は4桁の年度で指定してください' }, { status: 400 });
+    }
 
-    let query = adminDb.collection('stores').where('eventId', '==', 'kodai2025');
+    let targetEventId: string | null = targetYear
+      ? await getDashboardEventIdForYear(targetYear)
+      : 'kodai2025';
     let filterTeamCode: string | null = null;
 
     if (requestedTeamId) {
@@ -36,25 +48,76 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: '班が見つかりません' }, { status: 404 });
       }
       const teamData = teamDoc.data() as Record<string, unknown> | undefined;
+      if (
+        targetYear &&
+        (!teamData || !teamBelongsToDashboardYear(teamData, targetYear, targetEventId))
+      ) {
+        return NextResponse.json({ error: '班が見つかりません' }, { status: 404 });
+      }
       filterTeamCode = typeof teamData?.teamCode === 'string' ? teamData.teamCode : null;
+      if (!targetEventId && typeof teamData?.eventId === 'string') {
+        targetEventId = teamData.eventId;
+      }
     } else if (decodedToken.role === 'team' && scope !== 'all') {
       // チームログイン時の既定表示は自班の担当区域＋周辺区域に限定
       const teamDoc = await adminDb.collection('teams').doc(String(decodedToken.teamId)).get();
       const teamData = teamDoc.data() as Record<string, unknown> | undefined;
+      if (
+        targetYear &&
+        (!teamData || !teamBelongsToDashboardYear(teamData, targetYear, targetEventId))
+      ) {
+        return NextResponse.json({ error: '班が見つかりません' }, { status: 404 });
+      }
       filterTeamCode = typeof decodedToken.teamCode === 'string' ? decodedToken.teamCode : null;
+      if (!targetEventId && typeof teamData?.eventId === 'string') {
+        targetEventId = teamData.eventId;
+      }
       if (teamData?.assignedArea) {
         const adjacent = Array.isArray(teamData.adjacentAreas) ? teamData.adjacentAreas : [];
         const allowedAreas = [teamData.assignedArea, ...adjacent].filter(Boolean);
         // Firestore 'in' フィルタは最大10要素。超える場合は全件取得して後段で絞り込み。
         if (allowedAreas.length > 0 && allowedAreas.length <= 10) {
+          if (!targetEventId) return NextResponse.json({ stores: [] });
+          let query = adminDb.collection('stores').where('eventId', '==', targetEventId);
           query = query.where('areaCode', 'in', allowedAreas);
+          if (status) {
+            query = query.where('distributionStatus', '==', status);
+          }
+          const snapshot = await query.get();
+          let stores = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as unknown as Store[];
+          if (q) {
+            const searchTerm = q.toLowerCase();
+            stores = stores.filter(
+              (store) =>
+                store.storeName.toLowerCase().includes(searchTerm) ||
+                store.address.toLowerCase().includes(searchTerm),
+            );
+          }
+          const selfCode = filterTeamCode;
+          stores = stores.filter(
+            (s: Store) => s.createdByTeamCode === selfCode || s.distributedBy === selfCode,
+          );
+          stores.sort((a, b) => {
+            const nameCompare = a.storeNameKana.localeCompare(b.storeNameKana, 'ja');
+            if (nameCompare !== 0) return nameCompare;
+            return a.addressKana.localeCompare(b.addressKana, 'ja');
+          });
+          return NextResponse.json({ stores });
         }
       }
-    } else if (area) {
-      // 明示的なエリア指定があれば適用（管理者など）
-      query = query.where('areaCode', '==', area);
     }
 
+    if (!targetEventId) {
+      return NextResponse.json({ stores: [] });
+    }
+
+    let query = adminDb.collection('stores').where('eventId', '==', targetEventId);
+    if (area) {
+      query = query.where('areaCode', '==', area);
+    }
     if (status) {
       query = query.where('distributionStatus', '==', status);
     }
@@ -129,6 +192,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '班ログインが必要です' }, { status: 403 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const yearParam = searchParams.get('year');
+    const targetYear = yearParam ? parseDashboardYear(yearParam) : null;
+    if (yearParam && !targetYear) {
+      return NextResponse.json({ error: 'year は4桁の年度で指定してください' }, { status: 400 });
+    }
+    const targetEventId = targetYear ? await getDashboardEventIdForYear(targetYear) : null;
+
     const {
       storeName,
       address,
@@ -145,11 +216,19 @@ export async function POST(request: NextRequest) {
 
     // チームの担当区域を解決（areaCode が指定されない場合の既定値に使用）
     let teamAssignedArea: string | undefined;
+    let teamEventId: string | undefined;
     if (decodedToken.role === 'team' && decodedToken.teamId) {
       try {
         const teamDoc = await adminDb.collection('teams').doc(decodedToken.teamId).get();
         const teamData = teamDoc.data() as Record<string, unknown> | undefined;
+        if (
+          targetYear &&
+          (!teamData || !teamBelongsToDashboardYear(teamData, targetYear, targetEventId))
+        ) {
+          return NextResponse.json({ error: '班が見つかりません' }, { status: 404 });
+        }
         teamAssignedArea = teamData?.assignedArea as string;
+        teamEventId = typeof teamData?.eventId === 'string' ? teamData.eventId : undefined;
       } catch (error) {
         console.error('エラー内容:', error);
       }
@@ -171,7 +250,7 @@ export async function POST(request: NextRequest) {
       ...(distributionStatus === 'completed' && { distributedAt: new Date() }),
       ...(notes && { notes }),
       registrationMethod: 'manual',
-      eventId: 'kodai2025',
+      eventId: teamEventId || targetEventId || 'kodai2025',
       createdAt: new Date(),
       updatedAt: new Date(),
     };

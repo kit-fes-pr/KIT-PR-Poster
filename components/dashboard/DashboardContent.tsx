@@ -1,39 +1,68 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { signOut } from 'firebase/auth';
 import useSWR from 'swr';
 import { Modal } from '@/components/ui/Modal';
 import { Store, StoreFormData } from '@/types';
 import { useForm } from 'react-hook-form';
-import { auth } from '@/lib/firebase';
-import { authenticatedFetch, fetcherAuth, getVerifiedAuthUser } from '@/lib/utils/auth-fetcher';
-import { removeLocalStorageItem } from '@/lib/utils/browser-storage';
+import {
+  authenticatedFetch,
+  fetcherAuth,
+  getVerifiedAuthUser,
+  VerifiedAuthUser,
+} from '@/lib/utils/auth-fetcher';
 
 type Mode = 'self' | 'all' | 'team';
+type DashboardTeam = {
+  teamId: string;
+  teamCode: string;
+  teamName: string;
+  assignedArea?: string;
+  timeSlot?: string;
+  year?: number;
+  isOwnTeam?: boolean;
+};
 
-export default function DashboardContent({ mode, teamId }: { mode: Mode; teamId?: string }) {
+export default function DashboardContent({
+  mode,
+  teamId,
+  year,
+}: {
+  mode: Mode;
+  teamId?: string;
+  year?: number;
+}) {
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
+  const [authUser, setAuthUser] = useState<VerifiedAuthUser | null>(null);
   const readOnly = mode === 'all' || mode === 'team';
+  const yearQuery = year ? `year=${encodeURIComponent(String(year))}` : '';
+  const withYearQuery = (url: string) => {
+    if (!yearQuery) return url;
+    return `${url}${url.includes('?') ? '&' : '?'}${yearQuery}`;
+  };
+  const allHref = year ? `/${year}/all` : '/';
+  const teamHref = (id: string) => (year ? `/${year}/${id}` : '/');
   const swrKey =
     mode === 'all'
-      ? '/api/stores?scope=all'
+      ? withYearQuery('/api/stores?scope=all')
       : mode === 'team' && teamId
-        ? `/api/stores?teamId=${encodeURIComponent(teamId)}`
+        ? withYearQuery(`/api/stores?teamId=${encodeURIComponent(teamId)}`)
         : mode === 'self'
-          ? '/api/stores'
+          ? withYearQuery('/api/stores')
           : null;
   const { data: storesData, mutate } = useSWR(swrKey, fetcherAuth);
+  const { data: teamsData } = useSWR<{ teams: DashboardTeam[] }>(
+    authChecked ? withYearQuery('/api/dashboard/teams') : null,
+    fetcherAuth,
+  );
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingStore, setIsAddingStore] = useState(false);
   const [detailsStoreId, setDetailsStoreId] = useState<string | null>(null);
   const [menuStoreId, setMenuStoreId] = useState<string | null>(null);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const {
     register,
@@ -82,7 +111,7 @@ export default function DashboardContent({ mode, teamId }: { mode: Mode; teamId?
 
         if (mode === 'self') {
           if (user.isAdmin) {
-            router.replace('/dashboard/all');
+            router.replace(allHref);
             return;
           }
           if (user.role !== 'team' || !user.teamId) {
@@ -96,6 +125,7 @@ export default function DashboardContent({ mode, teamId }: { mode: Mode; teamId?
           return;
         }
 
+        setAuthUser(user);
         setAuthChecked(true);
       })
       .catch(() => {
@@ -104,7 +134,7 @@ export default function DashboardContent({ mode, teamId }: { mode: Mode; teamId?
     return () => {
       mounted = false;
     };
-  }, [mode, router, teamId]);
+  }, [allHref, mode, router, teamId]);
 
   const filteredStores: Store[] = useMemo(() => {
     const list: Store[] = storesData?.stores || [];
@@ -133,10 +163,20 @@ export default function DashboardContent({ mode, teamId }: { mode: Mode; teamId?
     (sum, s) => sum + (Number(s.distributedCount) || 0),
     0,
   );
+  const teams = teamsData?.teams || [];
+  const ownTeam = teams.find((team) => team.teamId === authUser?.teamId || team.isOwnTeam);
+  const currentTeam =
+    mode === 'team'
+      ? teams.find((team) => team.teamId === teamId)
+      : mode === 'self'
+        ? ownTeam
+        : undefined;
+  const isViewingOtherTeam =
+    mode === 'team' && !!currentTeam && !!ownTeam && currentTeam.teamId !== ownTeam.teamId;
 
   const onSubmitStore = async (data: StoreFormData) => {
     try {
-      const response = await authenticatedFetch('/api/stores', {
+      const response = await authenticatedFetch(withYearQuery('/api/stores'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -277,99 +317,36 @@ export default function DashboardContent({ mode, teamId }: { mode: Mode; teamId?
     }
   };
 
-  const handleLogout = async () => {
-    if (isLoggingOut) return;
-    setIsLoggingOut(true);
-
-    try {
-      await authenticatedFetch('/api/auth/logout', { method: 'POST' });
-    } catch (error) {
-      console.error('Logout API error:', error);
-    } finally {
-      try {
-        await signOut(auth);
-      } catch (error) {
-        console.error('Firebase sign out error:', error);
-      }
-      removeLocalStorageItem('authToken');
-      router.replace('/');
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-md sm:text-xl font-semibold">
-                配布管理ダッシュボード
-                {mode === 'all' ? '（全班）' : mode === 'team' ? '（班別）' : ''}
-              </h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              {!readOnly && (
-                <button
-                  onClick={() => setIsAddingStore(true)}
-                  className="hidden lg:inline-flex px-4 py-2 bg-indigo-600 text-white rounded-md text-sm"
-                >
-                  店舗を追加
-                </button>
-              )}
-              {!readOnly ? (
-                <Link
-                  href="/dashboard/all"
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  全班表示
-                </Link>
-              ) : (
-                <Link
-                  href="/dashboard"
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  自班表示
-                </Link>
-              )}
-              <button
-                type="button"
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 text-sm"
-                title="ログアウト"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="w-5 h-5"
-                >
-                  <path d="M13 3a1 1 0 011 1v4a1 1 0 11-2 0V5H7a1 1 0 00-1 1v12a1 1 0 001 1h5v-3a1 1 0 112 0v4a1 1 0 01-1 1H7a3 3 0 01-3-3V6a3 3 0 013-3h6z" />
-                  <path d="M16.293 8.293a1 1 0 011.414 0L21 11.586a2 2 0 010 2.828l-3.293 3.293a1 1 0 11-1.414-1.414L17.586 14H11a1 1 0 110-2h6.586l-1.293-1.293a1 1 0 010-1.414z" />
-                </svg>
-              </button>
+    <>
+      <div className="mx-auto max-w-7xl px-4 pb-4 sm:px-6 sm:pb-6 lg:px-8">
+        {isViewingOtherTeam && currentTeam && ownTeam && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+            <div className="text-sm font-semibold text-amber-900">他班のページを閲覧しています</div>
+            <div className="mt-1 text-sm text-amber-800">
+              自班: {ownTeam.teamName} / 表示中: {currentTeam.teamName}
             </div>
           </div>
-        </div>
-      </nav>
+        )}
 
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-lg font-medium">総店舗数</h3>
-            <p className="text-3xl font-bold text-gray-900">{totalStores}</p>
+        <div className="mb-4 grid grid-cols-2 gap-3 lg:mb-6 lg:grid-cols-4 lg:gap-6">
+          <div className="rounded-lg bg-white p-4 shadow sm:p-6">
+            <h3 className="text-sm font-medium text-gray-500 sm:text-base">総店舗数</h3>
+            <p className="mt-1 text-2xl font-bold text-gray-900 sm:text-3xl">{totalStores}</p>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-lg font-medium">配布済み</h3>
-            <p className="text-3xl font-bold text-green-600">{completedStores}</p>
+          <div className="rounded-lg bg-white p-4 shadow sm:p-6">
+            <h3 className="text-sm font-medium text-gray-500 sm:text-base">配布済み</h3>
+            <p className="mt-1 text-2xl font-bold text-green-600 sm:text-3xl">{completedStores}</p>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-lg font-medium">配布不可</h3>
-            <p className="text-3xl font-bold text-red-600">{failedStores}</p>
+          <div className="rounded-lg bg-white p-4 shadow sm:p-6">
+            <h3 className="text-sm font-medium text-gray-500 sm:text-base">配布不可</h3>
+            <p className="mt-1 text-2xl font-bold text-red-600 sm:text-3xl">{failedStores}</p>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-lg font-medium">総配布枚数</h3>
-            <p className="text-3xl font-bold text-indigo-600">{totalDistributedCount}</p>
+          <div className="rounded-lg bg-white p-4 shadow sm:p-6">
+            <h3 className="text-sm font-medium text-gray-500 sm:text-base">総配布枚数</h3>
+            <p className="mt-1 text-2xl font-bold text-indigo-600 sm:text-3xl">
+              {totalDistributedCount}
+            </p>
           </div>
         </div>
 
@@ -384,28 +361,72 @@ export default function DashboardContent({ mode, teamId }: { mode: Mode; teamId?
           </div>
         )}
 
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-              <div className="flex space-x-3">
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-                >
-                  <option value="all">すべて</option>
-                  <option value="pending">未配布</option>
-                  <option value="completed">配布済み</option>
-                  <option value="failed">配布不可</option>
-                  <option value="revisit">要再訪問</option>
-                </select>
-                <input
-                  type="text"
-                  placeholder="店名・住所で検索"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="border border-gray-300 rounded-md px-1 py-2 text-sm"
-                />
+        <div className="rounded-lg bg-white shadow">
+          <div className="border-b border-gray-200 px-4 py-4 sm:px-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">店舗一覧</h2>
+                <p className="text-sm text-gray-500">{filteredStores.length}件表示中</p>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[10rem_minmax(16rem,1fr)] lg:grid-cols-[12rem_10rem_minmax(16rem,1fr)_auto]">
+                {(mode === 'all' || mode === 'team') && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">
+                      表示する班
+                    </label>
+                    <select
+                      value={mode === 'team' ? teamId || '' : 'all'}
+                      onChange={(e) => {
+                        const nextTeamId = e.target.value;
+                        router.push(nextTeamId === 'all' ? allHref : teamHref(nextTeamId));
+                      }}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    >
+                      <option value="all">全班の店舗</option>
+                      {teams.map((team) => (
+                        <option key={team.teamId} value={team.teamId}>
+                          {team.teamName} / {team.teamId}
+                          {team.isOwnTeam ? '（自班）' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">状態</label>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  >
+                    <option value="all">すべて</option>
+                    <option value="pending">未配布</option>
+                    <option value="completed">配布済み</option>
+                    <option value="failed">配布不可</option>
+                    <option value="revisit">要再訪問</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">検索</label>
+                  <input
+                    type="text"
+                    placeholder="店名・住所で検索"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                {!readOnly && (
+                  <div className="hidden lg:flex lg:items-end">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingStore(true)}
+                      className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
+                    >
+                      店舗を追加
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -734,6 +755,6 @@ export default function DashboardContent({ mode, teamId }: { mode: Mode; teamId?
             </Modal>
           );
         })()}
-    </div>
+    </>
   );
 }
