@@ -100,23 +100,28 @@ export default function TeamDetailPage() {
           fetcherAuth('/api/admin/areas'),
           fetcherAuth(`/api/admin/teams/${teamId}/stores`),
         ]);
-        const loadedAreas = (areasData.areas || []) as Area[];
+        const loadedTeam = td?.team as Team | undefined;
+        if (!loadedTeam) {
+          throw new Error('チーム情報の取得に失敗しました');
+        }
+
+        const loadedAreas = (areasData?.areas || []) as Area[];
         const selectedArea = loadedAreas.find(
           (area) =>
-            area.areaId === td.team.areaId ||
-            area.areaId === td.team.assignedArea ||
-            area.areaCode === td.team.assignedArea,
+            area.areaId === loadedTeam?.areaId ||
+            area.areaId === loadedTeam?.assignedArea ||
+            area.areaCode === loadedTeam?.assignedArea,
         );
-        setTeam(td.team);
+        setTeam(loadedTeam);
         setAreas(loadedAreas);
 
         setEditForm({
-          teamName: td.team.teamName || '',
-          timeSlot: td.team.timeSlot || '',
+          teamName: loadedTeam?.teamName || '',
+          timeSlot: loadedTeam?.timeSlot || '',
           assignedArea: selectedArea?.areaId || '',
         });
 
-        setStores(st.stores || []);
+        setStores(st?.stores || []);
       } catch (error) {
         console.error('Team detail loading error:', error);
       } finally {
