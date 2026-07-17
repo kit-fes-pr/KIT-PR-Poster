@@ -95,8 +95,8 @@ export default function TeamDetailPage() {
           setDistributionSlots(slots);
         }
 
-        const td = await fetcherAuth(`/api/admin/teams/${teamId}`, token);
-        const areasData = await fetcherAuth('/api/admin/areas', token);
+        const td = await fetcherAuth(`/api/admin/teams/${teamId}`);
+        const areasData = await fetcherAuth('/api/admin/areas');
         const loadedAreas = (areasData.areas || []) as Area[];
         const selectedArea = loadedAreas.find(
           (area) =>
