@@ -14,13 +14,7 @@ import {
 import { normalizeGrade } from '@/lib/utils/grade/grade';
 import { clearDashboardCache } from '@/lib/utils/dashboard/dashboard-cache';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
-
-const fetcherAuth = async (url: string) => {
-  const token = localStorage.getItem('authToken');
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error('認証が必要です');
-  return res.json();
-};
+import { authenticatedFetch, fetcherAuth } from '@/lib/utils/auth-fetcher';
 
 export default function TeamDetailPage() {
   const router = useRouter();
@@ -219,10 +213,8 @@ export default function TeamDetailPage() {
                   if (!confirm('このチームを削除しますか？配布記録がある場合は削除できません。'))
                     return;
                   try {
-                    const token = localStorage.getItem('authToken');
-                    const res = await fetch(`/api/admin/teams/${teamId}`, {
+                    const res = await authenticatedFetch(`/api/admin/teams/${teamId}`, {
                       method: 'DELETE',
-                      headers: { Authorization: `Bearer ${token}` },
                     });
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || '削除に失敗しました');
@@ -342,17 +334,15 @@ export default function TeamDetailPage() {
                     <button
                       onClick={async () => {
                         try {
-                          const token = localStorage.getItem('authToken');
                           const payload = {
                             teamName: editForm.teamName,
                             timeSlot: editForm.timeSlot,
                             areaId: editForm.assignedArea,
                           };
-                          const res = await fetch(`/api/admin/teams/${teamId}`, {
+                          const res = await authenticatedFetch(`/api/admin/teams/${teamId}`, {
                             method: 'PATCH',
                             headers: {
                               'Content-Type': 'application/json',
-                              Authorization: `Bearer ${token}`,
                             },
                             body: JSON.stringify(payload),
                           });

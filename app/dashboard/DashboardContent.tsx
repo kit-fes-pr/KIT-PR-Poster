@@ -7,22 +7,16 @@ import useSWR from 'swr';
 import { Modal } from '@/components/ui/Modal';
 import { Store, StoreFormData } from '@/types';
 import { useForm } from 'react-hook-form';
+import { authenticatedFetch, fetcherAuth, getFreshAuthToken } from '@/lib/utils/auth-fetcher';
 
 type Mode = 'self' | 'all';
-
-const fetcher = async (url: string) => {
-  const token = localStorage.getItem('authToken');
-  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!response.ok) throw new Error('認証が必要です');
-  return response.json();
-};
 
 export default function DashboardContent({ mode }: { mode: Mode }) {
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
   const readOnly = mode === 'all';
   const swrKey = mode === 'all' ? '/api/stores?scope=all' : '/api/stores';
-  const { data: storesData, mutate } = useSWR(swrKey, fetcher);
+  const { data: storesData, mutate } = useSWR(swrKey, fetcherAuth);
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,12 +64,17 @@ export default function DashboardContent({ mode }: { mode: Mode }) {
   }, [detailsStoreId, storesData, resetEdit]);
 
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-      router.replace('/');
-    } else {
-      setAuthChecked(true);
-    }
+    let mounted = true;
+    getFreshAuthToken()
+      .then(() => {
+        if (mounted) setAuthChecked(true);
+      })
+      .catch(() => {
+        if (mounted) router.replace('/');
+      });
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   const filteredStores: Store[] = useMemo(() => {
@@ -108,10 +107,9 @@ export default function DashboardContent({ mode }: { mode: Mode }) {
 
   const onSubmitStore = async (data: StoreFormData) => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch('/api/stores', {
+      const response = await authenticatedFetch('/api/stores', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...data,
           distributedCount:
@@ -157,10 +155,9 @@ export default function DashboardContent({ mode }: { mode: Mode }) {
     reason?: string,
   ) => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`/api/stores/${storeId}`, {
+      const response = await authenticatedFetch(`/api/stores/${storeId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           distributionStatus: status,
           distributedCount: count || 0,
@@ -180,10 +177,9 @@ export default function DashboardContent({ mode }: { mode: Mode }) {
 
   const updateStoreDetails = async (storeId: string, data: StoreFormData) => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`/api/stores/${storeId}`, {
+      const response = await authenticatedFetch(`/api/stores/${storeId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storeName: data.storeName,
           address: data.address,
@@ -210,10 +206,8 @@ export default function DashboardContent({ mode }: { mode: Mode }) {
   const deleteStore = async (storeId: string) => {
     if (!confirm('この店舗を削除しますか？この操作は元に戻せません。')) return;
     try {
-      const token = localStorage.getItem('authToken');
-      const res = await fetch(`/api/stores/${storeId}`, {
+      const res = await authenticatedFetch(`/api/stores/${storeId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         setMenuStoreId(null);

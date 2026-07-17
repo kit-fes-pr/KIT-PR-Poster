@@ -7,17 +7,7 @@ import { useForm } from 'react-hook-form';
 import useSWR from 'swr';
 import { Modal } from '@/components/ui/Modal';
 import { Store, StoreFormData } from '@/types';
-
-const fetcher = async (url: string) => {
-  const token = localStorage.getItem('authToken');
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  if (!response.ok) throw new Error('認証が必要です');
-  return response.json();
-};
+import { authenticatedFetch, fetcherAuth, getFreshAuthToken } from '@/lib/utils/auth-fetcher';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -28,7 +18,7 @@ export default function Dashboard() {
   const [detailsStoreId, setDetailsStoreId] = useState<string | null>(null);
   const [menuStoreId, setMenuStoreId] = useState<string | null>(null);
 
-  const { data: storesData, mutate } = useSWR('/api/stores', fetcher);
+  const { data: storesData, mutate } = useSWR('/api/stores', fetcherAuth);
 
   const {
     register,
@@ -79,12 +69,17 @@ export default function Dashboard() {
   }, [detailsStoreId, storesData, resetEdit]);
 
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-      router.replace('/');
-    } else {
-      setAuthChecked(true);
-    }
+    let mounted = true;
+    getFreshAuthToken()
+      .then(() => {
+        if (mounted) setAuthChecked(true);
+      })
+      .catch(() => {
+        if (mounted) router.replace('/');
+      });
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   // Close menu on outside click
@@ -123,12 +118,10 @@ export default function Dashboard() {
 
   const onSubmitStore = async (data: StoreFormData) => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch('/api/stores', {
+      const response = await authenticatedFetch('/api/stores', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           ...data,
@@ -161,12 +154,10 @@ export default function Dashboard() {
     reason?: string,
   ) => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`/api/stores/${storeId}`, {
+      const response = await authenticatedFetch(`/api/stores/${storeId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           distributionStatus: status,
@@ -189,12 +180,10 @@ export default function Dashboard() {
 
   const updateStoreDetails = async (storeId: string, data: StoreFormData) => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`/api/stores/${storeId}`, {
+      const response = await authenticatedFetch(`/api/stores/${storeId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           storeName: data.storeName,
@@ -223,10 +212,8 @@ export default function Dashboard() {
   const deleteStore = async (storeId: string) => {
     if (!confirm('この店舗を削除しますか？この操作は元に戻せません。')) return;
     try {
-      const token = localStorage.getItem('authToken');
-      const res = await fetch(`/api/stores/${storeId}`, {
+      const res = await authenticatedFetch(`/api/stores/${storeId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         setMenuStoreId(null);
