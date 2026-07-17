@@ -7,15 +7,22 @@ import useSWR from 'swr';
 import { Modal } from '@/components/ui/Modal';
 import { Store, StoreFormData } from '@/types';
 import { useForm } from 'react-hook-form';
-import { authenticatedFetch, fetcherAuth, getFreshAuthToken } from '@/lib/utils/auth-fetcher';
+import { authenticatedFetch, fetcherAuth, getVerifiedAuthUser } from '@/lib/utils/auth-fetcher';
 
-type Mode = 'self' | 'all';
+type Mode = 'self' | 'all' | 'team';
 
-export default function DashboardContent({ mode }: { mode: Mode }) {
+export default function DashboardContent({ mode, teamId }: { mode: Mode; teamId?: string }) {
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
-  const readOnly = mode === 'all';
-  const swrKey = mode === 'all' ? '/api/stores?scope=all' : '/api/stores';
+  const readOnly = mode === 'all' || mode === 'team';
+  const swrKey =
+    mode === 'all'
+      ? '/api/stores?scope=all'
+      : mode === 'team' && teamId
+        ? `/api/stores?teamId=${encodeURIComponent(teamId)}`
+        : mode === 'self'
+          ? '/api/stores'
+          : null;
   const { data: storesData, mutate } = useSWR(swrKey, fetcherAuth);
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -65,9 +72,27 @@ export default function DashboardContent({ mode }: { mode: Mode }) {
 
   useEffect(() => {
     let mounted = true;
-    getFreshAuthToken()
-      .then(() => {
-        if (mounted) setAuthChecked(true);
+    getVerifiedAuthUser()
+      .then((user) => {
+        if (!mounted) return;
+
+        if (mode === 'self') {
+          if (user.isAdmin) {
+            router.replace('/dashboard/all');
+            return;
+          }
+          if (user.role !== 'team' || !user.teamId) {
+            router.replace('/');
+            return;
+          }
+        }
+
+        if ((mode === 'all' || mode === 'team') && !user.isAdmin && user.role !== 'team') {
+          router.replace('/');
+          return;
+        }
+
+        setAuthChecked(true);
       })
       .catch(() => {
         if (mounted) router.replace('/');
@@ -75,7 +100,7 @@ export default function DashboardContent({ mode }: { mode: Mode }) {
     return () => {
       mounted = false;
     };
-  }, [router]);
+  }, [mode, router, teamId]);
 
   const filteredStores: Store[] = useMemo(() => {
     const list: Store[] = storesData?.stores || [];
@@ -255,7 +280,8 @@ export default function DashboardContent({ mode }: { mode: Mode }) {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <h1 className="text-md sm:text-xl font-semibold">
-                配布管理ダッシュボード{readOnly ? '（全班）' : ''}
+                配布管理ダッシュボード
+                {mode === 'all' ? '（全班）' : mode === 'team' ? '（班別）' : ''}
               </h1>
             </div>
             <div className="flex items-center space-x-4">

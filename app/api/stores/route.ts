@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { generateKana } from '@/lib/kanaUtils';
 import { Store } from '@/types';
+import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,19 +14,34 @@ export async function GET(request: NextRequest) {
 
     const idToken = authHeader.split('Bearer ')[1];
     const decodedToken = await adminAuth.verifyIdToken(idToken);
+    const isAdmin = hasAdminPrivileges(decodedToken as { role?: unknown; isAdmin?: unknown });
+    const isTeam = decodedToken.role === 'team' && !!decodedToken.teamId && !!decodedToken.teamCode;
+    if (!isAdmin && !isTeam) {
+      return NextResponse.json({ error: '閲覧権限がありません' }, { status: 403 });
+    }
 
     const { searchParams } = new URL(request.url);
     const area = searchParams.get('area');
     const status = searchParams.get('status');
     const q = searchParams.get('q');
+    const scope = (searchParams.get('scope') || '').toLowerCase();
+    const requestedTeamId = searchParams.get('teamId');
 
     let query = adminDb.collection('stores').where('eventId', '==', 'kodai2025');
+    let filterTeamCode: string | null = null;
 
-    const scope = (searchParams.get('scope') || '').toLowerCase();
-    if (decodedToken.role === 'team' && scope !== 'all') {
-      // チームログイン時は既定で自班の担当区域＋周辺区域に限定
-      const teamDoc = await adminDb.collection('teams').doc(decodedToken.teamId).get();
+    if (requestedTeamId) {
+      const teamDoc = await adminDb.collection('teams').doc(requestedTeamId).get();
+      if (!teamDoc.exists) {
+        return NextResponse.json({ error: '班が見つかりません' }, { status: 404 });
+      }
       const teamData = teamDoc.data() as Record<string, unknown> | undefined;
+      filterTeamCode = typeof teamData?.teamCode === 'string' ? teamData.teamCode : null;
+    } else if (decodedToken.role === 'team' && scope !== 'all') {
+      // チームログイン時の既定表示は自班の担当区域＋周辺区域に限定
+      const teamDoc = await adminDb.collection('teams').doc(String(decodedToken.teamId)).get();
+      const teamData = teamDoc.data() as Record<string, unknown> | undefined;
+      filterTeamCode = typeof decodedToken.teamCode === 'string' ? decodedToken.teamCode : null;
       if (teamData?.assignedArea) {
         const adjacent = Array.isArray(teamData.adjacentAreas) ? teamData.adjacentAreas : [];
         const allowedAreas = [teamData.assignedArea, ...adjacent].filter(Boolean);
@@ -59,9 +75,9 @@ export async function GET(request: NextRequest) {
     }
 
     // もし 'in' 条件を使えず全件読み出した場合、自班スコープであればここで絞り込み
-    if (decodedToken.role === 'team' && scope !== 'all') {
+    if (decodedToken.role === 'team' && scope !== 'all' && !requestedTeamId) {
       try {
-        const teamDoc = await adminDb.collection('teams').doc(decodedToken.teamId).get();
+        const teamDoc = await adminDb.collection('teams').doc(String(decodedToken.teamId)).get();
         const teamData = teamDoc.data() as Record<string, unknown> | undefined;
         if (teamData?.assignedArea) {
           const adjacent = Array.isArray(teamData.adjacentAreas) ? teamData.adjacentAreas : [];
@@ -74,9 +90,15 @@ export async function GET(request: NextRequest) {
         console.error('エラー内容:', error);
       }
       // ログインコード（班）単位で管理: 自分が作成 or 自分が配布した店舗のみ表示
-      const selfCode = decodedToken.teamCode;
+      const selfCode = filterTeamCode;
       stores = stores.filter(
         (s: Store) => s.createdByTeamCode === selfCode || s.distributedBy === selfCode,
+      );
+    }
+
+    if (filterTeamCode && requestedTeamId) {
+      stores = stores.filter(
+        (s: Store) => s.createdByTeamCode === filterTeamCode || s.distributedBy === filterTeamCode,
       );
     }
 
@@ -103,6 +125,9 @@ export async function POST(request: NextRequest) {
 
     const idToken = authHeader.split('Bearer ')[1];
     const decodedToken = await adminAuth.verifyIdToken(idToken);
+    if (decodedToken.role !== 'team' || !decodedToken.teamId || !decodedToken.teamCode) {
+      return NextResponse.json({ error: '班ログインが必要です' }, { status: 403 });
+    }
 
     const {
       storeName,

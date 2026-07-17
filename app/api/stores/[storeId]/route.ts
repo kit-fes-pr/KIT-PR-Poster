@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { generateKana } from '@/lib/kanaUtils';
 import { FieldValue } from 'firebase-admin/firestore';
+import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 
 export async function PUT(
   request: NextRequest,
@@ -26,6 +27,16 @@ export async function PUT(
 
     if (!storeDoc.exists) {
       return NextResponse.json({ error: '店舗が見つかりません' }, { status: 404 });
+    }
+
+    const store = storeDoc.data() as Record<string, unknown>;
+    const isAdmin = hasAdminPrivileges(decodedToken as { role?: unknown; isAdmin?: unknown });
+    const isRelatedTeam =
+      !!decodedToken.teamCode &&
+      (store.createdByTeamCode === decodedToken.teamCode ||
+        store.distributedBy === decodedToken.teamCode);
+    if (!isAdmin && !isRelatedTeam) {
+      return NextResponse.json({ error: '更新権限がありません' }, { status: 403 });
     }
 
     const updateData: Record<string, unknown> = {
@@ -114,7 +125,7 @@ export async function DELETE(
     const store = storeDoc.data() as Record<string, unknown>;
 
     // 管理者は削除可能。それ以外は作成チームのみ削除可能。
-    const isAdmin = decodedToken.role === 'admin';
+    const isAdmin = hasAdminPrivileges(decodedToken as { role?: unknown; isAdmin?: unknown });
     const isCreator = !!decodedToken.teamCode && store.createdByTeamCode === decodedToken.teamCode;
     if (!isAdmin && !isCreator) {
       return NextResponse.json({ error: '削除権限がありません' }, { status: 403 });

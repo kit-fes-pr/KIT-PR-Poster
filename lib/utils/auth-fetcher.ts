@@ -42,3 +42,21 @@ export async function fetcherAuth(url: string) {
   if (!response.ok) throw new Error('認証が必要です');
   return response.json();
 }
+
+export type VerifiedAuthUser = {
+  uid: string;
+  email?: string;
+  teamCode?: string;
+  teamId?: string;
+  role?: string;
+  isAdmin: boolean;
+};
+
+export async function getVerifiedAuthUser() {
+  const response = await authenticatedFetch('/api/auth/verify');
+  if (!response.ok) throw new Error('認証が必要です');
+
+  const data = (await response.json()) as { user?: VerifiedAuthUser };
+  if (!data.user) throw new Error('認証が必要です');
+  return data.user;
+}
