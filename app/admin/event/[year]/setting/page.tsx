@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import YearPageSectionHeader from '@/components/admin/YearPageSectionHeader';
 import { LoadingInline } from '@/components/ui/Loading';
+import { Modal } from '@/components/ui/Modal';
 import { formatDateOnly } from '@/lib/utils/dateUtils';
 import {
   buildAvailabilitySlotChoices,
@@ -13,6 +14,7 @@ import {
 } from '@/lib/utils/availability/availability';
 import type { AvailabilitySlotChoice } from '@/lib/utils/availability/availability';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
+import { clearDashboardCache } from '@/lib/utils/dashboard/dashboard-cache';
 
 type EventSummary = {
   id?: string;
@@ -29,6 +31,21 @@ type CurrentForm = {
   description?: string;
   isActive: boolean;
   fields: { fieldId: string; options?: string[]; visibleFromGrade?: number }[];
+};
+
+type TeamSummary = {
+  teamId?: string;
+  id?: string;
+  teamName?: string;
+  teamCode?: string;
+  timeSlot?: string;
+};
+
+type TeamSlotBulkUpdate = {
+  teamId: string;
+  timeSlot: string;
+  eventId: string;
+  year: number;
 };
 
 function buildFormAvailabilityOptions(slotKeys: string[]): string[] {
@@ -53,11 +70,15 @@ export default function DistributionSettingsPage({
   const [error, setError] = useState('');
   const [eventData, setEventData] = useState<EventSummary | null>(null);
   const [currentForm, setCurrentForm] = useState<CurrentForm | null>(null);
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [eventName, setEventName] = useState('');
   const [distributionStartDate, setDistributionStartDate] = useState('');
   const [distributionEndDate, setDistributionEndDate] = useState('');
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [teamSlotModalOpen, setTeamSlotModalOpen] = useState(false);
+  const [teamSlotDrafts, setTeamSlotDrafts] = useState<Record<string, string>>({});
+  const [applyingTeamSlots, setApplyingTeamSlots] = useState(false);
   const hasLoadedRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedSnapshotRef = useRef<string>('');
@@ -82,17 +103,21 @@ export default function DistributionSettingsPage({
         const token = await user.getIdToken();
         const eventId = `kodai${resolvedParams.year}`;
 
-        const [eventRes, formsRes] = await Promise.all([
+        const [eventRes, formsRes, teamsRes] = await Promise.all([
           fetch(`/api/admin/events?year=${resolvedParams.year}`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
           fetch(`/api/forms?eventId=${eventId}`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
+          fetch(`/api/admin/teams?year=${resolvedParams.year}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
         ]);
 
         const eventJson = await eventRes.json().catch(() => null);
         const formsJson = await formsRes.json().catch(() => null);
+        const teamsJson = await teamsRes.json().catch(() => null);
 
         if (!eventRes.ok) {
           setError(eventJson?.error || 'イベント設定の取得に失敗しました');
@@ -137,6 +162,7 @@ export default function DistributionSettingsPage({
             ? (formsJson.forms[0] as CurrentForm)
             : null;
         setCurrentForm(nextForm);
+        setTeams(Array.isArray(teamsJson?.teams) ? (teamsJson.teams as TeamSummary[]) : []);
       } catch (err) {
         console.error(err);
         setError('イベント設定の読み込みに失敗しました');
@@ -296,6 +322,140 @@ export default function DistributionSettingsPage({
     ],
   );
 
+  const getSavedSnapshot = useCallback(() => {
+    try {
+      return JSON.parse(lastSavedSnapshotRef.current || '{}') as {
+        eventName?: string;
+        distributionStartDate?: string;
+        distributionEndDate?: string;
+        selectedSlots?: string[];
+      };
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const buildDefaultTeamSlotDrafts = useCallback(
+    (choices: AvailabilitySlotChoice[]) => {
+      const fallbackSlot = choices[0]?.key || '';
+      return teams.reduce<Record<string, string>>((acc, team) => {
+        const teamId = team.teamId || team.id || '';
+        if (!teamId) return acc;
+        const currentSuffix = String(team.timeSlot || '').endsWith('_pm') ? '_pm' : '_am';
+        const sameHalfDay = choices.find((choice) => choice.key.endsWith(currentSuffix));
+        const stillValid = choices.find((choice) => choice.key === team.timeSlot);
+        acc[teamId] = stillValid?.key || sameHalfDay?.key || fallbackSlot;
+        return acc;
+      }, {});
+    },
+    [teams],
+  );
+
+  const openTeamSlotModalForDateChange = useCallback(
+    (nextStartDate: string, nextEndDate: string) => {
+      const nextChoices = buildAvailabilitySlotChoices(nextStartDate, nextEndDate);
+      setTeamSlotDrafts(buildDefaultTeamSlotDrafts(nextChoices));
+      setTeamSlotModalOpen(true);
+    },
+    [buildDefaultTeamSlotDrafts],
+  );
+
+  const handleDistributionStartDateChange = (value: string) => {
+    setDistributionStartDate(value);
+    if (!hasLoadedRef.current || teams.length === 0) return;
+    const saved = getSavedSnapshot();
+    if (value !== saved.distributionStartDate) {
+      openTeamSlotModalForDateChange(value, distributionEndDate || value);
+    }
+  };
+
+  const handleDistributionEndDateChange = (value: string) => {
+    setDistributionEndDate(value);
+    if (!hasLoadedRef.current || teams.length === 0) return;
+    const saved = getSavedSnapshot();
+    if (value !== saved.distributionEndDate) {
+      openTeamSlotModalForDateChange(distributionStartDate || value, value);
+    }
+  };
+
+  const cancelTeamSlotChange = () => {
+    const saved = getSavedSnapshot();
+    setDistributionStartDate(saved.distributionStartDate || '');
+    setDistributionEndDate(saved.distributionEndDate || '');
+    setSelectedSlots(saved.selectedSlots || []);
+    setTeamSlotDrafts({});
+    setTeamSlotModalOpen(false);
+  };
+
+  const applyTeamSlotChange = async () => {
+    if (!user || !resolvedParams) return;
+    const invalidTeam = teams.find((team) => {
+      const teamId = team.teamId || team.id || '';
+      return !teamId || !teamSlotDrafts[teamId];
+    });
+    if (invalidTeam) {
+      setError('すべてのチームに配布枠を選択してください');
+      return;
+    }
+
+    try {
+      setApplyingTeamSlots(true);
+      setError('');
+      const saved = await persistSettings(false);
+      if (!saved) return;
+
+      const token = await user.getIdToken();
+      const eventId = eventData?.id || `kodai${resolvedParams.year}`;
+      const updates = teams
+        .map((team) => {
+          const teamId = team.teamId || team.id || '';
+          const nextTimeSlot = teamSlotDrafts[teamId];
+          if (!teamId || !nextTimeSlot || nextTimeSlot === team.timeSlot) return null;
+          return {
+            teamId,
+            timeSlot: nextTimeSlot,
+            eventId,
+            year: Number(resolvedParams.year),
+          };
+        })
+        .filter((update): update is TeamSlotBulkUpdate => update !== null);
+
+      if (updates.length > 0) {
+        const res = await fetch('/api/admin/teams/bulk', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ updates }),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok) {
+          throw new Error(json?.error || 'チーム配布枠の更新に失敗しました');
+        }
+      }
+
+      setTeams((current) =>
+        current.map((team) => {
+          const teamId = team.teamId || team.id || '';
+          return teamId && teamSlotDrafts[teamId]
+            ? { ...team, timeSlot: teamSlotDrafts[teamId] }
+            : team;
+        }),
+      );
+      clearDashboardCache(Number(resolvedParams.year));
+      setTeamSlotModalOpen(false);
+      setTeamSlotDrafts({});
+      setSaveStatus('saved');
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'チーム配布枠の更新に失敗しました');
+      setSaveStatus('error');
+    } finally {
+      setApplyingTeamSlots(false);
+    }
+  };
+
   const toggleSlot = (slotKey: string) => {
     setSelectedSlots((current) =>
       current.includes(slotKey)
@@ -306,6 +466,7 @@ export default function DistributionSettingsPage({
 
   useEffect(() => {
     if (!hasLoadedRef.current || !resolvedParams || !user || authLoading) return;
+    if (teamSlotModalOpen) return;
 
     const snapshot = JSON.stringify({
       eventName,
@@ -405,7 +566,7 @@ export default function DistributionSettingsPage({
                   <input
                     type="date"
                     value={distributionStartDate}
-                    onChange={(e) => setDistributionStartDate(e.target.value)}
+                    onChange={(e) => handleDistributionStartDateChange(e.target.value)}
                     className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -415,7 +576,7 @@ export default function DistributionSettingsPage({
                   <input
                     type="date"
                     value={distributionEndDate}
-                    onChange={(e) => setDistributionEndDate(e.target.value)}
+                    onChange={(e) => handleDistributionEndDateChange(e.target.value)}
                     className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -490,6 +651,78 @@ export default function DistributionSettingsPage({
           </div>
         </div>
       </div>
+      <Modal
+        open={teamSlotModalOpen}
+        onClose={applyingTeamSlots ? () => undefined : cancelTeamSlotChange}
+        panelClassName="max-w-3xl"
+      >
+        <div className="border-b border-gray-200 px-6 py-4">
+          <h2 className="text-lg font-semibold text-gray-900">チームの配布枠を更新</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            配布日が変更されたため、既存チームの配布枠を新しい日程に合わせて選択してください。
+          </p>
+        </div>
+        <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+          {allChoices.length === 0 ? (
+            <p className="text-sm text-red-600">配布期間を設定してください。</p>
+          ) : (
+            <div className="space-y-3">
+              {teams.map((team) => {
+                const teamId = team.teamId || team.id || '';
+                return (
+                  <div
+                    key={teamId || team.teamCode}
+                    className="grid gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-[1fr_220px]"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {team.teamName || '名称未設定'}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">{team.teamCode || '-'}</p>
+                    </div>
+                    <select
+                      value={teamSlotDrafts[teamId] || ''}
+                      onChange={(e) =>
+                        setTeamSlotDrafts((current) => ({
+                          ...current,
+                          [teamId]: e.target.value,
+                        }))
+                      }
+                      className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-indigo-500"
+                      disabled={!teamId || applyingTeamSlots}
+                    >
+                      <option value="">配布枠を選択</option>
+                      {allChoices.map((choice) => (
+                        <option key={choice.key} value={choice.key}>
+                          {choice.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">
+          <button
+            type="button"
+            onClick={cancelTeamSlotChange}
+            disabled={applyingTeamSlots}
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            onClick={applyTeamSlotChange}
+            disabled={applyingTeamSlots || allChoices.length === 0}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {applyingTeamSlots ? '更新中...' : '保存して更新'}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

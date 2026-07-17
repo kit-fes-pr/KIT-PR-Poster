@@ -83,6 +83,9 @@ describe('team route utils', () => {
     assert.equal(updated.update.teamName, ' 更新後 ');
     assert.equal(updated.update.teamCode, 'T-02');
     assert.equal(updated.update.timeSlot, '2026-06-01_pm');
+    assert.equal(updated.update.validStartDate, '2026-06-01T08:00:00+09:00');
+    assert.equal(updated.update.validEndDate, '2026-06-01T21:00:00+09:00');
+    assert.equal(updated.update.accessWindowVersion, 1);
     assert.equal(updated.update.isActive, false);
     assert.equal(updated.update.areaId, 'area-1');
     assert.deepEqual(updated.update.adjacentAreas, ['A-02', 'A-03']);

@@ -4,10 +4,12 @@ import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import {
   buildDashboardAreaStats,
   buildDashboardEventData,
-  buildDashboardMemberStats,
   buildDashboardTeamStats,
 } from '@/lib/utils/dashboard/dashboard-route';
+import { buildAssignmentDashboardMemberStats } from '@/lib/utils/assignment/assignment-dashboard';
 import { FirestoreOptimizer } from '@/lib/utils/firestore-optimizer';
+import { loadAreaMap } from '@/lib/server/team-area';
+import { buildMissingTeamAccessWindowPatch } from '@/lib/utils/team/team-access';
 
 export async function GET(request: NextRequest, context: { params: Promise<{ year: string }> }) {
   const startTime = Date.now();
@@ -57,15 +59,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
             .get(),
       },
       {
-        key: `members_${year}`,
-        query: () => adminDb.collection('members').where('year', '==', yearNum).get(),
+        key: `assignments_${year}`,
+        query: () => adminDb.collection('assignments').where('year', '==', yearNum).get(),
       },
     ]);
 
-    const [eventDoc, teamsSnapshot, membersSnapshot] = [
+    const [eventDoc, teamsSnapshot, assignmentsSnapshot] = [
       queries[`event_${year}`],
       queries[`teams_${year}`],
-      queries[`members_${year}`],
+      queries[`assignments_${year}`],
     ];
 
     // イベントデータの処理
@@ -81,19 +83,32 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
       });
     }
 
+    const areaMap = await loadAreaMap();
+
     // チームデータの処理
     const teams = (
       teamsSnapshot as { docs: { id: string; data: () => Record<string, unknown> }[] }
-    ).docs.map((doc) => ({
-      teamId: doc.id,
-      ...doc.data(),
-    })) as Array<Record<string, unknown> & { teamId: string }>;
+    ).docs.map((doc) => {
+      const data = doc.data();
+      const areaId = String(data.areaId || '');
+      const assignedArea = String(data.assignedArea || '');
+      const area =
+        areaMap.byId.get(areaId) ||
+        areaMap.byId.get(assignedArea) ||
+        areaMap.byCode.get(assignedArea);
+      return {
+        teamId: doc.id,
+        ...data,
+        ...(buildMissingTeamAccessWindowPatch(data) || {}),
+        assignedAreaName: area?.areaName || '',
+      };
+    }) as Array<Record<string, unknown> & { teamId: string }>;
 
-    // メンバー統計の計算
-    const members = (
-      membersSnapshot as { docs: { data: () => Record<string, unknown> }[] }
+    // 割り当て統計の計算
+    const assignments = (
+      assignmentsSnapshot as { docs: { data: () => Record<string, unknown> }[] }
     ).docs.map((doc) => doc.data());
-    const memberStats = buildDashboardMemberStats(members);
+    const memberStats = buildAssignmentDashboardMemberStats(assignments);
 
     // チーム統計の計算
     const teamStats = buildDashboardTeamStats({

@@ -24,6 +24,7 @@ import { Modal } from '@/components/ui/Modal';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { ExportActionButtons } from '@/components/ui/ExportActionButtons';
+import { AssignmentStatusSummary } from '@/components/assignments/AssignmentStatusSummary';
 import YearPageSectionHeader from '@/components/admin/YearPageSectionHeader';
 import { Area } from '@/types';
 import type { FormAnswer } from '@/types/forms';
@@ -604,16 +605,19 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
   const getAreaLabel = (area?: Area | null) => {
     if (!area) return '-';
-    return `${area.areaName}（${area.areaCode}）`;
+    return area.areaName || '-';
   };
 
   const getTeamAreaLabel = (team?: Team | null) => {
     if (!team) return '-';
     const matched = areas.find(
-      (area) => area.areaId === team.areaId || area.areaCode === team.assignedArea,
+      (area) =>
+        area.areaId === team.areaId ||
+        area.areaId === team.assignedArea ||
+        area.areaCode === team.assignedArea,
     );
     if (matched) return getAreaLabel(matched);
-    return team.assignedArea || '-';
+    return '-';
   };
 
   const resolveAssignmentSlot = (team: Team | null | undefined) => {
@@ -923,7 +927,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         const participant = participants.find((item) => item.responseId === assignment.responseId);
         const team = teams.find((item) => item.teamId === assignment.teamId);
         if (!participant || !team) return null;
-        const teamLabel = team.teamName || team.assignedArea || team.teamId;
+        const teamLabel = team.teamName || getTeamAreaLabel(team);
         return {
           team: teamLabel,
           grade: normalizeGrade(participant.grade),
@@ -1122,14 +1126,6 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         {/* 設定セクション */}
         <div className="bg-white shadow rounded-lg p-6 mb-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">割り当て設定</h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm font-medium text-gray-700 mb-1">対象フォーム</p>
-              <p className="text-sm text-gray-900">{selectedFormTitle || 'フォームが未設定です'}</p>
-            </div>
-          </div>
-
           {/* 自動割り当て実行ボタン */}
           <div className="mt-6 flex flex-col gap-3">
             <button
@@ -1331,43 +1327,11 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                           {formatDate(participant.submittedAt)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {assignment && team ? (
-                            <div className="text-sm">
-                              <div className="font-medium text-gray-900">{team.teamName}</div>
-                              <div className="text-gray-500">{getTeamAreaLabel(team)}</div>
-                              <div className="text-gray-400 text-xs">
-                                配布枠: {formatAvailabilitySlotLabel(team.timeSlot)}
-                              </div>
-                              <div className="flex space-x-2 mt-1">
-                                <span
-                                  className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                    assignment.assignedBy === 'auto'
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : 'bg-green-100 text-green-800'
-                                  }`}
-                                >
-                                  {assignment.assignedBy === 'auto' ? '自動' : '手動'}
-                                </span>
-                                {assignment.timeSlot && (
-                                  <span
-                                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                      assignment.timeSlot.endsWith('_am')
-                                        ? 'bg-yellow-100 text-yellow-800'
-                                        : assignment.timeSlot.endsWith('_pm')
-                                          ? 'bg-purple-100 text-purple-800'
-                                          : 'bg-gray-100 text-gray-800'
-                                    }`}
-                                  >
-                                    {formatAvailabilitySlotLabel(assignment.timeSlot)}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
-                              未割り当て
-                            </span>
-                          )}
+                          <AssignmentStatusSummary
+                            assignment={assignment}
+                            team={team}
+                            areaLabel={team ? getTeamAreaLabel(team) : undefined}
+                          />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-3">
@@ -1425,8 +1389,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                       </div>
                       {assignment && team && (
                         <div className="mt-2 text-xs text-gray-500">
-                          割り当て先: {team.teamName} /{' '}
-                          {formatAvailabilitySlotLabel(assignment.timeSlot)}
+                          <div className="mb-1">割り当て先: {team.teamName}</div>
+                          <AssignmentStatusSummary assignment={assignment} team={team} compact />
                         </div>
                       )}
                     </div>
@@ -1585,6 +1549,9 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                         if (!res.ok) throw new Error(data.error || '更新に失敗しました');
                         // 再読込
                         await loadAssignments();
+                        if (resolvedParams?.year) {
+                          clearDashboardCache(Number(resolvedParams.year));
+                        }
                         setShowManualModal(false);
                         setSelectedParticipant(null);
                         setManualAssignTeamId('');

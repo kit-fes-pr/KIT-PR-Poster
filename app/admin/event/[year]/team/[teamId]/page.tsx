@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { LoadingInline } from '@/components/ui/Loading';
 import { Modal } from '@/components/ui/Modal';
-import { Team, Store } from '@/types';
+import { Area, Team, Store } from '@/types';
 import YearPageSectionHeader from '@/components/admin/YearPageSectionHeader';
 import {
   buildAvailabilitySlotChoices,
@@ -14,13 +14,7 @@ import {
 import { normalizeGrade } from '@/lib/utils/grade/grade';
 import { clearDashboardCache } from '@/lib/utils/dashboard/dashboard-cache';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
-
-const fetcherAuth = async (url: string) => {
-  const token = localStorage.getItem('authToken');
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error('認証が必要です');
-  return res.json();
-};
+import { authenticatedFetch, fetcherAuth } from '@/lib/utils/auth-fetcher';
 
 export default function TeamDetailPage() {
   const router = useRouter();
@@ -30,6 +24,7 @@ export default function TeamDetailPage() {
 
   const { user, isAdmin, loading: authLoading } = useRequireAdmin();
   const [team, setTeam] = useState<Team | null>(null);
+  const [areas, setAreas] = useState<Area[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [distributionSlots, setDistributionSlots] = useState<string[]>([]);
   const completed = useMemo(
@@ -100,17 +95,33 @@ export default function TeamDetailPage() {
           setDistributionSlots(slots);
         }
 
-        const td = await fetcherAuth(`/api/admin/teams/${teamId}`);
-        setTeam(td.team);
+        const [td, areasData, st] = await Promise.all([
+          fetcherAuth(`/api/admin/teams/${teamId}`),
+          fetcherAuth('/api/admin/areas'),
+          fetcherAuth(`/api/admin/teams/${teamId}/stores`),
+        ]);
+        const loadedTeam = td?.team as Team | undefined;
+        if (!loadedTeam) {
+          throw new Error('チーム情報の取得に失敗しました');
+        }
+
+        const loadedAreas = (areasData?.areas || []) as Area[];
+        const selectedArea = loadedAreas.find(
+          (area) =>
+            area.areaId === loadedTeam?.areaId ||
+            area.areaId === loadedTeam?.assignedArea ||
+            area.areaCode === loadedTeam?.assignedArea,
+        );
+        setTeam(loadedTeam);
+        setAreas(loadedAreas);
 
         setEditForm({
-          teamName: td.team.teamName || '',
-          timeSlot: td.team.timeSlot || '',
-          assignedArea: td.team.assignedArea || '',
+          teamName: loadedTeam?.teamName || '',
+          timeSlot: loadedTeam?.timeSlot || '',
+          assignedArea: selectedArea?.areaId || '',
         });
 
-        const st = await fetcherAuth(`/api/admin/teams/${teamId}/stores`);
-        setStores(st.stores || []);
+        setStores(st?.stores || []);
       } catch (error) {
         console.error('Team detail loading error:', error);
       } finally {
@@ -178,6 +189,17 @@ export default function TeamDetailPage() {
     return <span className={`inline-block px-2 py-1 text-xs rounded-full ${cls}`}>{text}</span>;
   };
 
+  const getTeamAreaName = (targetTeam?: Team | null) => {
+    if (!targetTeam) return '-';
+    const matched = areas.find(
+      (area) =>
+        area.areaId === targetTeam.areaId ||
+        area.areaId === targetTeam.assignedArea ||
+        area.areaCode === targetTeam.assignedArea,
+    );
+    return matched?.areaName || '-';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 space-y-6">
@@ -193,21 +215,13 @@ export default function TeamDetailPage() {
                 チーム管理へ戻る
               </Link>
               <button
-                onClick={() => setIsBasicEditOpen(true)}
-                className="px-4 py-2 border rounded-md text-sm bg-white text-gray-700 hover:bg-gray-50"
-              >
-                編集
-              </button>
-              <button
                 className="px-4 py-2 border border-red-300 text-red-700 rounded-md text-sm bg-white hover:bg-red-50"
                 onClick={async () => {
                   if (!confirm('このチームを削除しますか？配布記録がある場合は削除できません。'))
                     return;
                   try {
-                    const token = localStorage.getItem('authToken');
-                    const res = await fetch(`/api/admin/teams/${teamId}`, {
+                    const res = await authenticatedFetch(`/api/admin/teams/${teamId}`, {
                       method: 'DELETE',
-                      headers: { Authorization: `Bearer ${token}` },
                     });
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || '削除に失敗しました');
@@ -230,7 +244,7 @@ export default function TeamDetailPage() {
             <h2 className="text-lg font-medium">
               {team?.teamName}（{team?.teamCode}）
             </h2>
-            <p className="text-sm text-gray-600 mt-1">担当区域: {team?.assignedArea || '-'}</p>
+            <p className="text-sm text-gray-600 mt-1">担当区域: {getTeamAreaName(team)}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
               <div>
                 <p className="text-sm text-gray-600">総件数</p>
@@ -303,11 +317,18 @@ export default function TeamDetailPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">担当区域</label>
-                      <input
+                      <select
                         className="mt-1 w-full border rounded px-3 py-2"
                         value={editForm.assignedArea}
                         onChange={(e) => setEditForm({ ...editForm, assignedArea: e.target.value })}
-                      />
+                      >
+                        <option value="">担当区域を選択</option>
+                        {areas.map((area) => (
+                          <option key={area.areaId} value={area.areaId}>
+                            {area.areaName}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   <div className="mt-6 flex justify-end gap-3">
@@ -320,17 +341,15 @@ export default function TeamDetailPage() {
                     <button
                       onClick={async () => {
                         try {
-                          const token = localStorage.getItem('authToken');
                           const payload = {
                             teamName: editForm.teamName,
                             timeSlot: editForm.timeSlot,
-                            assignedArea: editForm.assignedArea,
+                            areaId: editForm.assignedArea,
                           };
-                          const res = await fetch(`/api/admin/teams/${teamId}`, {
+                          const res = await authenticatedFetch(`/api/admin/teams/${teamId}`, {
                             method: 'PATCH',
                             headers: {
                               'Content-Type': 'application/json',
-                              Authorization: `Bearer ${token}`,
                             },
                             body: JSON.stringify(payload),
                           });
@@ -390,7 +409,15 @@ export default function TeamDetailPage() {
             </div>
           </div>
           <div className="bg-white p-6 rounded-lg shadow lg:col-span-3">
-            <h2 className="text-lg font-medium mb-4">基本情報</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-medium mb-4">基本情報</h2>
+              <button
+                onClick={() => setIsBasicEditOpen(true)}
+                className="px-3 py-1 border rounded-md"
+              >
+                編集
+              </button>
+            </div>
             {loading ? (
               <LoadingInline />
             ) : (
@@ -409,16 +436,8 @@ export default function TeamDetailPage() {
                 </p>
                 <p>
                   <span className="text-gray-600">担当区域:</span>{' '}
-                  <span className="ml-2">{team?.assignedArea || '-'}</span>
+                  <span className="ml-2">{getTeamAreaName(team)}</span>
                 </p>
-                <div className="pt-2">
-                  <button
-                    onClick={() => setIsBasicEditOpen(true)}
-                    className="px-3 py-1 border rounded-md"
-                  >
-                    編集
-                  </button>
-                </div>
               </div>
             )}
           </div>

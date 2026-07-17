@@ -11,6 +11,10 @@ import {
   normalizeTeamYear,
   resolveTeamAreaSelection,
 } from '@/lib/utils/team/team-api';
+import {
+  buildMissingTeamAccessWindowPatch,
+  buildTeamAccessWindowFromTimeSlot,
+} from '@/lib/utils/team/team-access';
 import { normalizeTeamTimeSlot } from '@/lib/utils/team/team';
 import { FirestoreCache } from '@/lib/utils/server-cache';
 
@@ -170,10 +174,14 @@ export async function GET(request: NextRequest) {
     if (scope === 'all') {
       const teamsSnapshot = await adminDb.collection('teams').get();
       const teams = teamsSnapshot.docs
-        .map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Record<string, unknown>),
-        }))
+        .map((doc) => {
+          const data = doc.data() as Record<string, unknown>;
+          return {
+            id: doc.id,
+            ...data,
+            ...(buildMissingTeamAccessWindowPatch(data) || {}),
+          };
+        })
         .filter((team) => (team as Record<string, unknown>).isActive !== false);
 
       return NextResponse.json({ teams });
@@ -201,11 +209,16 @@ export async function GET(request: NextRequest) {
       byYear.docs.forEach((doc) => snapshotMap.set(doc.id, doc));
     }
 
-    const teams = Array.from(snapshotMap.values())
-      .map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as Record<string, unknown>),
-      }))
+    const teamDocs = Array.from(snapshotMap.values());
+    const teams = teamDocs
+      .map((doc) => {
+        const data = doc.data() as Record<string, unknown>;
+        return {
+          id: doc.id,
+          ...data,
+          ...(buildMissingTeamAccessWindowPatch(data) || {}),
+        };
+      })
       .filter((team) => (team as Record<string, unknown>).isActive !== false);
 
     return NextResponse.json({ teams });
@@ -264,6 +277,7 @@ export async function PATCH(request: NextRequest) {
         );
       }
       update.timeSlot = normalizedTimeSlot;
+      Object.assign(update, buildTeamAccessWindowFromTimeSlot(normalizedTimeSlot) || {});
     }
     if (typeof body.teamName === 'string') update.teamName = body.teamName;
     if (typeof body.teamCode === 'string') update.teamCode = body.teamCode;

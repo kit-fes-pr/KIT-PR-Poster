@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
       return NextResponse.json({ error: '不正な年度です' }, { status: 400 });
     }
 
-    logInfo('最小限データ取得開始', {
+    logInfo('データ取得開始', {
       component: 'minimal-dashboard-api',
       year: yearNum,
       operation: 'data_fetch_start',

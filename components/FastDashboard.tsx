@@ -6,7 +6,7 @@ import { useProgressiveData } from '@/lib/hooks/useProgressiveData';
 import { useFastPageTransition } from '@/lib/hooks/usePageTransition';
 import { LoadingScreen, LoadingInline } from '@/components/ui/Loading';
 import { MetricCard } from '@/components/ui/MetricCard';
-import { formatDateOnly } from '@/lib/utils/dateUtils';
+import { formatTeamAccessPeriod } from '@/lib/utils/team/team-access';
 
 interface FastDashboardProps {
   year: number;
@@ -163,63 +163,55 @@ export default function FastDashboard({ year, isAdmin }: FastDashboardProps) {
                         }}
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{team.teamCode}</div>
-                          <div className="text-sm text-gray-500">{team.teamName}</div>
+                          <div className="text-sm font-medium text-gray-900">{team.teamName}</div>
+                          <div className="text-sm text-gray-500">{team.teamCode}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            {team.assignedArea}
+                          <span className="inline-flex items-center px-2.5 py-0.5 font-medium text-gray-800">
+                            {team.assignedAreaName || '-'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <span className="inline-flex items-center px-2.5 py-0.5 font-medium text-gray-800">
                             {team.memberCount || 0}人
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {(() => {
-                            const start = formatDateOnly(
-                              team.validStartDate as string | number | Date | null | undefined,
-                            );
-                            const end = formatDateOnly(
-                              team.validEndDate as string | number | Date | null | undefined,
-                            );
-                            if (start !== '-' && end !== '-' && start !== end)
-                              return `${start}〜${end}`;
-                            return start !== '-' ? start : '-';
-                          })()}
+                          {formatTeamAccessPeriod(team)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
 
-                <div className="bg-gray-50 px-6 py-4 flex items-center justify-between gap-3">
-                  <p className="text-sm text-gray-600">
-                    {safeCurrentPage} / {totalPages} ページ
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={safeCurrentPage <= 1}
-                      className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      前へ
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (hasMore && !isLoadingMore) {
-                          loadMore();
-                        }
-                        setCurrentPage((p) => p + 1);
-                      }}
-                      disabled={safeCurrentPage >= totalPages && !hasMore}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      次へ
-                    </button>
+                {totalPages > 1 && (
+                  <div className="bg-gray-50 px-6 py-4 flex items-center justify-between gap-3">
+                    <p className="text-sm text-gray-600">
+                      {safeCurrentPage} / {totalPages} ページ
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={safeCurrentPage <= 1}
+                        className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        前へ
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (hasMore && !isLoadingMore) {
+                            loadMore();
+                          }
+                          setCurrentPage((p) => p + 1);
+                        }}
+                        disabled={safeCurrentPage >= totalPages && !hasMore}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        次へ
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>

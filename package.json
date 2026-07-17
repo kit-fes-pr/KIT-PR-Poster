@@ -3,10 +3,10 @@
   "version": "1.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "dev:docker": "next dev",
+    "dev": "node scripts/team-access-startup-backfill.mjs && next dev --turbopack",
+    "dev:docker": "node scripts/team-access-startup-backfill.mjs && next dev",
     "build": "next build --turbopack",
-    "start": "next start",
+    "start": "node scripts/team-access-startup-backfill.mjs && next start",
     "lint": "eslint",
     "format": "prettier --write app components lib scripts tests types README.md MANUAL.md package.json eslint.config.mjs next.config.ts postcss.config.mjs tsconfig.json tsconfig.test.json docker-compose.yml",
     "format:check": "prettier --check app components lib scripts tests types README.md MANUAL.md package.json eslint.config.mjs next.config.ts postcss.config.mjs tsconfig.json tsconfig.test.json docker-compose.yml",

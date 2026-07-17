@@ -6,6 +6,7 @@ import {
   normalizeTeamYear,
   resolveTeamAreaSelection,
 } from './team-api';
+import { buildTeamAccessWindowFromTimeSlot } from './team-access';
 
 export function normalizeTeamRouteAuthHeader(authHeader: string | null): string | null {
   if (!authHeader?.startsWith('Bearer ')) return null;
@@ -135,6 +136,7 @@ export function buildTeamRouteUpdatePayload(input: {
       return { error: 'timeSlot は配布枠キーから選択してください' };
     }
     update.timeSlot = normalizedTimeSlot;
+    Object.assign(update, buildTeamAccessWindowFromTimeSlot(normalizedTimeSlot) || {});
   }
 
   return { update };

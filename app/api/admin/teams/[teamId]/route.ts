@@ -23,6 +23,36 @@ async function loadEventAvailabilitySlots(eventId: string): Promise<string[]> {
   );
 }
 
+async function loadEventAvailabilitySlotsForTeamUpdate(
+  body: Record<string, unknown>,
+  currentTeam: Record<string, unknown>,
+): Promise<string[]> {
+  if (typeof body.eventId === 'string' && body.eventId) {
+    return loadEventAvailabilitySlots(body.eventId);
+  }
+
+  const requestedYear =
+    typeof body.year === 'number'
+      ? body.year
+      : typeof body.year === 'string' && /^\d{4}$/.test(body.year)
+        ? Number(body.year)
+        : null;
+  if (requestedYear) {
+    const snap = await adminDb
+      .collection('distributionEvents')
+      .where('year', '==', requestedYear)
+      .limit(1)
+      .get();
+    if (!snap.empty) {
+      return loadEventAvailabilitySlots(snap.docs[0].id);
+    }
+  }
+
+  return typeof currentTeam.eventId === 'string' && currentTeam.eventId !== ''
+    ? loadEventAvailabilitySlots(currentTeam.eventId)
+    : [];
+}
+
 async function loadAreaForTeam(areaId: unknown, assignedArea: unknown) {
   if (typeof areaId === 'string' && areaId) {
     const doc = await adminDb.collection('areas').doc(areaId).get();
@@ -93,6 +123,7 @@ export async function PATCH(
     if (!doc.exists) {
       return NextResponse.json({ error: 'チームが見つかりません' }, { status: 404 });
     }
+    const currentTeam = doc.data() as Record<string, unknown>;
 
     const area =
       typeof body.assignedArea === 'string' || typeof body.areaId === 'string'
@@ -106,26 +137,25 @@ export async function PATCH(
       areaId: body.areaId,
       assignedArea: body.assignedArea,
       area,
-      eventAvailabilitySlots:
-        typeof (doc.data() as Record<string, unknown>).eventId === 'string'
-          ? await loadEventAvailabilitySlots(
-              (doc.data() as Record<string, unknown>).eventId as string,
-            )
-          : [],
+      year: body.year,
+      eventAvailabilitySlots: await loadEventAvailabilitySlotsForTeamUpdate(body, currentTeam),
       updatedAt: new Date(),
     });
     if ('error' in updateResult) {
       return NextResponse.json({ error: updateResult.error }, { status: 400 });
     }
     const update: Record<string, unknown> = updateResult.update;
+    if (typeof body.eventId === 'string' && body.eventId) {
+      update.eventId = body.eventId;
+    }
 
     await ref.update(update);
     const updated = await ref.get();
 
-    const teamYear = doc.data()?.year;
-    if (typeof teamYear === 'number') {
-      FirestoreCache.invalidateYear(teamYear);
-    }
+    const yearsToInvalidate = new Set<number>();
+    if (typeof currentTeam.year === 'number') yearsToInvalidate.add(currentTeam.year);
+    if (typeof update.year === 'number') yearsToInvalidate.add(update.year);
+    yearsToInvalidate.forEach((year) => FirestoreCache.invalidateYear(year));
 
     return NextResponse.json({ success: true, team: { teamId: updated.id, ...updated.data() } });
   } catch (error) {

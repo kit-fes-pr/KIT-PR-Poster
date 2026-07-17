@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { LocalCacheManager, createIncrementalFetcher, optimizedSWRConfig } from '@/lib/utils/cache';
 import { useTeamRealtimeUpdates } from '@/lib/hooks/useRealtimeData';
 import { LoadingInline } from '@/components/ui/Loading';
+import { formatTeamAccessPeriod } from '@/lib/utils/team/team-access';
 
 // シングルトンインスタンス
 const cacheManager = new LocalCacheManager();
@@ -14,7 +15,13 @@ interface OptimizedTeamManagerProps {
   year: number;
   isAdmin: boolean;
   onTeamUpdate?: (
-    teams: Array<{ teamId: string; teamCode: string; teamName: string; assignedArea: string }>,
+    teams: Array<{
+      teamId: string;
+      teamCode: string;
+      teamName: string;
+      assignedArea: string;
+      assignedAreaName?: string;
+    }>,
   ) => void;
 }
 
@@ -163,21 +170,10 @@ export default function OptimizedTeamManager({
                       {team.teamName}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {team.assignedArea}
+                      {team.assignedAreaName || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {(() => {
-                        try {
-                          const parseDate = (dateStr: string | undefined) =>
-                            dateStr ? new Date(dateStr).toLocaleDateString('ja-JP') : '';
-                          const start = parseDate(team.validStartDate || team.validDate);
-                          const end = parseDate(team.validEndDate || team.validDate);
-                          if (start && end && start !== end) return `${start} 〜 ${end}`;
-                          return start || '-';
-                        } catch {
-                          return '-';
-                        }
-                      })()}
+                      {formatTeamAccessPeriod(team)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {(() => {

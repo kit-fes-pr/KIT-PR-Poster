@@ -85,6 +85,7 @@ describe('dashboard route utils', () => {
         teamId: 'teamA',
         teamCode: 'A-01',
         assignedArea: 'A-01',
+        assignedAreaName: '本館前',
         createdAt: new Date('2026-06-21T06:00:00.000Z'),
         updatedAt: { toDate: () => new Date('2026-06-21T06:10:00.000Z') },
         validStartDate: '2026-06-01',
@@ -113,8 +114,8 @@ describe('dashboard route utils', () => {
       memberStatsByTeam: memberStats,
     });
 
-    assert.equal(areaStats['A-01'].teamCount, 1);
-    assert.equal(areaStats['A-01'].memberCount, 2);
+    assert.equal(areaStats['本館前'].teamCount, 1);
+    assert.equal(areaStats['本館前'].memberCount, 2);
     assert.equal(areaStats['未設定'].teamCount, 1);
     assert.equal(areaStats['未設定'].memberCount, 1);
   });

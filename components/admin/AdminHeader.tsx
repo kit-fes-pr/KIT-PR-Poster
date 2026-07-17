@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { NavButton } from '@/lib/hooks/useNavigation';
+import { removeLocalStorageItem } from '@/lib/utils/browser-storage';
 
 type AdminNavItem = {
   href: string;
@@ -51,7 +52,7 @@ export default function AdminHeader() {
     try {
       await signOut(auth);
     } finally {
-      localStorage.removeItem('authToken');
+      removeLocalStorageItem('authToken');
       router.replace('/admin/login');
     }
   };
