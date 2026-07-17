@@ -87,6 +87,20 @@ export default function Dashboard() {
     }
   }, [router]);
 
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuStoreId) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (!target) return;
+      if (!target.closest('[data-menu-root]')) {
+        setMenuStoreId(null);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [menuStoreId]);
+
   if (!authChecked) return null;
 
   const filteredStores = (storesData?.stores || [])
@@ -139,20 +153,6 @@ export default function Dashboard() {
       alert('店舗の登録に失敗しました');
     }
   };
-
-  // Close menu on outside click
-  useEffect(() => {
-    if (!menuStoreId) return;
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Element | null;
-      if (!target) return;
-      if (!target.closest('[data-menu-root]')) {
-        setMenuStoreId(null);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [menuStoreId]);
 
   const updateStoreStatus = async (
     storeId: string,

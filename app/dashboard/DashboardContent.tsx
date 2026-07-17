@@ -78,8 +78,6 @@ export default function DashboardContent({ mode }: { mode: Mode }) {
     }
   }, [router]);
 
-  if (!authChecked) return null;
-
   const filteredStores: Store[] = useMemo(() => {
     const list: Store[] = storesData?.stores || [];
     const filtered = list.filter((store) => {
@@ -149,6 +147,8 @@ export default function DashboardContent({ mode }: { mode: Mode }) {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [menuStoreId]);
+
+  if (!authChecked) return null;
 
   const updateStoreStatus = async (
     storeId: string,
