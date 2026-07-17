@@ -66,6 +66,10 @@ function isDateOnlyString(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+function chooseDateTimeValue(...values: unknown[]) {
+  return values.find((value) => value && !isDateOnlyString(value));
+}
+
 export function formatTeamAccessPeriod(input: {
   timeSlot?: unknown;
   validStartDate?: unknown;
@@ -74,9 +78,11 @@ export function formatTeamAccessPeriod(input: {
 }): string {
   const fallbackWindow = buildMissingTeamAccessWindowPatch(input);
   const start = parseDateLike(
-    input.validStartDate || input.validDate || fallbackWindow?.validStartDate,
+    chooseDateTimeValue(input.validStartDate, input.validDate, fallbackWindow?.validStartDate),
   );
-  const end = parseDateLike(input.validEndDate || input.validDate || fallbackWindow?.validEndDate);
+  const end = parseDateLike(
+    chooseDateTimeValue(input.validEndDate, input.validDate, fallbackWindow?.validEndDate),
+  );
   if (!start && !end) return '-';
 
   const formatter = new Intl.DateTimeFormat('ja-JP', {

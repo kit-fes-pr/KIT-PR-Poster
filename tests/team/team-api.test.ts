@@ -173,6 +173,14 @@ describe('team api utils', () => {
       '2026/06/03 8:00〜21:00',
     );
     assert.equal(
+      formatTeamAccessPeriod({
+        timeSlot: '2026-06-02_pm',
+        validStartDate: '2026-06-02',
+        validEndDate: '2026-06-02',
+      }),
+      '2026/06/02 8:00〜21:00',
+    );
+    assert.equal(
       isWithinTeamAccessWindow({
         now: new Date('2026-05-31T23:30:00.000Z'),
         validStartDate: '2026-06-01T08:00:00+09:00',
