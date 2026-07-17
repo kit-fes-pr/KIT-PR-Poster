@@ -211,11 +211,14 @@ export async function GET(request: NextRequest) {
 
     const teamDocs = Array.from(snapshotMap.values());
     const teams = teamDocs
-      .map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as Record<string, unknown>),
-        ...(buildMissingTeamAccessWindowPatch(doc.data()) || {}),
-      }))
+      .map((doc) => {
+        const data = doc.data() as Record<string, unknown>;
+        return {
+          id: doc.id,
+          ...data,
+          ...(buildMissingTeamAccessWindowPatch(data) || {}),
+        };
+      })
       .filter((team) => (team as Record<string, unknown>).isActive !== false);
 
     return NextResponse.json({ teams });
