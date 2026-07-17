@@ -18,7 +18,24 @@ type TeamBulkUpdate = {
   year?: unknown;
 };
 
-async function loadEventAvailabilitySlots(eventId: string): Promise<string[]> {
+type EventAvailabilitySlotCache = {
+  byEventId: Map<string, Promise<string[]>>;
+  eventIdByYear: Map<number, Promise<string | null>>;
+};
+
+async function loadEventAvailabilitySlots(
+  eventId: string,
+  cache: EventAvailabilitySlotCache,
+): Promise<string[]> {
+  const cached = cache.byEventId.get(eventId);
+  if (cached) return cached;
+
+  const promise = loadEventAvailabilitySlotsUncached(eventId);
+  cache.byEventId.set(eventId, promise);
+  return promise;
+}
+
+async function loadEventAvailabilitySlotsUncached(eventId: string): Promise<string[]> {
   const snap = await adminDb.collection('distributionEvents').doc(eventId).get();
   if (!snap.exists) return [];
   const data = snap.data() as Record<string, unknown>;
@@ -29,12 +46,30 @@ async function loadEventAvailabilitySlots(eventId: string): Promise<string[]> {
   );
 }
 
+async function loadEventIdByYear(
+  year: number,
+  cache: EventAvailabilitySlotCache,
+): Promise<string | null> {
+  const cached = cache.eventIdByYear.get(year);
+  if (cached) return cached;
+
+  const promise = adminDb
+    .collection('distributionEvents')
+    .where('year', '==', year)
+    .limit(1)
+    .get()
+    .then((snap) => (snap.empty ? null : snap.docs[0].id));
+  cache.eventIdByYear.set(year, promise);
+  return promise;
+}
+
 async function loadEventAvailabilitySlotsForTeamUpdate(
   update: TeamBulkUpdate,
   currentTeam: Record<string, unknown>,
+  cache: EventAvailabilitySlotCache,
 ): Promise<string[]> {
   if (typeof update.eventId === 'string' && update.eventId) {
-    return loadEventAvailabilitySlots(update.eventId);
+    return loadEventAvailabilitySlots(update.eventId, cache);
   }
 
   const requestedYear =
@@ -44,18 +79,14 @@ async function loadEventAvailabilitySlotsForTeamUpdate(
         ? Number(update.year)
         : null;
   if (requestedYear) {
-    const snap = await adminDb
-      .collection('distributionEvents')
-      .where('year', '==', requestedYear)
-      .limit(1)
-      .get();
-    if (!snap.empty) {
-      return loadEventAvailabilitySlots(snap.docs[0].id);
+    const eventId = await loadEventIdByYear(requestedYear, cache);
+    if (eventId) {
+      return loadEventAvailabilitySlots(eventId, cache);
     }
   }
 
   return typeof currentTeam.eventId === 'string'
-    ? loadEventAvailabilitySlots(currentTeam.eventId)
+    ? loadEventAvailabilitySlots(currentTeam.eventId, cache)
     : [];
 }
 
@@ -92,6 +123,10 @@ export async function PATCH(request: NextRequest) {
 
     const refs = teamIds.map((teamId) => adminDb.collection('teams').doc(teamId));
     const docs = await adminDb.getAll(...refs);
+    const eventAvailabilitySlotCache: EventAvailabilitySlotCache = {
+      byEventId: new Map(),
+      eventIdByYear: new Map(),
+    };
     const batchUpdates: Array<{
       ref: FirebaseFirestore.DocumentReference;
       update: Record<string, unknown>;
@@ -115,6 +150,7 @@ export async function PATCH(request: NextRequest) {
         eventAvailabilitySlots: await loadEventAvailabilitySlotsForTeamUpdate(
           requestedUpdate,
           currentTeam,
+          eventAvailabilitySlotCache,
         ),
         updatedAt: new Date(),
       });
