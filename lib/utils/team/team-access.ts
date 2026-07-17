@@ -55,6 +55,10 @@ function parseDateLike(value: unknown): Date | null {
   return null;
 }
 
+function isDateOnlyString(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 export function formatTeamAccessPeriod(input: {
   timeSlot?: unknown;
   validStartDate?: unknown;
@@ -108,6 +112,14 @@ export function isWithinTeamAccessWindow(input: {
   validEndDate?: unknown;
   validDate?: unknown;
 }): boolean | null {
+  if (
+    isDateOnlyString(input.validStartDate) ||
+    isDateOnlyString(input.validEndDate) ||
+    isDateOnlyString(input.validDate)
+  ) {
+    return null;
+  }
+
   const start = parseDateLike(input.validStartDate || input.validDate);
   const end = parseDateLike(input.validEndDate || input.validDate);
   if (!start && !end) return null;
