@@ -10,7 +10,7 @@ type DashboardTeam = {
   teamId: string;
   teamCode: string;
   teamName: string;
-  assignedArea?: string;
+  areaName?: string;
   timeSlot?: string;
   year?: number;
   isOwnTeam?: boolean;
@@ -52,7 +52,7 @@ export default function TeamSelectContent({ year }: { year: number }) {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return teams;
     return teams.filter((team) =>
-      [team.teamId, team.teamName, team.teamCode, team.assignedArea]
+      [team.teamId, team.teamName, team.teamCode, team.areaName]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(keyword)),
     );
@@ -69,7 +69,7 @@ export default function TeamSelectContent({ year }: { year: number }) {
               班を検索
             </label>
             <p className="mt-1 text-sm text-gray-500">
-              チームID・班名・班コード・担当区域で絞り込めます。
+              チームID・班名・班コード・配布区域で絞り込めます。
             </p>
           </div>
           <div className="text-sm text-gray-500">{filteredTeams.length}班表示中</div>
@@ -100,7 +100,6 @@ export default function TeamSelectContent({ year }: { year: number }) {
                   <div className="truncate text-base font-semibold text-gray-900">
                     {team.teamName}
                   </div>
-                  <div className="mt-1 text-sm text-gray-500">{team.teamCode || '-'}</div>
                 </div>
                 {isOwnTeam && (
                   <span className="shrink-0 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
@@ -109,21 +108,9 @@ export default function TeamSelectContent({ year }: { year: number }) {
                 )}
               </div>
               <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <div className="text-xs font-medium text-gray-500">チームID</div>
-                  <div className="mt-0.5 break-all rounded-md bg-gray-50 px-2 py-1 font-mono text-xs text-gray-800">
-                    {team.teamId}
-                  </div>
-                </div>
                 <div>
-                  <div className="text-xs font-medium text-gray-500">担当区域</div>
-                  <div className="truncate font-medium text-gray-900">
-                    {team.assignedArea || '-'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs font-medium text-gray-500">年度</div>
-                  <div className="font-medium text-gray-900">{team.year || year}</div>
+                  <div className="text-xs font-medium text-gray-500">配布区域</div>
+                  <div className="truncate font-medium text-gray-900">{team.areaName || '-'}</div>
                 </div>
               </div>
             </Link>
@@ -131,7 +118,7 @@ export default function TeamSelectContent({ year }: { year: number }) {
         })}
         {filteredTeams.length === 0 && (
           <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500 sm:col-span-2 lg:col-span-3">
-            条件に一致する班がありません。検索語を短くするか、チームID・班名・担当区域を確認してください。
+            条件に一致する班がありません。検索語を短くするか、チームID・班名・配布区域を確認してください。
           </div>
         )}
       </div>

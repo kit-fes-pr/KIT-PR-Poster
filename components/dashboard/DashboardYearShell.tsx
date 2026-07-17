@@ -21,6 +21,7 @@ type DashboardTeam = {
   teamId: string;
   teamCode: string;
   teamName: string;
+  areaName?: string;
   assignedArea?: string;
   timeSlot?: string;
   year?: number;

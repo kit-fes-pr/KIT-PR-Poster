@@ -18,6 +18,7 @@ type DashboardTeam = {
   teamId: string;
   teamCode: string;
   teamName: string;
+  areaName?: string;
   assignedArea?: string;
   timeSlot?: string;
   year?: number;
@@ -385,7 +386,8 @@ export default function DashboardContent({
                       <option value="all">全班の店舗</option>
                       {teams.map((team) => (
                         <option key={team.teamId} value={team.teamId}>
-                          {team.teamName} / {team.teamId}
+                          {team.teamName}
+                          {team.areaName ? ` / ${team.areaName}` : ''}
                           {team.isOwnTeam ? '（自班）' : ''}
                         </option>
                       ))}

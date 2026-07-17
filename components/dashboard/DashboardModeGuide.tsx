@@ -39,7 +39,7 @@ export default function DashboardModeGuide({
   ];
 
   return (
-    <div className="mb-4 grid gap-3 lg:grid-cols-3">
+    <div className="mb-4 hidden gap-3 md:grid lg:grid-cols-3">
       {items.map((item) => {
         const active = mode === item.key || (mode === 'team' && item.key === 'teams');
         return (

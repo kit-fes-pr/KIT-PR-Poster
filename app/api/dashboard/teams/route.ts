@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
+import { loadAreaMap } from '@/lib/server/team-area';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import {
   getDashboardEventIdForYear,
@@ -30,16 +31,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'year は4桁の年度で指定してください' }, { status: 400 });
     }
     const eventId = year ? await getDashboardEventIdForYear(year) : null;
+    const areaMap = await loadAreaMap();
 
     const snapshot = await adminDb.collection('teams').get();
     const teams = snapshot.docs
       .map((doc) => {
         const data = doc.data() as Record<string, unknown>;
+        const areaId = String(data.areaId || '');
+        const assignedArea = String(data.assignedArea || '');
+        const area =
+          areaMap.byId.get(areaId) ||
+          areaMap.byId.get(assignedArea) ||
+          areaMap.byCode.get(assignedArea);
         return {
           teamId: doc.id,
           teamCode: typeof data.teamCode === 'string' ? data.teamCode : '',
           teamName: typeof data.teamName === 'string' ? data.teamName : '',
           assignedArea: typeof data.assignedArea === 'string' ? data.assignedArea : '',
+          areaName: area?.areaName || '',
           timeSlot: typeof data.timeSlot === 'string' ? data.timeSlot : '',
           year: getTeamYearValue(data) || undefined,
           eventId: typeof data.eventId === 'string' ? data.eventId : undefined,
