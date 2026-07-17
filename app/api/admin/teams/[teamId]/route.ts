@@ -48,7 +48,7 @@ async function loadEventAvailabilitySlotsForTeamUpdate(
     }
   }
 
-  return typeof currentTeam.eventId === 'string'
+  return typeof currentTeam.eventId === 'string' && currentTeam.eventId !== ''
     ? loadEventAvailabilitySlots(currentTeam.eventId)
     : [];
 }
