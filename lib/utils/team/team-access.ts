@@ -30,7 +30,14 @@ export function buildMissingTeamAccessWindowPatch(team: {
   validStartDate?: unknown;
   validEndDate?: unknown;
 }) {
-  if (team.validStartDate && team.validEndDate) return null;
+  if (
+    team.validStartDate &&
+    team.validEndDate &&
+    !isDateOnlyString(team.validStartDate) &&
+    !isDateOnlyString(team.validEndDate)
+  ) {
+    return null;
+  }
   return buildTeamAccessWindowFromTimeSlot(team.timeSlot);
 }
 

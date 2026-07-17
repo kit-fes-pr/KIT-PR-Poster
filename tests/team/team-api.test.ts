@@ -139,6 +139,18 @@ describe('team api utils', () => {
         accessWindowVersion: 1,
       },
     );
+    assert.deepEqual(
+      buildMissingTeamAccessWindowPatch({
+        timeSlot: '2026-06-02_pm',
+        validStartDate: '2026-06-02',
+        validEndDate: '2026-06-02',
+      }),
+      {
+        validStartDate: '2026-06-02T08:00:00+09:00',
+        validEndDate: '2026-06-02T21:00:00+09:00',
+        accessWindowVersion: 1,
+      },
+    );
     assert.equal(
       buildMissingTeamAccessWindowPatch({
         timeSlot: '2026-06-02_pm',
