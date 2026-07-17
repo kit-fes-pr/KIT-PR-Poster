@@ -4,6 +4,7 @@ export interface DashboardTeam {
   teamId: string;
   teamCode: string;
   teamName: string;
+  timeSlot?: string;
   assignedArea: string;
   assignedAreaName?: string;
   memberCount?: number;
@@ -50,7 +51,7 @@ export interface ProgressiveDashboardCache {
 }
 
 const DASHBOARD_CACHE_PREFIX = 'kitpr_dashboard_cache_';
-const DASHBOARD_CACHE_VERSION = 2;
+const DASHBOARD_CACHE_VERSION = 4;
 
 function getKey(year: number) {
   return `${DASHBOARD_CACHE_PREFIX}${year}`;

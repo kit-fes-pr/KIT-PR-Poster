@@ -8,6 +8,12 @@ import {
   resolveTeamAreaSelection,
   shouldBlockTeamDeletion,
 } from '../../lib/utils/team/team-api';
+import {
+  buildMissingTeamAccessWindowPatch,
+  buildTeamAccessWindowFromTimeSlot,
+  formatTeamAccessPeriod,
+  isWithinTeamAccessWindow,
+} from '../../lib/utils/team/team-access';
 
 describe('team api utils', () => {
   test('normalizeTeamYear accepts only 4-digit integers', () => {
@@ -74,6 +80,9 @@ describe('team api utils', () => {
         teamCode: 'T-01',
         teamName: 'チームA',
         timeSlot: '2026-06-01_am',
+        validStartDate: '2026-06-01T08:00:00+09:00',
+        validEndDate: '2026-06-01T21:00:00+09:00',
+        accessWindowVersion: 1,
         areaId: 'area-1',
         assignedArea: 'A-01',
         adjacentAreas: ['A-02', 'A-03'],
@@ -100,11 +109,72 @@ describe('team api utils', () => {
         teamCode: 'T-02',
         year: 2027,
         timeSlot: '2026-06-01_pm',
+        validStartDate: '2026-06-01T08:00:00+09:00',
+        validEndDate: '2026-06-01T21:00:00+09:00',
+        accessWindowVersion: 1,
         isActive: false,
         areaId: 'area-1',
         assignedArea: 'A-01',
         adjacentAreas: ['A-02', 'A-03'],
       },
+    );
+  });
+
+  test('team access window is derived from distribution slot date', () => {
+    assert.deepEqual(buildTeamAccessWindowFromTimeSlot('2026-06-01_am'), {
+      validStartDate: '2026-06-01T08:00:00+09:00',
+      validEndDate: '2026-06-01T21:00:00+09:00',
+      accessWindowVersion: 1,
+    });
+    assert.equal(buildTeamAccessWindowFromTimeSlot('invalid'), null);
+    assert.deepEqual(
+      buildMissingTeamAccessWindowPatch({
+        timeSlot: '2026-06-02_pm',
+        validStartDate: '',
+        validEndDate: '',
+      }),
+      {
+        validStartDate: '2026-06-02T08:00:00+09:00',
+        validEndDate: '2026-06-02T21:00:00+09:00',
+        accessWindowVersion: 1,
+      },
+    );
+    assert.equal(
+      buildMissingTeamAccessWindowPatch({
+        timeSlot: '2026-06-02_pm',
+        validStartDate: '2026-06-02T09:00:00+09:00',
+        validEndDate: '2026-06-02T20:00:00+09:00',
+      }),
+      null,
+    );
+    assert.equal(
+      formatTeamAccessPeriod({
+        validStartDate: '2026-06-01T08:00:00+09:00',
+        validEndDate: '2026-06-01T21:00:00+09:00',
+      }),
+      '2026/06/01 8:00〜21:00',
+    );
+    assert.equal(
+      formatTeamAccessPeriod({
+        timeSlot: '2026-06-03_am',
+      }),
+      '2026/06/03 8:00〜21:00',
+    );
+    assert.equal(
+      isWithinTeamAccessWindow({
+        now: new Date('2026-05-31T23:30:00.000Z'),
+        validStartDate: '2026-06-01T08:00:00+09:00',
+        validEndDate: '2026-06-01T21:00:00+09:00',
+      }),
+      true,
+    );
+    assert.equal(
+      isWithinTeamAccessWindow({
+        now: new Date('2026-06-01T12:30:00.000Z'),
+        validStartDate: '2026-06-01T08:00:00+09:00',
+        validEndDate: '2026-06-01T21:00:00+09:00',
+      }),
+      false,
     );
   });
 

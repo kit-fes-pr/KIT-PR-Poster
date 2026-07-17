@@ -1,6 +1,7 @@
 import { Team } from '../../../types';
 import { normalizeAdjacentAreas } from '../area/area';
 import { normalizeTeamTimeSlot } from './team';
+import { buildTeamAccessWindowFromTimeSlot } from './team-access';
 
 export interface TeamAreaSelection {
   areaId: string;
@@ -74,11 +75,13 @@ export function buildTeamCreateData(input: {
   if (!normalizedTimeSlot) {
     throw new Error('timeSlot is invalid');
   }
+  const accessWindow = buildTeamAccessWindowFromTimeSlot(normalizedTimeSlot);
 
   return {
     teamCode: String(input.teamCode || '').trim(),
     teamName: String(input.teamName || '').trim(),
     timeSlot: normalizedTimeSlot,
+    ...(accessWindow || {}),
     areaId: input.area.areaId,
     assignedArea: input.area.assignedArea,
     adjacentAreas: normalizeAdjacentAreas(input.area.adjacentAreas),
@@ -115,6 +118,7 @@ export function buildTeamUpdateData(input: {
       throw new Error('timeSlot is invalid');
     }
     update.timeSlot = normalizedTimeSlot;
+    Object.assign(update, buildTeamAccessWindowFromTimeSlot(normalizedTimeSlot) || {});
   }
 
   if (typeof input.isActive === 'boolean') update.isActive = input.isActive;

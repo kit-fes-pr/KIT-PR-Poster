@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
+import { formatTeamAccessPeriod, isWithinTeamAccessWindow } from '@/lib/utils/team/team-access';
 
 export async function POST(request: NextRequest) {
   try {
@@ -89,7 +90,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 班のアクセス可能日（範囲）の確認（存在する場合のみチェック）
+    // 班のアクセス可能日時（範囲）の確認（存在する場合のみチェック）
+    const teamAccessResult = isWithinTeamAccessWindow({
+      now: new Date(),
+      validStartDate: teamData.validStartDate,
+      validEndDate: teamData.validEndDate,
+      validDate: teamData.validDate,
+    });
+    if (teamAccessResult === false) {
+      return NextResponse.json(
+        { error: `現在はアクセス期間外です。班: ${formatTeamAccessPeriod(teamData)}` },
+        { status: 403 },
+      );
+    }
+
+    // 後方互換: 日付のみで保存されていた班のアクセス可能日を確認
     let teamStartKey: string | null = null;
     let teamEndKey: string | null = null;
     try {
@@ -124,7 +139,7 @@ export async function POST(request: NextRequest) {
       console.error('エラー内容:', error);
     }
 
-    if (teamStartKey || teamEndKey) {
+    if (teamAccessResult === null && (teamStartKey || teamEndKey)) {
       const ts = teamStartKey || teamEndKey; // どちらか片方でも設定されていれば判定対象
       const te = teamEndKey || teamStartKey;
       const teamInRange = ts && te ? ts <= todayKey && todayKey <= te : todayKey === ts;

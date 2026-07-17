@@ -11,8 +11,13 @@ import {
   normalizeTeamYear,
   resolveTeamAreaSelection,
 } from '@/lib/utils/team/team-api';
+import {
+  buildMissingTeamAccessWindowPatch,
+  buildTeamAccessWindowFromTimeSlot,
+} from '@/lib/utils/team/team-access';
 import { normalizeTeamTimeSlot } from '@/lib/utils/team/team';
 import { FirestoreCache } from '@/lib/utils/server-cache';
+import { backfillMissingTeamAccessWindows } from '@/lib/server/team-access-backfill';
 
 async function loadEventAvailabilitySlots(eventId: string): Promise<string[]> {
   const snap = await adminDb.collection('distributionEvents').doc(eventId).get();
@@ -169,10 +174,14 @@ export async function GET(request: NextRequest) {
 
     if (scope === 'all') {
       const teamsSnapshot = await adminDb.collection('teams').get();
+      await backfillMissingTeamAccessWindows(teamsSnapshot.docs, {
+        batchFactory: () => adminDb.batch(),
+      });
       const teams = teamsSnapshot.docs
         .map((doc) => ({
           id: doc.id,
           ...(doc.data() as Record<string, unknown>),
+          ...(buildMissingTeamAccessWindowPatch(doc.data()) || {}),
         }))
         .filter((team) => (team as Record<string, unknown>).isActive !== false);
 
@@ -201,10 +210,16 @@ export async function GET(request: NextRequest) {
       byYear.docs.forEach((doc) => snapshotMap.set(doc.id, doc));
     }
 
-    const teams = Array.from(snapshotMap.values())
+    const teamDocs = Array.from(snapshotMap.values());
+    await backfillMissingTeamAccessWindows(teamDocs, {
+      batchFactory: () => adminDb.batch(),
+    });
+
+    const teams = teamDocs
       .map((doc) => ({
         id: doc.id,
         ...(doc.data() as Record<string, unknown>),
+        ...(buildMissingTeamAccessWindowPatch(doc.data()) || {}),
       }))
       .filter((team) => (team as Record<string, unknown>).isActive !== false);
 
@@ -264,6 +279,7 @@ export async function PATCH(request: NextRequest) {
         );
       }
       update.timeSlot = normalizedTimeSlot;
+      Object.assign(update, buildTeamAccessWindowFromTimeSlot(normalizedTimeSlot) || {});
     }
     if (typeof body.teamName === 'string') update.teamName = body.teamName;
     if (typeof body.teamCode === 'string') update.teamCode = body.teamCode;

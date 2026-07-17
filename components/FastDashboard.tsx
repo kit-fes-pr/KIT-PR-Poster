@@ -6,7 +6,7 @@ import { useProgressiveData } from '@/lib/hooks/useProgressiveData';
 import { useFastPageTransition } from '@/lib/hooks/usePageTransition';
 import { LoadingScreen, LoadingInline } from '@/components/ui/Loading';
 import { MetricCard } from '@/components/ui/MetricCard';
-import { formatDateOnly } from '@/lib/utils/dateUtils';
+import { formatTeamAccessPeriod } from '@/lib/utils/team/team-access';
 
 interface FastDashboardProps {
   year: number;
@@ -177,17 +177,7 @@ export default function FastDashboard({ year, isAdmin }: FastDashboardProps) {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {(() => {
-                            const start = formatDateOnly(
-                              team.validStartDate as string | number | Date | null | undefined,
-                            );
-                            const end = formatDateOnly(
-                              team.validEndDate as string | number | Date | null | undefined,
-                            );
-                            if (start !== '-' && end !== '-' && start !== end)
-                              return `${start}〜${end}`;
-                            return start !== '-' ? start : '-';
-                          })()}
+                          {formatTeamAccessPeriod(team)}
                         </td>
                       </tr>
                     ))}
