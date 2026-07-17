@@ -95,8 +95,11 @@ export default function TeamDetailPage() {
           setDistributionSlots(slots);
         }
 
-        const td = await fetcherAuth(`/api/admin/teams/${teamId}`);
-        const areasData = await fetcherAuth('/api/admin/areas');
+        const [td, areasData, st] = await Promise.all([
+          fetcherAuth(`/api/admin/teams/${teamId}`),
+          fetcherAuth('/api/admin/areas'),
+          fetcherAuth(`/api/admin/teams/${teamId}/stores`),
+        ]);
         const loadedAreas = (areasData.areas || []) as Area[];
         const selectedArea = loadedAreas.find(
           (area) =>
@@ -113,7 +116,6 @@ export default function TeamDetailPage() {
           assignedArea: selectedArea?.areaId || '',
         });
 
-        const st = await fetcherAuth(`/api/admin/teams/${teamId}/stores`);
         setStores(st.stores || []);
       } catch (error) {
         console.error('Team detail loading error:', error);

@@ -48,7 +48,7 @@ async function loadEventAvailabilitySlotsForTeamUpdate(
     }
   }
 
-  return typeof currentTeam.eventId === 'string'
+  return typeof currentTeam.eventId === 'string' && currentTeam.eventId !== ''
     ? loadEventAvailabilitySlots(currentTeam.eventId)
     : [];
 }
@@ -152,10 +152,10 @@ export async function PATCH(
     await ref.update(update);
     const updated = await ref.get();
 
-    const teamYear = typeof update.year === 'number' ? update.year : currentTeam.year;
-    if (typeof teamYear === 'number') {
-      FirestoreCache.invalidateYear(teamYear);
-    }
+    const yearsToInvalidate = new Set<number>();
+    if (typeof currentTeam.year === 'number') yearsToInvalidate.add(currentTeam.year);
+    if (typeof update.year === 'number') yearsToInvalidate.add(update.year);
+    yearsToInvalidate.forEach((year) => FirestoreCache.invalidateYear(year));
 
     return NextResponse.json({ success: true, team: { teamId: updated.id, ...updated.data() } });
   } catch (error) {

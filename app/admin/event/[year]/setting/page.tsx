@@ -41,6 +41,13 @@ type TeamSummary = {
   timeSlot?: string;
 };
 
+type TeamSlotBulkUpdate = {
+  teamId: string;
+  timeSlot: string;
+  eventId: string;
+  year: number;
+};
+
 function buildFormAvailabilityOptions(slotKeys: string[]): string[] {
   return [...slotKeys, UNAVAILABLE_SLOT_KEY, ALL_AVAILABLE_SLOT_KEY];
 }
@@ -399,30 +406,34 @@ export default function DistributionSettingsPage({
 
       const token = await user.getIdToken();
       const eventId = eventData?.id || `kodai${resolvedParams.year}`;
-      await Promise.all(
-        teams.map(async (team) => {
+      const updates = teams
+        .map((team) => {
           const teamId = team.teamId || team.id || '';
-          if (!teamId) return;
           const nextTimeSlot = teamSlotDrafts[teamId];
-          if (!nextTimeSlot || nextTimeSlot === team.timeSlot) return;
-          const res = await fetch(`/api/admin/teams/${teamId}`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              timeSlot: nextTimeSlot,
-              eventId,
-              year: Number(resolvedParams.year),
-            }),
-          });
-          const json = await res.json().catch(() => null);
-          if (!res.ok) {
-            throw new Error(json?.error || 'チーム配布枠の更新に失敗しました');
-          }
-        }),
-      );
+          if (!teamId || !nextTimeSlot || nextTimeSlot === team.timeSlot) return null;
+          return {
+            teamId,
+            timeSlot: nextTimeSlot,
+            eventId,
+            year: Number(resolvedParams.year),
+          };
+        })
+        .filter((update): update is TeamSlotBulkUpdate => update !== null);
+
+      if (updates.length > 0) {
+        const res = await fetch('/api/admin/teams/bulk', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ updates }),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok) {
+          throw new Error(json?.error || 'チーム配布枠の更新に失敗しました');
+        }
+      }
 
       setTeams((current) =>
         current.map((team) => {

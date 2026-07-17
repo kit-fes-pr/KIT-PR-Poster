@@ -1,16 +1,20 @@
 // ローカルストレージベースのキャッシュマネージャー
+import { getBrowserLocalStorage, getLocalStorageItem } from '@/lib/utils/browser-storage';
+
 export class LocalCacheManager {
   private prefix = 'kitpr_cache_';
 
   // キャッシュデータの保存
   setCache(key: string, data: unknown, timestamp?: string): void {
     try {
+      const storage = getBrowserLocalStorage();
+      if (!storage) return;
       const cacheData = {
         data,
         timestamp: timestamp || new Date().toISOString(),
         cachedAt: Date.now(),
       };
-      localStorage.setItem(this.prefix + key, JSON.stringify(cacheData));
+      storage.setItem(this.prefix + key, JSON.stringify(cacheData));
     } catch (error) {
       console.warn('キャッシュ保存失敗:', error);
     }
@@ -19,7 +23,7 @@ export class LocalCacheManager {
   // キャッシュデータの取得
   getCache(key: string): { data: unknown; timestamp: string } | null {
     try {
-      const cached = localStorage.getItem(this.prefix + key);
+      const cached = getLocalStorageItem(this.prefix + key);
       if (!cached) return null;
 
       const cacheData = JSON.parse(cached);
@@ -42,7 +46,7 @@ export class LocalCacheManager {
 
   // キャッシュの削除
   removeCache(key: string): void {
-    localStorage.removeItem(this.prefix + key);
+    getBrowserLocalStorage()?.removeItem(this.prefix + key);
   }
 
   // 差分データをマージ
@@ -84,7 +88,7 @@ export class LocalCacheManager {
 // SWR用の差分取得fetcher
 export const createIncrementalFetcher = (cacheManager: LocalCacheManager) => {
   return async (url: string): Promise<unknown> => {
-    const token = localStorage.getItem('authToken');
+    const token = getLocalStorageItem('authToken');
     if (!token) throw new Error('認証が必要です');
 
     // URLからキャッシュキーを生成

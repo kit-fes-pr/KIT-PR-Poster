@@ -184,7 +184,7 @@ export default function FastDashboard({ year, isAdmin }: FastDashboardProps) {
                   </tbody>
                 </table>
 
-                {totalPages != 1 && (
+                {totalPages > 1 && (
                   <div className="bg-gray-50 px-6 py-4 flex items-center justify-between gap-3">
                     <p className="text-sm text-gray-600">
                       {safeCurrentPage} / {totalPages} ページ

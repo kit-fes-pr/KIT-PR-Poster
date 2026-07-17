@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { useErrorRecovery } from '@/lib/utils/error-recovery';
+import { removeLocalStorageItem, setLocalStorageItem } from '@/lib/utils/browser-storage';
 
 interface UseRequireAdminOptions {
   onRedirect?: (path: string) => void;
@@ -47,7 +48,7 @@ export function useRequireAdmin(options: UseRequireAdminOptions = {}) {
 
         if (!response.ok) {
           if (isMounted) {
-            localStorage.removeItem('authToken');
+            removeLocalStorageItem('authToken');
             handleRedirect('/admin/login');
           }
           return;
@@ -56,14 +57,14 @@ export function useRequireAdmin(options: UseRequireAdminOptions = {}) {
         const data = await response.json();
         if (!data?.user?.isAdmin) {
           if (isMounted) {
-            localStorage.removeItem('authToken');
+            removeLocalStorageItem('authToken');
             handleRedirect('/admin/login');
           }
           return;
         }
 
         if (isMounted) {
-          localStorage.setItem('authToken', token);
+          setLocalStorageItem('authToken', token);
           setUser(currentUser);
           setIsAdmin(true);
           setError(null);
@@ -73,7 +74,7 @@ export function useRequireAdmin(options: UseRequireAdminOptions = {}) {
         const diagnosis = handleError(err, 'require-admin-verify');
         if (isMounted) {
           if (diagnosis.type === 'auth') {
-            localStorage.removeItem('authToken');
+            removeLocalStorageItem('authToken');
             handleRedirect('/admin/login');
           } else if (diagnosis.recoverable) {
             setError('認証の確認中にエラーが発生しました');
@@ -89,7 +90,7 @@ export function useRequireAdmin(options: UseRequireAdminOptions = {}) {
         if (isMounted) {
           setUser(null);
           setIsAdmin(false);
-          localStorage.removeItem('authToken');
+          removeLocalStorageItem('authToken');
           handleRedirect('/admin/login');
           setLoading(false);
         }
@@ -102,7 +103,7 @@ export function useRequireAdmin(options: UseRequireAdminOptions = {}) {
       } catch (err) {
         console.error('Failed to get token:', err);
         if (isMounted) {
-          localStorage.removeItem('authToken');
+          removeLocalStorageItem('authToken');
           handleRedirect('/admin/login');
         }
       }
