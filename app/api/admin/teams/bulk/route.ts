@@ -163,7 +163,8 @@ export async function PATCH(request: NextRequest) {
       ref: FirebaseFirestore.DocumentReference;
       update: Record<string, unknown>;
       team: Record<string, unknown>;
-      year?: number;
+      previousYear?: number;
+      nextYear?: number;
     }> = [];
 
     for (let i = 0; i < requestedUpdates.length; i++) {
@@ -202,12 +203,8 @@ export async function PATCH(request: NextRequest) {
         ref: doc.ref,
         update,
         team: { teamId: doc.id, ...currentTeam, ...update },
-        year:
-          typeof update.year === 'number'
-            ? update.year
-            : typeof currentTeam.year === 'number'
-              ? currentTeam.year
-              : undefined,
+        previousYear: typeof currentTeam.year === 'number' ? currentTeam.year : undefined,
+        nextYear: typeof update.year === 'number' ? update.year : undefined,
       });
     }
 
@@ -217,7 +214,9 @@ export async function PATCH(request: NextRequest) {
     }
     await batch.commit();
 
-    const years = new Set(batchUpdates.map((item) => item.year).filter(isFiniteNumber));
+    const years = new Set(
+      batchUpdates.flatMap((item) => [item.previousYear, item.nextYear]).filter(isFiniteNumber),
+    );
     years.forEach((year) => FirestoreCache.invalidateYear(year));
 
     return NextResponse.json({
