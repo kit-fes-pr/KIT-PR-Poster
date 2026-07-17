@@ -11,6 +11,9 @@ import {
 } from '@/lib/utils/team/team-route';
 import { FirestoreCache } from '@/lib/utils/server-cache';
 
+type TeamDocumentReference = FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>;
+type TeamUpdateData = FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>;
+
 type TeamBulkUpdate = {
   teamId?: unknown;
   timeSlot?: unknown;
@@ -160,8 +163,8 @@ export async function PATCH(request: NextRequest) {
       eventIdByYear: new Map(),
     };
     const batchUpdates: Array<{
-      ref: any;
-      update: Record<string, unknown>;
+      ref: TeamDocumentReference;
+      update: TeamUpdateData;
       team: Record<string, unknown>;
       previousYear?: number;
       nextYear?: number;
@@ -194,7 +197,7 @@ export async function PATCH(request: NextRequest) {
         );
       }
 
-      const update = updateResult.update;
+      const update = updateResult.update as TeamUpdateData;
       if (typeof requestedUpdate.eventId === 'string' && requestedUpdate.eventId) {
         update.eventId = requestedUpdate.eventId;
       }
