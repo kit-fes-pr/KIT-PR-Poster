@@ -83,9 +83,14 @@ export async function PATCH(request: NextRequest) {
     }
 
     const requestedUpdates = body.updates as TeamBulkUpdate[];
-    const refs = requestedUpdates.map((update) =>
-      adminDb.collection('teams').doc(String(update.teamId || '')),
+    const teamIds = requestedUpdates.map((update) =>
+      typeof update.teamId === 'string' ? update.teamId.trim() : '',
     );
+    if (teamIds.some((teamId) => !teamId)) {
+      return NextResponse.json({ error: 'teamId は必須です' }, { status: 400 });
+    }
+
+    const refs = teamIds.map((teamId) => adminDb.collection('teams').doc(teamId));
     const docs = await adminDb.getAll(...refs);
     const batchUpdates: Array<{
       ref: FirebaseFirestore.DocumentReference;
@@ -96,10 +101,7 @@ export async function PATCH(request: NextRequest) {
 
     for (let i = 0; i < requestedUpdates.length; i++) {
       const requestedUpdate = requestedUpdates[i];
-      const teamId = typeof requestedUpdate.teamId === 'string' ? requestedUpdate.teamId : '';
-      if (!teamId) {
-        return NextResponse.json({ error: 'teamId は必須です' }, { status: 400 });
-      }
+      const teamId = teamIds[i];
 
       const doc = docs[i];
       if (!doc.exists) {
