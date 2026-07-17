@@ -2,6 +2,7 @@
 
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { setLocalStorageItem } from '@/lib/utils/browser-storage';
 
 function waitForCurrentUser() {
   if (auth.currentUser) return Promise.resolve(auth.currentUser);
@@ -19,7 +20,7 @@ export async function getFreshAuthToken(forceRefresh = false) {
   if (!user) throw new Error('認証が必要です');
 
   const token = await user.getIdToken(forceRefresh);
-  localStorage.setItem('authToken', token);
+  setLocalStorageItem('authToken', token);
   return token;
 }
 

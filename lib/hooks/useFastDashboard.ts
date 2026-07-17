@@ -2,10 +2,11 @@
 
 import { mutate as swrMutate } from 'swr';
 import { DashboardTeam, writeDashboardCache } from '@/lib/utils/dashboard/dashboard-cache';
+import { getLocalStorageItem } from '@/lib/utils/browser-storage';
 
 // プリロード機能
 export function preloadDashboard(year: number) {
-  const token = localStorage.getItem('authToken');
+  const token = getLocalStorageItem('authToken');
   if (!token || !year) return;
 
   const minimalKey = `/api/admin/dashboard/${year}/minimal`;
