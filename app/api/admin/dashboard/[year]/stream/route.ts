@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { loadAreaMap } from '@/lib/server/team-area';
-import { backfillMissingTeamAccessWindows } from '@/lib/server/team-access-backfill';
 import { buildMissingTeamAccessWindowPatch } from '@/lib/utils/team/team-access';
 
 function serializeDateValue(value: unknown): string | unknown {
@@ -129,9 +128,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
             .limit(20); // 最初は20件だけ
 
           const teamsSnapshot = await teamsQuery.get();
-          await backfillMissingTeamAccessWindows(teamsSnapshot.docs, {
-            batchFactory: () => adminDb.batch(),
-          });
           const areaMap = await loadAreaMap();
 
           const teams = teamsSnapshot.docs.map((doc) => {

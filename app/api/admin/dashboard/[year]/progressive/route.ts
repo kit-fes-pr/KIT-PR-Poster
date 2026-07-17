@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { loadAreaMap } from '@/lib/server/team-area';
-import { backfillMissingTeamAccessWindows } from '@/lib/server/team-access-backfill';
 import { buildMissingTeamAccessWindowPatch } from '@/lib/utils/team/team-access';
 
 /**
@@ -88,9 +87,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
       .sort((a, b) => (b.updatedAtMs || b.createdAtMs) - (a.updatedAtMs || a.createdAtMs));
 
     const pagedDocs = orderedTeams.slice(offset, offset + limit).map((item) => item.doc);
-    await backfillMissingTeamAccessWindows(pagedDocs, {
-      batchFactory: () => adminDb.batch(),
-    });
     const areaMap = await loadAreaMap();
     const teams = await Promise.all(
       pagedDocs.map(async (doc) => {

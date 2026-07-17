@@ -9,7 +9,6 @@ import {
 import { buildAssignmentDashboardMemberStats } from '@/lib/utils/assignment/assignment-dashboard';
 import { FirestoreOptimizer } from '@/lib/utils/firestore-optimizer';
 import { loadAreaMap } from '@/lib/server/team-area';
-import { backfillMissingTeamAccessWindows } from '@/lib/server/team-access-backfill';
 import { buildMissingTeamAccessWindowPatch } from '@/lib/utils/team/team-access';
 
 export async function GET(request: NextRequest, context: { params: Promise<{ year: string }> }) {
@@ -85,12 +84,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
     }
 
     const areaMap = await loadAreaMap();
-    await backfillMissingTeamAccessWindows(
-      (teamsSnapshot as { docs: FirebaseFirestore.QueryDocumentSnapshot[] }).docs,
-      {
-        batchFactory: () => adminDb.batch(),
-      },
-    );
 
     // チームデータの処理
     const teams = (

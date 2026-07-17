@@ -17,7 +17,6 @@ import {
 } from '@/lib/utils/team/team-access';
 import { normalizeTeamTimeSlot } from '@/lib/utils/team/team';
 import { FirestoreCache } from '@/lib/utils/server-cache';
-import { backfillMissingTeamAccessWindows } from '@/lib/server/team-access-backfill';
 
 async function loadEventAvailabilitySlots(eventId: string): Promise<string[]> {
   const snap = await adminDb.collection('distributionEvents').doc(eventId).get();
@@ -174,9 +173,6 @@ export async function GET(request: NextRequest) {
 
     if (scope === 'all') {
       const teamsSnapshot = await adminDb.collection('teams').get();
-      await backfillMissingTeamAccessWindows(teamsSnapshot.docs, {
-        batchFactory: () => adminDb.batch(),
-      });
       const teams = teamsSnapshot.docs
         .map((doc) => ({
           id: doc.id,
@@ -211,10 +207,6 @@ export async function GET(request: NextRequest) {
     }
 
     const teamDocs = Array.from(snapshotMap.values());
-    await backfillMissingTeamAccessWindows(teamDocs, {
-      batchFactory: () => adminDb.batch(),
-    });
-
     const teams = teamDocs
       .map((doc) => ({
         id: doc.id,
