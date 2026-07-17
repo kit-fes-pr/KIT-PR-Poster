@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { signOut } from 'firebase/auth';
 import useSWR from 'swr';
 import { Modal } from '@/components/ui/Modal';
 import { Store, StoreFormData } from '@/types';
 import { useForm } from 'react-hook-form';
+import { auth } from '@/lib/firebase';
 import { authenticatedFetch, fetcherAuth, getVerifiedAuthUser } from '@/lib/utils/auth-fetcher';
+import { removeLocalStorageItem } from '@/lib/utils/browser-storage';
 
 type Mode = 'self' | 'all' | 'team';
 
@@ -30,6 +33,7 @@ export default function DashboardContent({ mode, teamId }: { mode: Mode; teamId?
   const [isAddingStore, setIsAddingStore] = useState(false);
   const [detailsStoreId, setDetailsStoreId] = useState<string | null>(null);
   const [menuStoreId, setMenuStoreId] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const {
     register,
@@ -273,6 +277,25 @@ export default function DashboardContent({ mode, teamId }: { mode: Mode; teamId?
     }
   };
 
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+
+    try {
+      await authenticatedFetch('/api/auth/logout', { method: 'POST' });
+    } catch (error) {
+      console.error('Logout API error:', error);
+    } finally {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        console.error('Firebase sign out error:', error);
+      }
+      removeLocalStorageItem('authToken');
+      router.replace('/');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow">
@@ -309,10 +332,9 @@ export default function DashboardContent({ mode, teamId }: { mode: Mode; teamId?
                 </Link>
               )}
               <button
-                onClick={() => {
-                  localStorage.removeItem('authToken');
-                  router.replace('/');
-                }}
+                type="button"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
                 className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 text-sm"
                 title="ログアウト"
               >
