@@ -22,6 +22,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 function normalizeBulkUpdates(updates: unknown[]): TeamBulkUpdate[] | { error: string } {
   const updateByTeamId = new Map<string, TeamBulkUpdate>();
 
@@ -213,8 +217,8 @@ export async function PATCH(request: NextRequest) {
     }
     await batch.commit();
 
-    const years = new Set(batchUpdates.map((item) => item.year).filter((year) => !!year));
-    years.forEach((year) => FirestoreCache.invalidateYear(Number(year)));
+    const years = new Set(batchUpdates.map((item) => item.year).filter(isFiniteNumber));
+    years.forEach((year) => FirestoreCache.invalidateYear(year));
 
     return NextResponse.json({
       success: true,
