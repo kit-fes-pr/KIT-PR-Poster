@@ -42,6 +42,8 @@ export async function GET(request: NextRequest) {
       ? await getDashboardEventIdForYear(targetYear)
       : 'kodai2025';
     let filterTeamCode: string | null = null;
+    let allowedAreas: string[] = [];
+    let hasAllowedAreas = false;
 
     if (requestedTeamId) {
       const teamDoc = await adminDb.collection('teams').doc(requestedTeamId).get();
@@ -73,11 +75,17 @@ export async function GET(request: NextRequest) {
       if (!targetEventId && typeof teamData?.eventId === 'string') {
         targetEventId = teamData.eventId;
       }
-      if (teamData?.assignedArea) {
-        const adjacent = Array.isArray(teamData.adjacentAreas) ? teamData.adjacentAreas : [];
-        const allowedAreas = [teamData.assignedArea, ...adjacent].filter(Boolean);
+      if (typeof teamData?.assignedArea === 'string' && teamData.assignedArea) {
+        const adjacent = Array.isArray(teamData.adjacentAreas)
+          ? teamData.adjacentAreas.filter(
+              (adjacentArea): adjacentArea is string =>
+                typeof adjacentArea === 'string' && !!adjacentArea,
+            )
+          : [];
+        allowedAreas = [teamData.assignedArea, ...adjacent];
+        hasAllowedAreas = allowedAreas.length > 0;
         // Firestore 'in' フィルタは最大10要素。超える場合は全件取得して後段で絞り込み。
-        if (allowedAreas.length > 0 && allowedAreas.length <= 10) {
+        if (hasAllowedAreas && allowedAreas.length <= 10) {
           if (!targetEventId) return NextResponse.json({ stores: [] });
           let query = adminDb.collection('stores').where('eventId', '==', targetEventId);
           query = query.where('areaCode', 'in', allowedAreas);
@@ -140,18 +148,8 @@ export async function GET(request: NextRequest) {
 
     // もし 'in' 条件を使えず全件読み出した場合、自班スコープであればここで絞り込み
     if (decodedToken.role === 'team' && scope !== 'all' && !requestedTeamId) {
-      try {
-        const teamDoc = await adminDb.collection('teams').doc(String(decodedToken.teamId)).get();
-        const teamData = teamDoc.data() as Record<string, unknown> | undefined;
-        if (teamData?.assignedArea) {
-          const adjacent = Array.isArray(teamData.adjacentAreas) ? teamData.adjacentAreas : [];
-          const allowedAreas = [teamData.assignedArea, ...adjacent].filter(Boolean);
-          if (allowedAreas.length > 10) {
-            stores = stores.filter((s: Store) => allowedAreas.includes(s.areaCode));
-          }
-        }
-      } catch (error) {
-        console.error('エラー内容:', error);
+      if (hasAllowedAreas && allowedAreas.length > 10) {
+        stores = stores.filter((s: Store) => allowedAreas.includes(s.areaCode));
       }
       // ログインコード（班）単位で管理: 自分が作成 or 自分が配布した店舗のみ表示
       const selfCode = filterTeamCode;
