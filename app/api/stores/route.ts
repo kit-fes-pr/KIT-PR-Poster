@@ -8,6 +8,7 @@ import {
   parseDashboardYear,
   teamBelongsToDashboardYear,
 } from '@/lib/server/dashboard-year';
+import { validateTeamForStoreCreate } from '@/lib/utils/stores/store-route';
 
 export async function GET(request: NextRequest) {
   try {
@@ -215,23 +216,22 @@ export async function POST(request: NextRequest) {
     }
 
     // チームの担当区域を解決（areaCode が指定されない場合の既定値に使用）
-    let teamAssignedArea: string | undefined;
-    let teamEventId: string | undefined;
-    if (decodedToken.role === 'team' && decodedToken.teamId) {
-      try {
-        const teamDoc = await adminDb.collection('teams').doc(decodedToken.teamId).get();
-        const teamData = teamDoc.data() as Record<string, unknown> | undefined;
-        if (
-          targetYear &&
-          (!teamData || !teamBelongsToDashboardYear(teamData, targetYear, targetEventId))
-        ) {
-          return NextResponse.json({ error: '班が見つかりません' }, { status: 404 });
-        }
-        teamAssignedArea = teamData?.assignedArea as string;
-        teamEventId = typeof teamData?.eventId === 'string' ? teamData.eventId : undefined;
-      } catch (error) {
-        console.error('エラー内容:', error);
-      }
+    let teamDoc;
+    try {
+      teamDoc = await adminDb.collection('teams').doc(String(decodedToken.teamId)).get();
+    } catch (error) {
+      console.error('Team lookup for store creation failed:', error);
+      return NextResponse.json({ error: '班情報の取得に失敗しました' }, { status: 500 });
+    }
+
+    const teamValidation = validateTeamForStoreCreate({
+      exists: teamDoc.exists,
+      data: teamDoc.data() as Record<string, unknown> | undefined,
+      targetYear,
+      targetEventId,
+    });
+    if (!teamValidation.ok) {
+      return NextResponse.json({ error: teamValidation.error }, { status: teamValidation.status });
     }
 
     const storeRef = adminDb.collection('stores').doc();
@@ -241,7 +241,11 @@ export async function POST(request: NextRequest) {
       address,
       addressKana: generateKana(address),
       // areaCode が未指定ならチームの担当区域を使用（なければ teamCode 先頭要素→最後に unknown）
-      areaCode: areaCode || teamAssignedArea || decodedToken.teamCode?.split('-')[0] || 'unknown',
+      areaCode:
+        areaCode ||
+        teamValidation.assignedArea ||
+        decodedToken.teamCode?.split('-')[0] ||
+        'unknown',
       distributionStatus: distributionStatus || 'pending',
       ...(failureReason && { failureReason }),
       distributedCount: distributedCount || 0,
@@ -250,7 +254,7 @@ export async function POST(request: NextRequest) {
       ...(distributionStatus === 'completed' && { distributedAt: new Date() }),
       ...(notes && { notes }),
       registrationMethod: 'manual',
-      eventId: teamEventId || targetEventId || 'kodai2025',
+      eventId: teamValidation.eventId || targetEventId || 'kodai2025',
       createdAt: new Date(),
       updatedAt: new Date(),
     };
