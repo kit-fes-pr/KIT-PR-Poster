@@ -219,6 +219,7 @@ export async function POST(request: NextRequest) {
         teamName: teamData.teamName,
         assignedArea: teamData.assignedArea,
         adjacentAreas: teamData.adjacentAreas,
+        year: teamData.year,
       },
     });
   } catch (error) {
