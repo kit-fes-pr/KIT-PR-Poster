@@ -7,30 +7,61 @@ import {
   buildAdminRecordUpdatePayload,
   buildAdminInviteDisplayName,
   buildAdminInviteLogPayload,
+  normalizeAdminDisplayName,
   normalizeAdminInviteEmail,
+  normalizeAdminUserAction,
 } from '@/lib/utils/admin/invites';
+
+async function verifyAdminRequest(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: '認証が必要です' }, { status: 401 }),
+    };
+  }
+
+  const idToken = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    if (!hasAdminPrivileges(decodedToken as { role?: unknown; isAdmin?: unknown })) {
+      return {
+        ok: false as const,
+        response: NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 }),
+      };
+    }
+    return { ok: true as const, decodedToken };
+  } catch (error) {
+    console.error('認証トークンの検証に失敗しました:', error);
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: '認証が必要です' }, { status: 401 }),
+    };
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
-    }
-
-    const idToken = authHeader.split('Bearer ')[1];
-    let decodedToken;
-    try {
-      decodedToken = await adminAuth.verifyIdToken(idToken);
-    } catch (error) {
-      console.error('認証トークンの検証に失敗しました:', error);
-      return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
-    }
-    if (!hasAdminPrivileges(decodedToken as { role?: unknown; isAdmin?: unknown })) {
-      return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 });
-    }
+    const authResult = await verifyAdminRequest(request);
+    if (!authResult.ok) return authResult.response;
 
     const snapshot = await adminDb.collection('admins').orderBy('email', 'asc').get();
-    const admins = snapshot.docs.map((doc) => buildAdminUserView(doc.id, doc.data()));
+    const admins = await Promise.all(
+      snapshot.docs.map(async (doc) => {
+        const data = doc.data();
+        try {
+          const authUser = await adminAuth.getUser(doc.id);
+          return buildAdminUserView(doc.id, data, {
+            email: authUser.email,
+            displayName: authUser.displayName,
+            disabled: authUser.disabled,
+          });
+        } catch (error) {
+          console.error(`管理者ユーザーの Auth 情報取得に失敗しました (${doc.id}):`, error);
+          return buildAdminUserView(doc.id, data);
+        }
+      }),
+    );
 
     return NextResponse.json({ admins });
   } catch (error) {
@@ -41,22 +72,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
-    }
-
-    const idToken = authHeader.split('Bearer ')[1];
-    let decodedToken;
-    try {
-      decodedToken = await adminAuth.verifyIdToken(idToken);
-    } catch (error) {
-      console.error('認証トークンの検証に失敗しました:', error);
-      return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
-    }
-    if (!hasAdminPrivileges(decodedToken as { role?: unknown; isAdmin?: unknown })) {
-      return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 });
-    }
+    const authResult = await verifyAdminRequest(request);
+    if (!authResult.ok) return authResult.response;
+    const { decodedToken } = authResult;
 
     const body = (await request.json().catch(() => null)) as {
       email?: string;
@@ -148,5 +166,101 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('管理者招待エラー:', error);
     return NextResponse.json({ error: 'ユーザー招待に失敗しました' }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const authResult = await verifyAdminRequest(request);
+    if (!authResult.ok) return authResult.response;
+    const { decodedToken } = authResult;
+
+    const body = (await request.json().catch(() => null)) as {
+      adminId?: unknown;
+      action?: unknown;
+      name?: unknown;
+    } | null;
+    const adminId = typeof body?.adminId === 'string' ? body.adminId.trim() : '';
+    const action = normalizeAdminUserAction(body?.action);
+    const name = normalizeAdminDisplayName(body?.name);
+
+    if (!adminId || !action) {
+      return NextResponse.json({ error: 'adminId と action は必須です' }, { status: 400 });
+    }
+
+    const isSelf = adminId === decodedToken.uid;
+    if (isSelf && (action === 'suspend' || action === 'revoke')) {
+      return NextResponse.json(
+        { error: '自分自身の停止または権限剥奪はできません' },
+        { status: 400 },
+      );
+    }
+
+    const adminRef = adminDb.collection('admins').doc(adminId);
+    const adminDoc = await adminRef.get();
+    if (!adminDoc.exists) {
+      return NextResponse.json({ error: '管理者ユーザーが見つかりません' }, { status: 404 });
+    }
+
+    const now = new Date();
+
+    if (action === 'updateName') {
+      if (!name) {
+        return NextResponse.json({ error: '表示名を入力してください' }, { status: 400 });
+      }
+      await adminAuth.updateUser(adminId, { displayName: name });
+      await adminRef.set({ name, updatedAt: now }, { merge: true });
+    }
+
+    if (action === 'suspend') {
+      await adminAuth.updateUser(adminId, { disabled: true });
+      await adminRef.set({ isSuspended: true, suspendedAt: now, updatedAt: now }, { merge: true });
+    }
+
+    if (action === 'resume') {
+      await adminAuth.updateUser(adminId, { disabled: false });
+      await adminRef.set({ isSuspended: false, resumedAt: now, updatedAt: now }, { merge: true });
+    }
+
+    if (action === 'revoke') {
+      await adminAuth.updateUser(adminId, { disabled: false });
+      await adminAuth.setCustomUserClaims(adminId, { role: 'user', isAdmin: false });
+      await adminRef.set(
+        {
+          isActive: false,
+          isSuspended: false,
+          revokedAt: now,
+          revokedBy: decodedToken.email || decodedToken.uid,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+    }
+
+    const updatedDoc = await adminRef.get();
+    let authUser;
+    try {
+      authUser = await adminAuth.getUser(adminId);
+    } catch (error) {
+      console.error(`管理者ユーザーの Auth 情報取得に失敗しました (${adminId}):`, error);
+    }
+
+    return NextResponse.json({
+      success: true,
+      admin: buildAdminUserView(
+        adminId,
+        updatedDoc.data() as Record<string, unknown>,
+        authUser
+          ? {
+              email: authUser.email,
+              displayName: authUser.displayName,
+              disabled: authUser.disabled,
+            }
+          : undefined,
+      ),
+    });
+  } catch (error) {
+    console.error('管理者ユーザー更新エラー:', error);
+    return NextResponse.json({ error: '管理者ユーザーの更新に失敗しました' }, { status: 500 });
   }
 }

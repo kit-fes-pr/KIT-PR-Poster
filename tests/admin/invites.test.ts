@@ -7,7 +7,9 @@ import {
   buildAdminUserView,
   buildAdminRecordCreatePayload,
   buildAdminRecordUpdatePayload,
+  normalizeAdminDisplayName,
   normalizeAdminInviteEmail,
+  normalizeAdminUserAction,
 } from '../../lib/utils/admin/invites';
 
 describe('admin invite utils', () => {
@@ -31,6 +33,16 @@ describe('admin invite utils', () => {
     assert.equal(buildAdminInviteDisplayName('example.com'), 'example.com');
   });
 
+  test('normalizeAdminUserAction and display name validate admin management inputs', () => {
+    assert.equal(normalizeAdminUserAction('updateName'), 'updateName');
+    assert.equal(normalizeAdminUserAction('suspend'), 'suspend');
+    assert.equal(normalizeAdminUserAction('resume'), 'resume');
+    assert.equal(normalizeAdminUserAction('revoke'), 'revoke');
+    assert.equal(normalizeAdminUserAction('delete'), null);
+    assert.equal(normalizeAdminDisplayName(' admin '), 'admin');
+    assert.equal(normalizeAdminDisplayName(null), '');
+  });
+
   test('buildAdminRecordCreatePayload and update payload preserve the expected shape', () => {
     const now = new Date('2026-06-01T00:00:00.000Z');
 
@@ -46,6 +58,7 @@ describe('admin invite utils', () => {
         email: 'admin@sub.kanazawa-it.ac.jp',
         name: 'admin',
         isActive: true,
+        isSuspended: false,
         createdAt: now,
         updatedAt: now,
       },
@@ -61,6 +74,7 @@ describe('admin invite utils', () => {
         email: 'admin@sub.kanazawa-it.ac.jp',
         name: 'admin',
         isActive: true,
+        isSuspended: false,
         updatedAt: now,
       },
     );
@@ -105,8 +119,24 @@ describe('admin invite utils', () => {
       email: 'admin@sub.kanazawa-it.ac.jp',
       name: 'admin',
       isActive: true,
+      isSuspended: false,
       createdAt: '2026-07-22T00:00:00.000Z',
       updatedAt: '2026-07-22T01:00:00.000Z',
     });
+  });
+
+  test('buildAdminUserView reflects auth suspension state', () => {
+    const view = buildAdminUserView(
+      'uid-1',
+      {
+        email: 'admin@sub.kanazawa-it.ac.jp',
+        name: 'admin',
+        isActive: false,
+      },
+      { disabled: true },
+    );
+
+    assert.equal(view.isActive, false);
+    assert.equal(view.isSuspended, true);
   });
 });
