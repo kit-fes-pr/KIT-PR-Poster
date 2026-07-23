@@ -4,6 +4,7 @@ import {
   ADMIN_EMAIL_PATTERN,
   buildAdminInviteDisplayName,
   buildAdminInviteLogPayload,
+  buildAdminUserView,
   buildAdminRecordCreatePayload,
   buildAdminRecordUpdatePayload,
   normalizeAdminInviteEmail,
@@ -86,5 +87,26 @@ describe('admin invite utils', () => {
         uid: 'uid-1',
       },
     );
+  });
+
+  test('buildAdminUserView serializes admin records for the management page', () => {
+    const view = buildAdminUserView('uid-1', {
+      email: 'admin@sub.kanazawa-it.ac.jp',
+      name: 'admin',
+      isActive: true,
+      createdAt: {
+        toDate: () => new Date('2026-07-22T00:00:00.000Z'),
+      },
+      updatedAt: new Date('2026-07-22T01:00:00.000Z'),
+    });
+
+    assert.deepEqual(view, {
+      adminId: 'uid-1',
+      email: 'admin@sub.kanazawa-it.ac.jp',
+      name: 'admin',
+      isActive: true,
+      createdAt: '2026-07-22T00:00:00.000Z',
+      updatedAt: '2026-07-22T01:00:00.000Z',
+    });
   });
 });

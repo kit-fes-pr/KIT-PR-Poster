@@ -62,3 +62,29 @@ export function buildAdminInviteLogPayload(params: {
     uid: params.uid,
   };
 }
+
+function serializeAdminDateValue(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString();
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toDate' in value &&
+    typeof (value as { toDate?: unknown }).toDate === 'function'
+  ) {
+    const date = (value as { toDate: () => Date }).toDate();
+    return date instanceof Date ? date.toISOString() : null;
+  }
+  if (typeof value === 'string') return value;
+  return null;
+}
+
+export function buildAdminUserView(id: string, data: Record<string, unknown>) {
+  return {
+    adminId: typeof data.adminId === 'string' && data.adminId ? data.adminId : id,
+    email: typeof data.email === 'string' ? data.email : '',
+    name: typeof data.name === 'string' ? data.name : '',
+    isActive: data.isActive !== false,
+    createdAt: serializeAdminDateValue(data.createdAt),
+    updatedAt: serializeAdminDateValue(data.updatedAt),
+  };
+}
