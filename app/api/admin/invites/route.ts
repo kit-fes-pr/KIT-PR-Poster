@@ -40,27 +40,46 @@ async function verifyAdminRequest(request: NextRequest) {
   }
 }
 
+async function getAuthUsersByUid(
+  uids: string[],
+): Promise<Map<string, { email?: string; displayName?: string; disabled?: boolean }>> {
+  const usersByUid = new Map<
+    string,
+    { email?: string; displayName?: string; disabled?: boolean }
+  >();
+  const chunkSize = 100;
+
+  for (let i = 0; i < uids.length; i += chunkSize) {
+    const uidChunk = uids.slice(i, i + chunkSize);
+    try {
+      const result = await adminAuth.getUsers(uidChunk.map((uid) => ({ uid })));
+      result.users.forEach((user) => {
+        usersByUid.set(user.uid, {
+          email: user.email,
+          displayName: user.displayName,
+          disabled: user.disabled,
+        });
+      });
+      result.notFound.forEach((identifier) => {
+        console.error('管理者ユーザーの Auth 情報が見つかりません:', identifier);
+      });
+    } catch (error) {
+      console.error('管理者ユーザーの Auth 情報一括取得に失敗しました:', error);
+    }
+  }
+
+  return usersByUid;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const authResult = await verifyAdminRequest(request);
     if (!authResult.ok) return authResult.response;
 
     const snapshot = await adminDb.collection('admins').orderBy('email', 'asc').get();
-    const admins = await Promise.all(
-      snapshot.docs.map(async (doc) => {
-        const data = doc.data();
-        try {
-          const authUser = await adminAuth.getUser(doc.id);
-          return buildAdminUserView(doc.id, data, {
-            email: authUser.email,
-            displayName: authUser.displayName,
-            disabled: authUser.disabled,
-          });
-        } catch (error) {
-          console.error(`管理者ユーザーの Auth 情報取得に失敗しました (${doc.id}):`, error);
-          return buildAdminUserView(doc.id, data);
-        }
-      }),
+    const authUsersByUid = await getAuthUsersByUid(snapshot.docs.map((doc) => doc.id));
+    const admins = snapshot.docs.map((doc) =>
+      buildAdminUserView(doc.id, doc.data(), authUsersByUid.get(doc.id)),
     );
 
     return NextResponse.json({ admins });
