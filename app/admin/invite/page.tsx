@@ -1,23 +1,58 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { LoadingInline } from '@/components/ui/Loading';
-import { Modal } from '@/components/ui/Modal';
 import { ADMIN_EMAIL_PATTERN } from '@/lib/utils/admin/invites';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
+import { AdminInviteModal } from '@/components/admin/AdminInviteModal';
+import { AdminInviteSuccessModal } from '@/components/admin/AdminInviteSuccessModal';
+import { AdminUsersTable } from '@/components/admin/AdminUsersTable';
+import { AdminUserSettingsModal } from '@/components/admin/AdminUserSettingsModal';
+import type { AdminInviteSuccess, AdminUser } from '@/components/admin/admin-users';
+import type { AdminUserAction } from '@/lib/utils/admin/invites';
 
 export default function AdminInvitePage() {
   const { user, loading: authLoading } = useRequireAdmin();
+  const [admins, setAdmins] = useState<AdminUser[]>([]);
+  const [loadingAdmins, setLoadingAdmins] = useState(false);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [selectedAdmin, setSelectedAdmin] = useState<AdminUser | null>(null);
+  const [editName, setEditName] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState<{
-    email: string;
-    operation: 'created' | 'updated';
-    passwordResetSent: boolean;
-  } | null>(null);
+  const [success, setSuccess] = useState<AdminInviteSuccess | null>(null);
+
+  const loadAdmins = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      setLoadingAdmins(true);
+      setError('');
+      const token = await user.getIdToken();
+      const response = await fetch('/api/admin/invites', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || '管理者ユーザー一覧の取得に失敗しました');
+      }
+      setAdmins(Array.isArray(data?.admins) ? data.admins : []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '管理者ユーザー一覧の取得に失敗しました');
+    } finally {
+      setLoadingAdmins(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void loadAdmins();
+  }, [loadAdmins]);
 
   const submitInvite = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -62,10 +97,52 @@ export default function AdminInvitePage() {
         passwordResetSent,
       });
       setEmail('');
+      setInviteModalOpen(false);
+      await loadAdmins();
     } catch (err) {
       setError(err instanceof Error ? err.message : '招待に失敗しました');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openAdminModal = (admin: AdminUser) => {
+    setSelectedAdmin(admin);
+    setEditName(admin.name || '');
+    setError('');
+  };
+
+  const submitAdminAction = async (action: AdminUserAction, confirmationMessage?: string) => {
+    if (!user || !selectedAdmin) return;
+    if (confirmationMessage && !window.confirm(confirmationMessage)) return;
+
+    try {
+      setActionLoading(true);
+      setError('');
+      const token = await user.getIdToken(true);
+      const response = await fetch('/api/admin/invites', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          adminId: selectedAdmin.adminId,
+          action,
+          name: editName,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || '管理者ユーザーの更新に失敗しました');
+      }
+
+      await loadAdmins();
+      setSelectedAdmin(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '管理者ユーザーの更新に失敗しました');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -87,77 +164,55 @@ export default function AdminInvitePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-6">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <div>
           <p className="text-sm font-medium text-gray-500">Admin</p>
-          <h1 className="text-2xl font-semibold text-gray-900">ユーザー招待</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            メールアドレスを入力すると、Firebase からパスワード再設定メールを送信します。
-          </p>
+          <h1 className="text-2xl font-semibold text-gray-900">管理者ユーザー管理</h1>
         </div>
 
-        {error && (
+        {error && !inviteModalOpen && !selectedAdmin && (
           <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
         )}
 
-        <form
-          className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm"
-          onSubmit={submitInvite}
-        >
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">メールアドレスを招待</h2>
-            <p className="mt-1 text-sm text-gray-600">
-              Firebase
-              からパスワード再設定メールを送信します。初回はメール内リンクからパスワードを設定します。
-            </p>
-          </div>
-
-          <label className="block text-sm font-medium text-gray-700">メールアドレス</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="example@sub.kanazawa-it.ac.jp"
-            className="mt-1 block w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
-          />
-
-          <div className="mt-6 flex justify-end">
-            <button
-              type="submit"
-              disabled={!email || submitting}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {submitting ? '送信中...' : '招待メールを送信'}
-            </button>
-          </div>
-        </form>
+        <AdminUsersTable
+          admins={admins}
+          loading={loadingAdmins}
+          onRefresh={() => void loadAdmins()}
+          onInvite={() => {
+            setEmail('');
+            setError('');
+            setInviteModalOpen(true);
+          }}
+          onSelectAdmin={openAdminModal}
+        />
       </div>
 
-      <Modal open={Boolean(success)} onClose={() => setSuccess(null)} panelClassName="max-w-md p-6">
-        {success && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">招待を送信しました</h2>
-            <p className="mt-3 text-sm text-gray-600">
-              {success.email} 宛の管理者登録は完了しました。
-            </p>
-            {!success.passwordResetSent && (
-              <p className="mt-2 text-sm text-amber-700">
-                パスワード再設定メールの送信には失敗しました。必要なら手動で再送してください。
-              </p>
-            )}
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => setSuccess(null)}
-                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
-              >
-                閉じる
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+      <AdminInviteModal
+        open={inviteModalOpen}
+        email={email}
+        error={error}
+        submitting={submitting}
+        onClose={() => setInviteModalOpen(false)}
+        onEmailChange={setEmail}
+        onSubmit={submitInvite}
+      />
+
+      <AdminUserSettingsModal
+        admin={selectedAdmin}
+        currentUserId={user.uid}
+        editName={editName}
+        error={error}
+        loading={actionLoading}
+        onClose={() => setSelectedAdmin(null)}
+        onEditNameChange={setEditName}
+        onAction={(action, confirmationMessage) =>
+          void submitAdminAction(action, confirmationMessage)
+        }
+      />
+
+      <AdminInviteSuccessModal success={success} onClose={() => setSuccess(null)} />
     </div>
   );
 }
