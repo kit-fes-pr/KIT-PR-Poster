@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth } from '@/lib/firebase-admin';
+import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 
 export async function GET(request: NextRequest) {
@@ -40,6 +40,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const isAdmin = hasAdminPrivileges(decodedToken as { role?: unknown; isAdmin?: unknown });
+    const { searchParams } = new URL(request.url);
+    if (isAdmin && searchParams.get('recordLogin') === '1') {
+      const now = new Date();
+      await adminDb
+        .collection('admins')
+        .doc(decodedToken.uid)
+        .set(
+          {
+            adminId: decodedToken.uid,
+            email: decodedToken.email || '',
+            lastLoginAt: now,
+            updatedAt: now,
+          },
+          { merge: true },
+        );
+    }
+
     return NextResponse.json({
       success: true,
       user: {
@@ -48,7 +66,7 @@ export async function GET(request: NextRequest) {
         teamCode: decodedToken.teamCode,
         teamId: decodedToken.teamId,
         role: decodedToken.role,
-        isAdmin: hasAdminPrivileges(decodedToken as { role?: unknown; isAdmin?: unknown }),
+        isAdmin,
       },
     });
   } catch (error) {
