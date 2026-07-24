@@ -80,7 +80,15 @@ export function AdminUsersTable({
                 return (
                   <tr
                     key={admin.adminId}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onSelectAdmin(admin)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onSelectAdmin(admin);
+                      }
+                    }}
                     className="cursor-pointer hover:bg-gray-50"
                   >
                     <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900">
