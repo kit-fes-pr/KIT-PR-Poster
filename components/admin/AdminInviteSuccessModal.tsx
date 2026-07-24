@@ -22,6 +22,7 @@ export function AdminInviteSuccessModal({ success, onClose }: AdminInviteSuccess
           )}
           <div className="mt-6 flex justify-end">
             <button
+              type="button"
               onClick={onClose}
               className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
             >
