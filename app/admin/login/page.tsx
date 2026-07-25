@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -16,6 +16,7 @@ export default function AdminLogin() {
   const [authLoading, setAuthLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const shouldRecordLoginRef = useRef(false);
 
   const clearAuthState = async () => {
     try {
@@ -36,9 +37,13 @@ export default function AdminLogin() {
       if (currentUser) {
         try {
           const idToken = await currentUser.getIdToken();
-          const response = await fetch('/api/auth/verify', {
-            headers: { Authorization: `Bearer ${idToken}` },
-          });
+          const response = await fetch(
+            shouldRecordLoginRef.current ? '/api/auth/verify?recordLogin=1' : '/api/auth/verify',
+            {
+              headers: { Authorization: `Bearer ${idToken}` },
+            },
+          );
+          shouldRecordLoginRef.current = false;
 
           if (response.ok) {
             const data = await response.json();
@@ -54,6 +59,7 @@ export default function AdminLogin() {
             await clearAuthState();
           }
         } catch (authError) {
+          shouldRecordLoginRef.current = false;
           console.error('認証チェックエラー:', authError);
           setError('認証チェックに失敗しました');
           await clearAuthState();
@@ -75,8 +81,10 @@ export default function AdminLogin() {
     setError('');
 
     try {
+      shouldRecordLoginRef.current = true;
       await signInWithEmailAndPassword(auth, data.email, data.password);
     } catch (error) {
+      shouldRecordLoginRef.current = false;
       console.error('エラー内容:', error);
       setError('ログインに失敗しました');
       await clearAuthState();

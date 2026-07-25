@@ -18,7 +18,7 @@ const adminNavItems: AdminNavItem[] = [
   { href: '/admin', label: '管理者ダッシュボード', exact: true },
   { href: '/admin/event', label: '年度選択' },
   { href: '/admin/event/areas', label: '配布区域' },
-  { href: '/admin/invite', label: 'ユーザー招待' },
+  { href: '/admin/invite', label: '管理者ユーザー' },
 ];
 
 export default function AdminHeader() {

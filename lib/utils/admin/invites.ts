@@ -19,14 +19,29 @@ export function buildAdminRecordUpdatePayload(params: {
   email: string;
   name: string;
   isActive: true;
+  isSuspended: false;
   updatedAt: Date;
 } {
   return {
     email: params.email,
     name: params.displayName,
     isActive: true,
+    isSuspended: false,
     updatedAt: params.now,
   };
+}
+
+export type AdminUserAction = 'updateName' | 'suspend' | 'resume' | 'revoke';
+
+export function normalizeAdminUserAction(value: unknown): AdminUserAction | null {
+  if (value === 'updateName' || value === 'suspend' || value === 'resume' || value === 'revoke') {
+    return value;
+  }
+  return null;
+}
+
+export function normalizeAdminDisplayName(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 export function buildAdminRecordCreatePayload(params: {
@@ -40,6 +55,7 @@ export function buildAdminRecordCreatePayload(params: {
     email: params.email,
     name: params.displayName,
     isActive: true,
+    isSuspended: false,
     createdAt: params.now,
     updatedAt: params.now,
   };
@@ -60,5 +76,36 @@ export function buildAdminInviteLogPayload(params: {
     invitedAt: params.now,
     operation: params.operation,
     uid: params.uid,
+  };
+}
+
+function serializeAdminDateValue(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString();
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toDate' in value &&
+    typeof (value as { toDate?: unknown }).toDate === 'function'
+  ) {
+    const date = (value as { toDate: () => Date }).toDate();
+    return date instanceof Date ? date.toISOString() : null;
+  }
+  if (typeof value === 'string') return value;
+  return null;
+}
+
+export function buildAdminUserView(
+  id: string,
+  data: Record<string, unknown>,
+  authUser?: { email?: string; displayName?: string; disabled?: boolean },
+) {
+  return {
+    adminId: typeof data.adminId === 'string' && data.adminId ? data.adminId : id,
+    email: typeof data.email === 'string' ? data.email : authUser?.email || '',
+    name: typeof data.name === 'string' ? data.name : authUser?.displayName || '',
+    isActive: data.isActive !== false,
+    isSuspended: data.isSuspended === true || authUser?.disabled === true,
+    createdAt: serializeAdminDateValue(data.createdAt),
+    updatedAt: serializeAdminDateValue(data.updatedAt),
   };
 }

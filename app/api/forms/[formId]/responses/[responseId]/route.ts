@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
+import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { FormAnswer, SurveyForm } from '@/types/forms';
 import { validateAvailabilitySelection } from '@/lib/utils/availability/availability';
 import { getAvailabilityDateSlotKeys } from '@/lib/utils/availability/availability';
@@ -54,7 +55,7 @@ export async function PATCH(
       const idToken = authHeader.split('Bearer ')[1];
       try {
         const decodedToken = await adminAuth.verifyIdToken(idToken);
-        isAdmin = decodedToken.role === 'admin';
+        isAdmin = hasAdminPrivileges(decodedToken as { role?: unknown; isAdmin?: unknown });
       } catch (error) {
         console.error('管理者認証エラー:', error);
       }
