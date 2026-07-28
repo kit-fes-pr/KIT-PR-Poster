@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -15,8 +15,17 @@ export default function Home() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<LoginFormData>();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const teamCode = params.get('teamCode') || params.get('code');
+    if (teamCode) {
+      setValue('teamCode', teamCode);
+    }
+  }, [setValue]);
 
   const resolveDashboardPath = (result: { teamData?: { year?: unknown } }) => {
     const year =
