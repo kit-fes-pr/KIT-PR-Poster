@@ -675,12 +675,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.separate === true) {
-      const files = await Promise.all(
-        rows.map(async (row) => ({
+      const files: Array<{ name: string; bytes: Uint8Array }> = [];
+      for (const row of rows) {
+        files.push({
           name: `${sanitizeFileName(`${row.teamName}_${row.teamCode}`)}.pdf`,
           bytes: await buildPdf({ year, rows: [row] }),
-        })),
-      );
+        });
+      }
       const zipBytes = buildZip(files);
 
       return new NextResponse(Buffer.from(zipBytes), {
