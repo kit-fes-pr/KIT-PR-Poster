@@ -20,6 +20,10 @@ type ResponseEditModalProps = {
   onSubmit: () => void;
   submitLabel: string;
   submitting?: boolean;
+  nameError?: string;
+  nameKanaError?: string;
+  gradeError?: string;
+  sectionError?: string;
   children: ReactNode;
   footerNote?: ReactNode;
   maxWidthClassName?: string;
@@ -41,6 +45,10 @@ export function ResponseEditModal({
   onSubmit,
   submitLabel,
   submitting = false,
+  nameError,
+  nameKanaError,
+  gradeError,
+  sectionError,
   children,
   footerNote,
   maxWidthClassName = 'max-w-4xl',
@@ -91,6 +99,10 @@ export function ResponseEditModal({
             onNameKanaChange={onNameKanaChange}
             onGradeChange={onGradeChange}
             onSectionChange={onSectionChange}
+            nameError={nameError}
+            nameKanaError={nameKanaError}
+            gradeError={gradeError}
+            sectionError={sectionError}
           />
 
           {children}

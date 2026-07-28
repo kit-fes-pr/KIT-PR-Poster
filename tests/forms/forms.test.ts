@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   buildResponseExportRows,
+  buildRequiredFormFieldErrors,
   expandAvailabilitySlotsForStorage,
   filterEditableFormFieldsForParticipant,
   filterVisibleFormFields,
@@ -174,6 +175,40 @@ describe('forms utils', () => {
         { fieldId: 'carUsage', value: '運転できる' },
         { fieldId: 'newField', value: 'new' },
       ],
+    );
+  });
+
+  test('buildRequiredFormFieldErrors rejects empty required fields added after response', () => {
+    assert.deepEqual(
+      buildRequiredFormFieldErrors(
+        [
+          { fieldId: 'remarks', label: '備考', required: false },
+          { fieldId: 'newRequired', label: '追加必須項目', required: true },
+          { fieldId: 'newRequiredCheckbox', label: '追加必須選択', required: true },
+        ],
+        [
+          { fieldId: 'remarks', value: 'before' },
+          { fieldId: 'newRequired', value: '' },
+          { fieldId: 'newRequiredCheckbox', value: [] },
+        ],
+      ),
+      ['追加必須項目は必須です', '追加必須選択は必須です'],
+    );
+  });
+
+  test('buildRequiredFormFieldErrors accepts filled required values', () => {
+    assert.deepEqual(
+      buildRequiredFormFieldErrors(
+        [
+          { fieldId: 'remarks', label: '備考', required: true },
+          { fieldId: 'choices', label: '選択', required: true },
+        ],
+        [
+          { fieldId: 'remarks', value: 'after' },
+          { fieldId: 'choices', value: ['A'] },
+        ],
+      ),
+      [],
     );
   });
 

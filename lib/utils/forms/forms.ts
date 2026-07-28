@@ -193,6 +193,27 @@ export function hasFormFieldAnswerValue(value: unknown): boolean {
   return value !== null && value !== undefined;
 }
 
+export function buildRequiredFormFieldErrors<
+  T extends { fieldId: string; label: string; required?: boolean },
+>(fields: T[], answers: FormAnswer[]): string[] {
+  return Object.values(buildRequiredFormFieldErrorMap(fields, answers));
+}
+
+export function buildRequiredFormFieldErrorMap<
+  T extends { fieldId: string; label: string; required?: boolean },
+>(fields: T[], answers: FormAnswer[]): Record<string, string> {
+  const answerValues = new Map(answers.map((answer) => [answer.fieldId, answer.value]));
+
+  return fields.reduce<Record<string, string>>((errors, field) => {
+    if (!field.required || hasFormFieldAnswerValue(answerValues.get(field.fieldId))) {
+      return errors;
+    }
+
+    errors[field.fieldId] = `${field.label}は必須です`;
+    return errors;
+  }, {});
+}
+
 export function filterEditableFormFieldsForParticipant<
   T extends { fieldId: string; visibleFromGrade?: number },
 >(

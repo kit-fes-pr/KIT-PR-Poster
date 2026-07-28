@@ -6,9 +6,10 @@ import { FormAnswer, SurveyForm } from '@/types/forms';
 import { validateAvailabilitySelection } from '@/lib/utils/availability/availability';
 import { getAvailabilityDateSlotKeys } from '@/lib/utils/availability/availability';
 import {
+  buildRequiredFormFieldErrors,
   expandAvailabilitySlotsForStorage,
   filterEditableFormFieldsForParticipant,
-  filterVisibleFormFieldsForParticipant,
+  hasFormFieldAnswerValue,
   mergeFormAnswers,
   prepareAnswersForStorage,
   resolveResponseAvailabilitySlots,
@@ -161,20 +162,14 @@ export async function PATCH(
     }
 
     // 各フィールドのバリデーション
-    const validationErrors: string[] = [];
+    const validationErrors: string[] = buildRequiredFormFieldErrors(visibleFields, mergedAnswers);
 
     for (const field of visibleFields) {
       const answer = mergedAnswers.find((a: FormAnswer) => a.fieldId === field.fieldId);
 
       // 必須フィールドのチェック
       if (field.required) {
-        if (
-          !answer ||
-          !answer.value ||
-          (Array.isArray(answer.value) && answer.value.length === 0) ||
-          (typeof answer.value === 'string' && answer.value.trim() === '')
-        ) {
-          validationErrors.push(`${field.label}は必須です`);
+        if (!answer || !hasFormFieldAnswerValue(answer.value)) {
           continue;
         }
       }

@@ -21,10 +21,17 @@ import {
 } from '@/lib/utils/availability/availability';
 import { normalizeGrade } from '@/lib/utils/grade/grade';
 import {
+  buildRequiredFormFieldErrorMap,
   filterEditableFormFieldsForParticipant,
   filterVisibleFormFieldsForParticipant,
 } from '@/lib/utils/forms/forms';
-import { FormField, FormResponse, ParticipantSurveyResponse, SurveyForm } from '@/types/forms';
+import {
+  FormAnswer,
+  FormField,
+  FormResponse,
+  ParticipantSurveyResponse,
+  SurveyForm,
+} from '@/types/forms';
 import type { AvailabilitySlotChoice } from '@/lib/utils/availability/availability';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
 
@@ -121,6 +128,15 @@ function isAvailabilityField(field: FormField): boolean {
   return field.fieldId === 'availability';
 }
 
+function formatApiError(data: { error?: unknown; details?: unknown } | null): string {
+  const errorMessage = typeof data?.error === 'string' ? data.error : '回答の更新に失敗しました';
+  const details = Array.isArray(data?.details)
+    ? data.details.filter((detail): detail is string => typeof detail === 'string')
+    : [];
+
+  return details.length > 0 ? `${errorMessage}: ${details.join(' / ')}` : errorMessage;
+}
+
 export default function FormDashboardPage({ params }: { params: Promise<{ year: string }> }) {
   const router = useRouter();
   const [resolvedParams, setResolvedParams] = useState<{ year: string } | null>(null);
@@ -144,6 +160,7 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
   >(null);
   const [editFormData, setEditFormData] = useState<{ [key: string]: string | string[] }>({});
   const [editSaving, setEditSaving] = useState(false);
+  const [editFieldErrors, setEditFieldErrors] = useState<Record<string, string>>({});
   const hasLoadedFormRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedSnapshotRef = useRef('');
@@ -527,6 +544,7 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
 
   const openEditModal = (response: FormResponse | ParticipantSurveyResponse) => {
     setEditingResponse(response);
+    setEditFieldErrors({});
 
     const participantResponse = response as ParticipantSurveyResponse;
     const formData: { [key: string]: string | string[] } = {
@@ -551,22 +569,51 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
     setEditingResponse(null);
     setEditFormData({});
     setEditSaving(false);
+    setEditFieldErrors({});
   };
 
   const updateResponse = async () => {
     if (!editingResponse || !currentForm || !resolvedParams || !user) return;
 
+    setError('');
+    setEditFieldErrors({});
+
+    const answers: FormAnswer[] = currentForm.fields.map((field) => ({
+      fieldId: field.fieldId,
+      value: editFormData[field.fieldId] || (field.type === 'checkbox' ? [] : ''),
+    }));
+    const availableSlots = normalizeAvailabilitySlots(editFormData.availability);
+    const editableFields = filterEditableFormFieldsForParticipant(
+      currentForm.fields,
+      normalizeGrade(editFormData.participantGrade),
+      availableSlots,
+      editFormData,
+    );
+    const nextFieldErrors = {
+      ...(!String(editFormData.participantName || '').trim()
+        ? { participantName: 'お名前は必須です' }
+        : {}),
+      ...(!String(editFormData.participantNameKana || '').trim()
+        ? { participantNameKana: 'ふりがなは必須です' }
+        : {}),
+      ...(!String(editFormData.participantGrade || '').trim()
+        ? { participantGrade: '学年は必須です' }
+        : {}),
+      ...(!String(editFormData.participantSection || '').trim()
+        ? { participantSection: '所属セクションは必須です' }
+        : {}),
+      ...buildRequiredFormFieldErrorMap(editableFields, answers),
+    };
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setEditFieldErrors(nextFieldErrors);
+      return;
+    }
+
     try {
       setEditSaving(true);
-      setError('');
 
       const token = await user.getIdToken();
-      const answers = currentForm.fields.map((field) => ({
-        fieldId: field.fieldId,
-        value: editFormData[field.fieldId] || (field.type === 'checkbox' ? [] : ''),
-      }));
-
-      const availableSlots = normalizeAvailabilitySlots(editFormData.availability);
 
       const res = await fetch(
         `/api/forms/${currentForm.formId}/responses/${editingResponse.responseId}`,
@@ -591,7 +638,7 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
 
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(data?.error || '回答の更新に失敗しました');
+        setError(formatApiError(data));
         return;
       }
 
@@ -603,6 +650,14 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
     } finally {
       setEditSaving(false);
     }
+  };
+
+  const clearEditFieldError = (fieldId: string) => {
+    setEditFieldErrors((current) => {
+      if (!current[fieldId]) return current;
+      const { [fieldId]: _removed, ...rest } = current;
+      return rest;
+    });
   };
 
   const deleteForm = async () => {
@@ -696,6 +751,7 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
                   ...current,
                   availability: nextValues,
                 }));
+                clearEditFieldError(field.fieldId);
               }}
               className="sr-only"
             />
@@ -746,9 +802,10 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
       return (
         <textarea
           value={typeof fieldValue === 'string' ? fieldValue : ''}
-          onChange={(e) =>
-            setEditFormData((current) => ({ ...current, [field.fieldId]: e.target.value }))
-          }
+          onChange={(e) => {
+            clearEditFieldError(field.fieldId);
+            setEditFormData((current) => ({ ...current, [field.fieldId]: e.target.value }));
+          }}
           rows={4}
           className="mt-1 block w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-indigo-500"
         />
@@ -759,9 +816,10 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
       return (
         <select
           value={typeof fieldValue === 'string' ? fieldValue : ''}
-          onChange={(e) =>
-            setEditFormData((current) => ({ ...current, [field.fieldId]: e.target.value }))
-          }
+          onChange={(e) => {
+            clearEditFieldError(field.fieldId);
+            setEditFormData((current) => ({ ...current, [field.fieldId]: e.target.value }));
+          }}
           className="mt-1 block w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-indigo-500"
         >
           <option value="">選択してください</option>
@@ -778,9 +836,10 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
       <input
         type={field.type === 'number' ? 'number' : 'text'}
         value={typeof fieldValue === 'string' ? fieldValue : ''}
-        onChange={(e) =>
-          setEditFormData((current) => ({ ...current, [field.fieldId]: e.target.value }))
-        }
+        onChange={(e) => {
+          clearEditFieldError(field.fieldId);
+          setEditFormData((current) => ({ ...current, [field.fieldId]: e.target.value }));
+        }}
         className="mt-1 block w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-indigo-500"
       />
     );
@@ -1100,18 +1159,26 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
           nameKana={String(editFormData.participantNameKana || '')}
           grade={String(editFormData.participantGrade || '')}
           section={String(editFormData.participantSection || '')}
-          onNameChange={(value) =>
-            setEditFormData((current) => ({ ...current, participantName: value }))
-          }
-          onNameKanaChange={(value) =>
-            setEditFormData((current) => ({ ...current, participantNameKana: value }))
-          }
-          onGradeChange={(value) =>
-            setEditFormData((current) => ({ ...current, participantGrade: value }))
-          }
-          onSectionChange={(value) =>
-            setEditFormData((current) => ({ ...current, participantSection: value }))
-          }
+          onNameChange={(value) => {
+            clearEditFieldError('participantName');
+            setEditFormData((current) => ({ ...current, participantName: value }));
+          }}
+          onNameKanaChange={(value) => {
+            clearEditFieldError('participantNameKana');
+            setEditFormData((current) => ({ ...current, participantNameKana: value }));
+          }}
+          onGradeChange={(value) => {
+            clearEditFieldError('participantGrade');
+            setEditFormData((current) => ({ ...current, participantGrade: value }));
+          }}
+          onSectionChange={(value) => {
+            clearEditFieldError('participantSection');
+            setEditFormData((current) => ({ ...current, participantSection: value }));
+          }}
+          nameError={editFieldErrors.participantName}
+          nameKanaError={editFieldErrors.participantNameKana}
+          gradeError={editFieldErrors.participantGrade}
+          sectionError={editFieldErrors.participantSection}
           onSubmit={updateResponse}
           submitLabel="変更を保存"
           submitting={editSaving}
@@ -1135,6 +1202,9 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
                   </div>
                 </div>
                 {renderEditableField(field)}
+                {editFieldErrors[field.fieldId] && (
+                  <p className="mt-2 text-sm text-red-600">{editFieldErrors[field.fieldId]}</p>
+                )}
               </div>
             ))}
         </ResponseEditModal>
