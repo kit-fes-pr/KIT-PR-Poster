@@ -100,6 +100,26 @@ export function validateFormAnswersPayload(
   return { valid: true };
 }
 
+export function normalizeParticipantNameSpacing(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .replace(/ +/g, '　');
+}
+
+export function validateParticipantNameSpacing(value: unknown, label: string): string | null {
+  const normalized = normalizeParticipantNameSpacing(value);
+  if (!normalized) {
+    return `${label}は必須です`;
+  }
+
+  const nameParts = normalized.split('　').filter((part) => part.length > 0);
+  if (nameParts.length < 2) {
+    return `苗字と名前の間に空白を入れてください`;
+  }
+
+  return null;
+}
+
 export function expandAvailabilitySlotsForStorage(
   values: unknown,
   allDateSlotKeys: string[],
@@ -191,6 +211,27 @@ export function hasFormFieldAnswerValue(value: unknown): boolean {
   if (Array.isArray(value)) return value.length > 0;
   if (typeof value === 'string') return value.trim() !== '';
   return value !== null && value !== undefined;
+}
+
+export function buildRequiredFormFieldErrors<
+  T extends { fieldId: string; label: string; required?: boolean },
+>(fields: T[], answers: FormAnswer[]): string[] {
+  return Object.values(buildRequiredFormFieldErrorMap(fields, answers));
+}
+
+export function buildRequiredFormFieldErrorMap<
+  T extends { fieldId: string; label: string; required?: boolean },
+>(fields: T[], answers: FormAnswer[]): Record<string, string> {
+  const answerValues = new Map(answers.map((answer) => [answer.fieldId, answer.value]));
+
+  return fields.reduce<Record<string, string>>((errors, field) => {
+    if (!field.required || hasFormFieldAnswerValue(answerValues.get(field.fieldId))) {
+      return errors;
+    }
+
+    errors[field.fieldId] = `${field.label}は必須です`;
+    return errors;
+  }, {});
 }
 
 export function filterEditableFormFieldsForParticipant<

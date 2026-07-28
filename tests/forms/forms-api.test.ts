@@ -164,7 +164,8 @@ describe('forms api utils', () => {
         formId: 'form-1',
         answers: [{ fieldId: 'availability', value: ['A'] }],
         participantData: {
-          name: '山田',
+          name: '山田 太郎',
+          nameKana: 'やまだ たろう',
           section: '1年',
           grade: '3',
           availableSlots: ['2026-06-01_am'],
@@ -179,8 +180,8 @@ describe('forms api utils', () => {
         editToken: 'token-2',
         submitterInfo: {},
         participantData: {
-          name: '山田',
-          nameKana: '',
+          name: '山田　太郎',
+          nameKana: 'やまだ　たろう',
           section: '1年',
           grade: 3,
           availableSlots: ['2026-06-01_am'],

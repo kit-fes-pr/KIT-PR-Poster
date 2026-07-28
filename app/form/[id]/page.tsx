@@ -7,7 +7,10 @@ import { SurveyForm, FormAnswer } from '@/types/forms';
 import { normalizeAvailabilitySlots } from '@/lib/utils/availability/availability';
 import { PublicSurveyForm } from '@/components/forms/PublicSurveyForm';
 import type { ParticipantIdentityFormValues } from '@/components/forms/ParticipantIdentitySection';
-import { filterVisibleFormFieldsForParticipant } from '@/lib/utils/forms/forms';
+import {
+  filterVisibleFormFieldsForParticipant,
+  normalizeParticipantNameSpacing,
+} from '@/lib/utils/forms/forms';
 
 interface FormData {
   [fieldId: string]: string | string[];
@@ -144,6 +147,8 @@ export default function FormResponsePage({ params }: { params: Promise<{ id: str
         setError('参加可能日時は一つ以上選択してください');
         return;
       }
+      const participantName = normalizeParticipantNameSpacing(data.participantName);
+      const participantNameKana = normalizeParticipantNameSpacing(data.participantNameKana);
 
       const res = await fetch(`/api/forms/${resolvedParams.id}/responses`, {
         method: 'POST',
@@ -153,8 +158,8 @@ export default function FormResponsePage({ params }: { params: Promise<{ id: str
         body: JSON.stringify({
           answers,
           participantData: {
-            name: data.participantName,
-            nameKana: data.participantNameKana,
+            name: participantName,
+            nameKana: participantNameKana,
             section: data.participantSection,
             grade: data.participantGrade,
             availableSlots,

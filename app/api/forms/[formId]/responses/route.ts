@@ -10,9 +10,11 @@ import { getAvailabilityDateSlotKeys } from '@/lib/utils/availability/availabili
 import {
   expandAvailabilitySlotsForStorage,
   filterVisibleFormFieldsForParticipant,
+  normalizeParticipantNameSpacing,
   prepareAnswersForStorage,
   resolveResponseAvailabilitySlots,
   validateFormAnswersPayload,
+  validateParticipantNameSpacing,
 } from '@/lib/utils/forms/forms';
 import { buildFormResponseRecord } from '@/lib/utils/forms/forms-api';
 import { buildResponsesParticipantGradeValidation } from '@/lib/utils/grade/grade-route';
@@ -108,21 +110,18 @@ export async function POST(
       : [];
     if (participantData) {
       const participantValidationErrors: string[] = [];
+      const nameValidationError = validateParticipantNameSpacing(participantData.name, 'お名前');
+      const nameKanaValidationError = validateParticipantNameSpacing(
+        participantData.nameKana,
+        'ふりがな',
+      );
 
-      if (
-        !participantData.name ||
-        typeof participantData.name !== 'string' ||
-        participantData.name.trim() === ''
-      ) {
-        participantValidationErrors.push('お名前は必須です');
+      if (nameValidationError) {
+        participantValidationErrors.push(nameValidationError);
       }
 
-      if (
-        !participantData.nameKana ||
-        typeof participantData.nameKana !== 'string' ||
-        participantData.nameKana.trim() === ''
-      ) {
-        participantValidationErrors.push('ふりがなは必須です');
+      if (nameKanaValidationError) {
+        participantValidationErrors.push(nameKanaValidationError);
       }
 
       if (
@@ -287,8 +286,8 @@ export async function POST(
         formId: resolvedParams.formId,
         answers: storedAnswers,
         participantData: {
-          name: participantData.name,
-          nameKana: participantData.nameKana,
+          name: normalizeParticipantNameSpacing(participantData.name),
+          nameKana: normalizeParticipantNameSpacing(participantData.nameKana),
           section: participantData.section,
           grade: gradeValidation.gradeNum,
           availableSlots: expandAvailabilitySlotsForStorage(

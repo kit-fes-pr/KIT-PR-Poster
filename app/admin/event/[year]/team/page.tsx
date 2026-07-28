@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatDate } from '@/lib/utils/dateUtils';
@@ -16,8 +16,11 @@ import {
 } from '@/lib/utils/availability/availability';
 import { normalizeGrade } from '@/lib/utils/grade/grade';
 import {
+  buildRequiredFormFieldErrorMap,
   filterEditableFormFieldsForParticipant,
   filterVisibleFormFieldsForParticipant,
+  normalizeParticipantNameSpacing,
+  validateParticipantNameSpacing,
 } from '@/lib/utils/forms/forms';
 import { LoadingInline } from '@/components/ui/Loading';
 import { Modal } from '@/components/ui/Modal';
@@ -112,6 +115,15 @@ function parseDateTimestamp(value: string | Date | number | null | undefined): n
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+function formatApiError(data: { error?: unknown; details?: unknown } | null): string {
+  const errorMessage = typeof data?.error === 'string' ? data.error : '回答の更新に失敗しました';
+  const details = Array.isArray(data?.details)
+    ? data.details.filter((detail): detail is string => typeof detail === 'string')
+    : [];
+
+  return details.length > 0 ? `${errorMessage}: ${details.join(' / ')}` : errorMessage;
+}
+
 export default function TeamAssignmentPage({ params }: { params: Promise<{ year: string }> }) {
   const router = useRouter();
   const [resolvedParams, setResolvedParams] = useState<{ year: string } | null>(null);
@@ -138,6 +150,10 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   const [responseEditValues, setResponseEditValues] = useState<Record<string, string | string[]>>(
     {},
   );
+  const [responseEditFieldErrors, setResponseEditFieldErrors] = useState<Record<string, string>>(
+    {},
+  );
+  const responseEditModalTopRef = useRef<HTMLDivElement | null>(null);
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>('');
   const [showCreateTeamForm, setShowCreateTeamForm] = useState(false);
   const [createTeamSubmitting, setCreateTeamSubmitting] = useState(false);
@@ -267,6 +283,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
     setSelectedParticipant(participant);
     setSelectedResponseId(participant.responseId);
+    setResponseEditFieldErrors({});
     const participantGradeValue = normalizeGrade(
       record?.participantData?.grade ?? participant.grade,
     );
@@ -287,10 +304,19 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     const allDateSlotKeys = options.filter(
       (key) => key !== UNAVAILABLE_SLOT_KEY && key !== ALL_AVAILABLE_SLOT_KEY,
     );
+    clearResponseEditFieldError(fieldId);
     setResponseEditValues((current) => {
       const currentValues = normalizeAvailabilitySlots(current[fieldId]);
       const nextValues = toggleAvailabilitySelection(currentValues, option, allDateSlotKeys);
       return { ...current, [fieldId]: nextValues };
+    });
+  };
+
+  const clearResponseEditFieldError = (fieldId: string) => {
+    setResponseEditFieldErrors((current) => {
+      if (!current[fieldId]) return current;
+      const { [fieldId]: _removed, ...rest } = current;
+      return rest;
     });
   };
 
@@ -305,22 +331,55 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
     const availability = normalizeAvailabilitySlots(responseEditValues?.availability);
     if (availability.length === 0) {
-      setError('参加可能日時は一つ以上選択してください');
+      setResponseEditFieldErrors({ availability: '参加可能日時は一つ以上選択してください' });
+      responseEditModalTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+
+    const answers: FormAnswer[] = currentForm.fields.map((field) => {
+      const value = responseEditValues[field.fieldId];
+      return {
+        fieldId: field.fieldId,
+        value: value ?? (field.type === 'checkbox' ? [] : ''),
+      };
+    });
+    const editableFields = filterEditableFormFieldsForParticipant(
+      currentForm.fields,
+      normalizeGrade(responseEditValues?.participantGrade),
+      availability,
+      responseEditValues,
+    );
+    const nameValidationError = validateParticipantNameSpacing(
+      responseEditValues?.participantName,
+      'お名前',
+    );
+    const nameKanaValidationError = validateParticipantNameSpacing(
+      responseEditValues?.participantNameKana,
+      'ふりがな',
+    );
+    const nextFieldErrors = {
+      ...(nameValidationError ? { participantName: nameValidationError } : {}),
+      ...(nameKanaValidationError ? { participantNameKana: nameKanaValidationError } : {}),
+      ...(!String(responseEditValues?.participantGrade || '').trim()
+        ? { participantGrade: '学年は必須です' }
+        : {}),
+      ...(!String(responseEditValues?.participantSection || '').trim()
+        ? { participantSection: '所属セクションは必須です' }
+        : {}),
+      ...buildRequiredFormFieldErrorMap(editableFields, answers),
+    };
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setResponseEditFieldErrors(nextFieldErrors);
+      responseEditModalTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
 
     try {
       setEditingResponseLoading(true);
       setError('');
+      setResponseEditFieldErrors({});
       const token = await user.getIdToken();
-
-      const answers: FormAnswer[] = currentForm.fields.map((field) => {
-        const value = responseEditValues[field.fieldId];
-        return {
-          fieldId: field.fieldId,
-          value: value ?? (field.type === 'checkbox' ? [] : ''),
-        };
-      });
 
       const res = await fetch(`/api/forms/${selectedForm}/responses/${selectedResponseId}`, {
         method: 'PATCH',
@@ -331,8 +390,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         body: JSON.stringify({
           answers,
           participantData: {
-            name: String(responseEditValues?.participantName || ''),
-            nameKana: String(responseEditValues?.participantNameKana || ''),
+            name: normalizeParticipantNameSpacing(responseEditValues?.participantName),
+            nameKana: normalizeParticipantNameSpacing(responseEditValues?.participantNameKana),
             grade: String(responseEditValues?.participantGrade || ''),
             section: String(responseEditValues?.participantSection || ''),
             availableSlots: availability,
@@ -340,13 +399,17 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '回答の更新に失敗しました');
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(formatApiError(data));
+        return;
+      }
 
       await loadParticipants(selectedForm);
       setShowResponseEditModal(false);
       setSelectedResponseId('');
       setSelectedParticipant(null);
+      setResponseEditFieldErrors({});
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '回答の更新に失敗しました';
       setError(msg);
@@ -362,6 +425,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     const optionLabel = (option: string) =>
       isAvailabilityField ? formatAvailabilitySlotLabel(option) : option;
     const value = responseEditValues[fieldId];
+    const fieldError = responseEditFieldErrors[fieldId];
 
     if (isAvailabilityField && field.type === 'checkbox') {
       const selectedValues = normalizeAvailabilitySlots(value);
@@ -462,6 +526,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                 })}
               </div>
             </div>
+            {fieldError && <p className="mt-2 text-sm text-red-600">{fieldError}</p>}
           </div>
         </div>
       );
@@ -473,9 +538,10 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
           <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
           <select
             value={typeof value === 'string' ? value : ''}
-            onChange={(e) =>
-              setResponseEditValues((current) => ({ ...current, [fieldId]: e.target.value }))
-            }
+            onChange={(e) => {
+              clearResponseEditFieldError(fieldId);
+              setResponseEditValues((current) => ({ ...current, [fieldId]: e.target.value }));
+            }}
             className="block w-full rounded-md border border-gray-300 px-3 py-2"
           >
             <option value="">選択してください</option>
@@ -485,6 +551,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
               </option>
             ))}
           </select>
+          {fieldError && <p className="mt-1 text-sm text-red-600">{fieldError}</p>}
         </div>
       );
     }
@@ -510,6 +577,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                     type="checkbox"
                     checked={selected}
                     onChange={() => {
+                      clearResponseEditFieldError(fieldId);
                       setResponseEditValues((current) => {
                         const currentValues = Array.isArray(current[fieldId])
                           ? (current[fieldId] as string[])
@@ -527,6 +595,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
               );
             })}
           </div>
+          {fieldError && <p className="mt-2 text-sm text-red-600">{fieldError}</p>}
         </div>
       );
     }
@@ -538,11 +607,13 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
           <input
             type="number"
             value={typeof value === 'string' ? value : ''}
-            onChange={(e) =>
-              setResponseEditValues((current) => ({ ...current, [fieldId]: e.target.value }))
-            }
+            onChange={(e) => {
+              clearResponseEditFieldError(fieldId);
+              setResponseEditValues((current) => ({ ...current, [fieldId]: e.target.value }));
+            }}
             className="block w-full rounded-md border border-gray-300 px-3 py-2"
           />
+          {fieldError && <p className="mt-1 text-sm text-red-600">{fieldError}</p>}
         </div>
       );
     }
@@ -554,11 +625,13 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
           type="text"
           value={typeof value === 'string' ? value : ''}
           placeholder={field.placeholder}
-          onChange={(e) =>
-            setResponseEditValues((current) => ({ ...current, [fieldId]: e.target.value }))
-          }
+          onChange={(e) => {
+            clearResponseEditFieldError(fieldId);
+            setResponseEditValues((current) => ({ ...current, [fieldId]: e.target.value }));
+          }}
           className="block w-full rounded-md border border-gray-300 px-3 py-2"
         />
+        {fieldError && <p className="mt-1 text-sm text-red-600">{fieldError}</p>}
       </div>
     );
   };
@@ -1579,12 +1652,13 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
               setShowResponseEditModal(false);
               setSelectedResponseId('');
               setSelectedParticipant(null);
+              setResponseEditFieldErrors({});
             }}
             centered={false}
             panelClassName="max-w-3xl"
             contentClassName="px-4 pb-10"
           >
-            <div className="mx-auto mt-10 w-full">
+            <div ref={responseEditModalTopRef} className="mx-auto mt-10 w-full">
               <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">回答を編集</h3>
@@ -1595,6 +1669,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                     setShowResponseEditModal(false);
                     setSelectedResponseId('');
                     setSelectedParticipant(null);
+                    setResponseEditFieldErrors({});
                   }}
                   className="text-gray-400 hover:text-gray-600"
                 >
@@ -1628,21 +1703,48 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                   </div>
                 ) : (
                   <div className="space-y-5">
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                       <div>
                         <label className="mb-1 block text-sm font-medium text-gray-700">
                           お名前 *
                         </label>
                         <input
                           value={String(responseEditValues?.participantName || '')}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            clearResponseEditFieldError('participantName');
                             setResponseEditValues((current) => ({
                               ...current,
                               participantName: e.target.value,
-                            }))
-                          }
+                            }));
+                          }}
                           className="block w-full rounded-md border border-gray-300 px-3 py-2"
                         />
+                        {responseEditFieldErrors.participantName && (
+                          <p className="mt-1 text-sm text-red-600">
+                            {responseEditFieldErrors.participantName}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          ふりがな *
+                        </label>
+                        <input
+                          value={String(responseEditValues?.participantNameKana || '')}
+                          onChange={(e) => {
+                            clearResponseEditFieldError('participantNameKana');
+                            setResponseEditValues((current) => ({
+                              ...current,
+                              participantNameKana: e.target.value,
+                            }));
+                          }}
+                          className="block w-full rounded-md border border-gray-300 px-3 py-2"
+                        />
+                        {responseEditFieldErrors.participantNameKana && (
+                          <p className="mt-1 text-sm text-red-600">
+                            {responseEditFieldErrors.participantNameKana}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -1650,12 +1752,13 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                         </label>
                         <select
                           value={String(responseEditValues?.participantGrade || '')}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            clearResponseEditFieldError('participantGrade');
                             setResponseEditValues((current) => ({
                               ...current,
                               participantGrade: e.target.value,
-                            }))
-                          }
+                            }));
+                          }}
                           className="block w-full rounded-md border border-gray-300 px-3 py-2"
                         >
                           <option value="">選択してください</option>
@@ -1664,6 +1767,11 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                           <option value="3">3年生</option>
                           <option value="4">4年生</option>
                         </select>
+                        {responseEditFieldErrors.participantGrade && (
+                          <p className="mt-1 text-sm text-red-600">
+                            {responseEditFieldErrors.participantGrade}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -1671,14 +1779,20 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                         </label>
                         <input
                           value={String(responseEditValues?.participantSection || '')}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            clearResponseEditFieldError('participantSection');
                             setResponseEditValues((current) => ({
                               ...current,
                               participantSection: e.target.value,
-                            }))
-                          }
+                            }));
+                          }}
                           className="block w-full rounded-md border border-gray-300 px-3 py-2"
                         />
+                        {responseEditFieldErrors.participantSection && (
+                          <p className="mt-1 text-sm text-red-600">
+                            {responseEditFieldErrors.participantSection}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -1701,6 +1815,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                     setShowResponseEditModal(false);
                     setSelectedResponseId('');
                     setSelectedParticipant(null);
+                    setResponseEditFieldErrors({});
                   }}
                   className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >

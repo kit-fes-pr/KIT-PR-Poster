@@ -3,19 +3,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { FormAnswer, SurveyForm } from '@/types/forms';
+import { FieldValue } from 'firebase-admin/firestore';
 import { validateAvailabilitySelection } from '@/lib/utils/availability/availability';
 import { getAvailabilityDateSlotKeys } from '@/lib/utils/availability/availability';
 import {
+  buildRequiredFormFieldErrors,
   expandAvailabilitySlotsForStorage,
   filterEditableFormFieldsForParticipant,
-  filterVisibleFormFieldsForParticipant,
+  hasFormFieldAnswerValue,
   mergeFormAnswers,
+  normalizeParticipantNameSpacing,
   prepareAnswersForStorage,
   resolveResponseAvailabilitySlots,
   validateFormAnswersPayload,
+  validateParticipantNameSpacing,
 } from '@/lib/utils/forms/forms';
 import { buildFormResponseRecord } from '@/lib/utils/forms/forms-api';
 import { buildResponsesParticipantGradeValidation } from '@/lib/utils/grade/grade-route';
+import { FirestoreCache } from '@/lib/utils/server-cache';
 
 export async function PATCH(
   request: NextRequest,
@@ -115,21 +120,21 @@ export async function PATCH(
     // 参加者データのバリデーション
     if (effectiveParticipantData) {
       const participantValidationErrors: string[] = [];
+      const nameValidationError = validateParticipantNameSpacing(
+        effectiveParticipantData.name,
+        'お名前',
+      );
+      const nameKanaValidationError = validateParticipantNameSpacing(
+        effectiveParticipantData.nameKana,
+        'ふりがな',
+      );
 
-      if (
-        !effectiveParticipantData.name ||
-        typeof effectiveParticipantData.name !== 'string' ||
-        effectiveParticipantData.name.trim() === ''
-      ) {
-        participantValidationErrors.push('お名前は必須です');
+      if (nameValidationError) {
+        participantValidationErrors.push(nameValidationError);
       }
 
-      if (
-        effectiveParticipantData.nameKana != null &&
-        (typeof effectiveParticipantData.nameKana !== 'string' ||
-          effectiveParticipantData.nameKana.trim() === '')
-      ) {
-        participantValidationErrors.push('ふりがなの形式が正しくありません');
+      if (nameKanaValidationError) {
+        participantValidationErrors.push(nameKanaValidationError);
       }
 
       if (
@@ -161,20 +166,14 @@ export async function PATCH(
     }
 
     // 各フィールドのバリデーション
-    const validationErrors: string[] = [];
+    const validationErrors: string[] = buildRequiredFormFieldErrors(visibleFields, mergedAnswers);
 
     for (const field of visibleFields) {
       const answer = mergedAnswers.find((a: FormAnswer) => a.fieldId === field.fieldId);
 
       // 必須フィールドのチェック
       if (field.required) {
-        if (
-          !answer ||
-          !answer.value ||
-          (Array.isArray(answer.value) && answer.value.length === 0) ||
-          (typeof answer.value === 'string' && answer.value.trim() === '')
-        ) {
-          validationErrors.push(`${field.label}は必須です`);
+        if (!answer || !hasFormFieldAnswerValue(answer.value)) {
           continue;
         }
       }
@@ -283,8 +282,8 @@ export async function PATCH(
         formId: resolvedParams.formId,
         answers: storedAnswers,
         participantData: {
-          name: effectiveParticipantData.name,
-          nameKana: effectiveParticipantData.nameKana || '',
+          name: normalizeParticipantNameSpacing(effectiveParticipantData.name),
+          nameKana: normalizeParticipantNameSpacing(effectiveParticipantData.nameKana || ''),
           section: effectiveParticipantData.section,
           grade: gradeNum,
           availableSlots: expandAvailabilitySlotsForStorage(
@@ -322,5 +321,88 @@ export async function PATCH(
   } catch (error) {
     console.error('回答更新エラー:', error);
     return NextResponse.json({ error: '回答の更新に失敗しました' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ formId: string; responseId: string }> },
+) {
+  try {
+    const authHeader = request.headers.get('authorization');
+
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
+
+    if (!hasAdminPrivileges(decodedToken as { role?: unknown; isAdmin?: unknown })) {
+      return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 });
+    }
+
+    const resolvedParams = await params;
+    const formRef = adminDb.collection('forms').doc(resolvedParams.formId);
+    const formDoc = await formRef.get();
+
+    if (!formDoc.exists) {
+      return NextResponse.json({ error: 'フォームが見つかりません' }, { status: 404 });
+    }
+
+    const responseRef = formRef.collection('responses').doc(resolvedParams.responseId);
+    const responseDoc = await responseRef.get();
+
+    if (!responseDoc.exists) {
+      return NextResponse.json({ error: '回答が見つかりません' }, { status: 404 });
+    }
+
+    const assignmentSnapshot = await adminDb
+      .collection('assignments')
+      .where('formId', '==', resolvedParams.formId)
+      .where('responseId', '==', resolvedParams.responseId)
+      .get();
+
+    if (assignmentSnapshot.size > 0) {
+      const assignmentBatch = adminDb.batch();
+      assignmentSnapshot.docs.forEach((doc) => {
+        assignmentBatch.delete(doc.ref);
+      });
+      await assignmentBatch.commit();
+    }
+
+    await responseRef.delete();
+
+    const formData = formDoc.data() as SurveyForm;
+    try {
+      const latestResponseSnapshot = await formRef
+        .collection('responses')
+        .orderBy('submittedAt', 'desc')
+        .limit(1)
+        .get();
+      const latestResponseDoc = latestResponseSnapshot.docs[0];
+      const latestResponseAt = latestResponseDoc?.data().submittedAt;
+
+      await formRef.update({
+        responseCount: FieldValue.increment(-1),
+        lastResponseAt: latestResponseAt || FieldValue.delete(),
+        updatedAt: new Date(),
+      });
+    } catch (aggregationError) {
+      console.error('回答削除後のフォーム集計更新エラー:', aggregationError);
+    }
+
+    if (formData.year) {
+      FirestoreCache.invalidateYear(Number(formData.year));
+    }
+
+    return NextResponse.json({
+      message: '回答を削除しました',
+      responseId: resolvedParams.responseId,
+      deletedAssignments: assignmentSnapshot.size,
+    });
+  } catch (error) {
+    console.error('回答削除エラー:', error);
+    return NextResponse.json({ error: '回答の削除に失敗しました' }, { status: 500 });
   }
 }

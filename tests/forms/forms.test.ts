@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   buildResponseExportRows,
+  buildRequiredFormFieldErrors,
   expandAvailabilitySlotsForStorage,
   filterEditableFormFieldsForParticipant,
   filterVisibleFormFields,
@@ -9,12 +10,14 @@ import {
   groupResponseExportRowsByGrade,
   mergeFormAnswers,
   normalizeFormEventContext,
+  normalizeParticipantNameSpacing,
   prepareAnswersForStorage,
   resolveResponseAvailabilitySlots,
   serializeDate,
   sortResponseExportRows,
   toMillis,
   validateFormAnswersPayload,
+  validateParticipantNameSpacing,
 } from '../../lib/utils/forms/forms';
 import type { ParticipantSurveyResponse } from '../../types/forms';
 
@@ -177,6 +180,40 @@ describe('forms utils', () => {
     );
   });
 
+  test('buildRequiredFormFieldErrors rejects empty required fields added after response', () => {
+    assert.deepEqual(
+      buildRequiredFormFieldErrors(
+        [
+          { fieldId: 'remarks', label: '備考', required: false },
+          { fieldId: 'newRequired', label: '追加必須項目', required: true },
+          { fieldId: 'newRequiredCheckbox', label: '追加必須選択', required: true },
+        ],
+        [
+          { fieldId: 'remarks', value: 'before' },
+          { fieldId: 'newRequired', value: '' },
+          { fieldId: 'newRequiredCheckbox', value: [] },
+        ],
+      ),
+      ['追加必須項目は必須です', '追加必須選択は必須です'],
+    );
+  });
+
+  test('buildRequiredFormFieldErrors accepts filled required values', () => {
+    assert.deepEqual(
+      buildRequiredFormFieldErrors(
+        [
+          { fieldId: 'remarks', label: '備考', required: true },
+          { fieldId: 'choices', label: '選択', required: true },
+        ],
+        [
+          { fieldId: 'remarks', value: 'after' },
+          { fieldId: 'choices', value: ['A'] },
+        ],
+      ),
+      [],
+    );
+  });
+
   test('validateFormAnswersPayload rejects invalid answer entries', () => {
     assert.deepEqual(validateFormAnswersPayload(null), {
       valid: false,
@@ -197,6 +234,24 @@ describe('forms utils', () => {
     assert.deepEqual(validateFormAnswersPayload([{ fieldId: 'remarks', value: 'ok' }]), {
       valid: true,
     });
+  });
+
+  test('normalizeParticipantNameSpacing converts half-width spaces and preserves full-width spaces', () => {
+    assert.equal(normalizeParticipantNameSpacing(' 山田 太郎 '), '山田　太郎');
+    assert.equal(normalizeParticipantNameSpacing('やまだ　たろう'), 'やまだ　たろう');
+  });
+
+  test('validateParticipantNameSpacing requires a separator between family and given names', () => {
+    assert.equal(
+      validateParticipantNameSpacing('山田太郎', 'お名前'),
+      '苗字と名前の間に空白を入れてください',
+    );
+    assert.equal(
+      validateParticipantNameSpacing('やまだたろう', 'ふりがな'),
+      '苗字と名前の間に空白を入れてください',
+    );
+    assert.equal(validateParticipantNameSpacing('山田 太郎', 'お名前'), null);
+    assert.equal(validateParticipantNameSpacing('やまだ　たろう', 'ふりがな'), null);
   });
 
   test('sortResponseExportRows sorts by Japanese name and puts blank names last', () => {

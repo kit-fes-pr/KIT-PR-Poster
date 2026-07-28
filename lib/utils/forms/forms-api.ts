@@ -6,8 +6,7 @@ import {
   ParticipantSurveyResponse,
   SurveyForm,
 } from '../../../types/forms';
-import { normalizeFormEventContext } from './forms';
-import { serializeDate } from './forms';
+import { normalizeFormEventContext, normalizeParticipantNameSpacing, serializeDate } from './forms';
 import { normalizeGrade } from '../grade/grade';
 
 function resolveFixedFieldId(index: number): string {
@@ -175,8 +174,8 @@ export function buildFormResponseRecord(input: {
       editToken: input.editToken,
       submitterInfo: input.submitterInfo || {},
       participantData: {
-        name: input.participantData.name,
-        nameKana: input.participantData.nameKana || '',
+        name: normalizeParticipantNameSpacing(input.participantData.name),
+        nameKana: normalizeParticipantNameSpacing(input.participantData.nameKana || ''),
         section: input.participantData.section,
         grade: normalizeGrade(input.participantData.grade),
         availableSlots: input.participantData.availableSlots || [],
