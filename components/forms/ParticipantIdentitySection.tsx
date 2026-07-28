@@ -23,7 +23,7 @@ export function ParticipantIdentitySection({ control }: ParticipantIdentitySecti
     rules: {
       required: 'お名前は必須です',
       validate: (value) => validateParticipantNameSpacing(value, 'お名前') || true,
-    }
+    },
   });
   const gradeField = useController({
     control,
