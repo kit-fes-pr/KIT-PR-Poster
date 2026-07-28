@@ -11,7 +11,10 @@ import {
   normalizeTeamRouteAuthHeader,
 } from '@/lib/utils/team/team-route';
 import { FirestoreCache } from '@/lib/utils/server-cache';
-import { generateNextTeamCodeInTransaction } from '@/lib/server/team-code';
+import {
+  generateAndReserveNextTeamCodeInTransaction,
+  getTeamCodeReservationRef,
+} from '@/lib/server/team-code';
 
 async function loadEventAvailabilitySlots(eventId: string): Promise<string[]> {
   const snap = await adminDb.collection('distributionEvents').doc(eventId).get();
@@ -174,13 +177,20 @@ export async function PATCH(
       (typeof update.year === 'number' && update.year !== currentTeam.year);
     if (shouldRegenerateTeamCode) {
       const updatedWithCode = await adminDb.runTransaction(async (transaction) => {
-        const generatedTeamCode = await generateNextTeamCodeInTransaction(transaction, {
+        const generatedTeamCode = await generateAndReserveNextTeamCodeInTransaction(transaction, {
           timeSlot: targetTimeSlot,
           eventId: targetEventId,
           year: targetYear,
           excludeTeamId: String(teamId),
+          teamId: String(teamId),
         });
         if (!generatedTeamCode) return false;
+        if (
+          typeof currentTeam.teamCode === 'string' &&
+          currentTeam.teamCode !== generatedTeamCode
+        ) {
+          transaction.delete(getTeamCodeReservationRef(currentTeam.teamCode));
+        }
         transaction.update(ref, { ...update, teamCode: generatedTeamCode });
         return true;
       });
@@ -271,6 +281,9 @@ export async function DELETE(
 
     // チームを削除
     batch.delete(ref);
+    if (teamCode) {
+      batch.delete(getTeamCodeReservationRef(teamCode));
+    }
 
     await batch.commit();
 

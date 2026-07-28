@@ -17,7 +17,10 @@ import {
 } from '@/lib/utils/team/team-access';
 import { normalizeTeamTimeSlot } from '@/lib/utils/team/team';
 import { FirestoreCache } from '@/lib/utils/server-cache';
-import { generateNextTeamCodeInTransaction } from '@/lib/server/team-code';
+import {
+  generateAndReserveNextTeamCodeInTransaction,
+  getTeamCodeReservationRef,
+} from '@/lib/server/team-code';
 
 async function loadEventAvailabilitySlots(eventId: string): Promise<string[]> {
   const snap = await adminDb.collection('distributionEvents').doc(eventId).get();
@@ -106,10 +109,11 @@ export async function POST(request: NextRequest) {
     const normalizedYear = normalizeTeamYear(year);
 
     const teamData = await adminDb.runTransaction(async (transaction) => {
-      const generatedTeamCode = await generateNextTeamCodeInTransaction(transaction, {
+      const generatedTeamCode = await generateAndReserveNextTeamCodeInTransaction(transaction, {
         timeSlot: normalizedTimeSlot,
         eventId,
         year: normalizedYear,
+        teamId: teamRef.id,
       });
       if (!generatedTeamCode) return null;
 
@@ -317,13 +321,20 @@ export async function PATCH(request: NextRequest) {
       (typeof update.year === 'number' && update.year !== currentTeam.year);
     if (shouldRegenerateTeamCode) {
       const updatedWithCode = await adminDb.runTransaction(async (transaction) => {
-        const generatedTeamCode = await generateNextTeamCodeInTransaction(transaction, {
+        const generatedTeamCode = await generateAndReserveNextTeamCodeInTransaction(transaction, {
           timeSlot: targetTimeSlot,
           eventId: currentTeam.eventId,
           year: targetYear,
           excludeTeamId: String(teamId),
+          teamId: String(teamId),
         });
         if (!generatedTeamCode) return false;
+        if (
+          typeof currentTeam.teamCode === 'string' &&
+          currentTeam.teamCode !== generatedTeamCode
+        ) {
+          transaction.delete(getTeamCodeReservationRef(currentTeam.teamCode));
+        }
         transaction.update(ref, { ...update, teamCode: generatedTeamCode });
         return true;
       });
