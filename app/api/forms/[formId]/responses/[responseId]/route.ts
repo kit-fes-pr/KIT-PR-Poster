@@ -363,28 +363,35 @@ export async function DELETE(
       .where('responseId', '==', resolvedParams.responseId)
       .get();
 
-    const batch = adminDb.batch();
-    batch.delete(responseRef);
-    assignmentSnapshot.docs.forEach((doc) => {
-      batch.delete(doc.ref);
-    });
-    await batch.commit();
+    if (assignmentSnapshot.size > 0) {
+      const assignmentBatch = adminDb.batch();
+      assignmentSnapshot.docs.forEach((doc) => {
+        assignmentBatch.delete(doc.ref);
+      });
+      await assignmentBatch.commit();
+    }
 
-    const latestResponseSnapshot = await formRef
-      .collection('responses')
-      .orderBy('submittedAt', 'desc')
-      .limit(1)
-      .get();
-    const latestResponseDoc = latestResponseSnapshot.docs[0];
-    const latestResponseAt = latestResponseDoc?.data().submittedAt;
-
-    await formRef.update({
-      responseCount: Math.max(Number((formDoc.data() as SurveyForm).responseCount || 1) - 1, 0),
-      lastResponseAt: latestResponseAt || FieldValue.delete(),
-      updatedAt: new Date(),
-    });
+    await responseRef.delete();
 
     const formData = formDoc.data() as SurveyForm;
+    try {
+      const latestResponseSnapshot = await formRef
+        .collection('responses')
+        .orderBy('submittedAt', 'desc')
+        .limit(1)
+        .get();
+      const latestResponseDoc = latestResponseSnapshot.docs[0];
+      const latestResponseAt = latestResponseDoc?.data().submittedAt;
+
+      await formRef.update({
+        responseCount: FieldValue.increment(-1),
+        lastResponseAt: latestResponseAt || FieldValue.delete(),
+        updatedAt: new Date(),
+      });
+    } catch (aggregationError) {
+      console.error('回答削除後のフォーム集計更新エラー:', aggregationError);
+    }
+
     if (formData.year) {
       FirestoreCache.invalidateYear(Number(formData.year));
     }
