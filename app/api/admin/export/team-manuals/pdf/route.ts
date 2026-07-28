@@ -621,17 +621,6 @@ async function buildPdf(input: { year: string; rows: TeamManualRow[] }) {
 
     drawText({ page, font, text: 'QRコード', x: 365, y: 678, size: HEADING_SIZE });
     drawQrCode({ page, matrix: qrMatrix, x: 350, y: 500, size: 170 });
-    drawWrappedText({
-      page,
-      font,
-      text: '',
-      x: 334,
-      y: 432,
-      size: SMALL_SIZE,
-      maxWidth: 210,
-      maxLines: 2,
-      color: rgb(0.38, 0.42, 0.48),
-    });
 
     page.drawRectangle({
       x: MARGIN_X,
