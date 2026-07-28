@@ -2,7 +2,7 @@ import { readFile } from 'fs/promises';
 import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import fontkit from '@pdf-lib/fontkit';
-import { PDFDocument, PDFPage, PDFFont, rgb } from 'pdf-lib';
+import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb } from 'pdf-lib';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { formatDate } from '@/lib/utils/dateUtils';
@@ -49,6 +49,10 @@ let fontEntryCache: Promise<FontEntry> | null = null;
 
 function normalizeString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function isAsciiPrintable(value: string): boolean {
+  return /^[\x20-\x7e]+$/.test(value);
 }
 
 function encodeUtf8(value: string): Uint8Array {
@@ -566,6 +570,7 @@ async function buildPdf(input: { year: string; rows: TeamManualRow[] }) {
   pdfDoc.registerFontkit(fontkit);
   const fontEntry = await loadFontEntry();
   const font = await pdfDoc.embedFont(fontEntry.bytes, { subset: false });
+  const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const rows = [...input.rows].sort((a, b) =>
     new Intl.Collator('ja').compare(a.teamName, b.teamName),
   );
@@ -614,7 +619,14 @@ async function buildPdf(input: { year: string; rows: TeamManualRow[] }) {
     });
 
     drawText({ page, font, text: 'チームコード', x: MARGIN_X, y: 564, size: HEADING_SIZE });
-    drawText({ page, font, text: row.teamCode, x: MARGIN_X, y: 527, size: 30 });
+    drawText({
+      page,
+      font: isAsciiPrintable(row.teamCode) ? latinBoldFont : font,
+      text: row.teamCode,
+      x: MARGIN_X,
+      y: 527,
+      size: 30,
+    });
 
     drawText({ page, font, text: 'アクセス先URL', x: MARGIN_X, y: 472, size: HEADING_SIZE });
     drawText({ page, font, text: TEAM_MANUAL_BASE_URL, x: MARGIN_X, y: 448, size: BODY_SIZE });
