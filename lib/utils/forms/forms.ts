@@ -100,6 +100,26 @@ export function validateFormAnswersPayload(
   return { valid: true };
 }
 
+export function normalizeParticipantNameSpacing(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .replace(/ +/g, '　');
+}
+
+export function validateParticipantNameSpacing(value: unknown, label: string): string | null {
+  const normalized = normalizeParticipantNameSpacing(value);
+  if (!normalized) {
+    return `${label}は必須です`;
+  }
+
+  const nameParts = normalized.split('　').filter((part) => part.length > 0);
+  if (nameParts.length < 2) {
+    return `苗字と名前の間に空白を入れてください`;
+  }
+
+  return null;
+}
+
 export function expandAvailabilitySlotsForStorage(
   values: unknown,
   allDateSlotKeys: string[],

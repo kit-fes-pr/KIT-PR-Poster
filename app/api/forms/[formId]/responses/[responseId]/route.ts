@@ -11,9 +11,11 @@ import {
   filterEditableFormFieldsForParticipant,
   hasFormFieldAnswerValue,
   mergeFormAnswers,
+  normalizeParticipantNameSpacing,
   prepareAnswersForStorage,
   resolveResponseAvailabilitySlots,
   validateFormAnswersPayload,
+  validateParticipantNameSpacing,
 } from '@/lib/utils/forms/forms';
 import { buildFormResponseRecord } from '@/lib/utils/forms/forms-api';
 import { buildResponsesParticipantGradeValidation } from '@/lib/utils/grade/grade-route';
@@ -116,21 +118,21 @@ export async function PATCH(
     // 参加者データのバリデーション
     if (effectiveParticipantData) {
       const participantValidationErrors: string[] = [];
+      const nameValidationError = validateParticipantNameSpacing(
+        effectiveParticipantData.name,
+        'お名前',
+      );
+      const nameKanaValidationError = validateParticipantNameSpacing(
+        effectiveParticipantData.nameKana,
+        'ふりがな',
+      );
 
-      if (
-        !effectiveParticipantData.name ||
-        typeof effectiveParticipantData.name !== 'string' ||
-        effectiveParticipantData.name.trim() === ''
-      ) {
-        participantValidationErrors.push('お名前は必須です');
+      if (nameValidationError) {
+        participantValidationErrors.push(nameValidationError);
       }
 
-      if (
-        effectiveParticipantData.nameKana != null &&
-        (typeof effectiveParticipantData.nameKana !== 'string' ||
-          effectiveParticipantData.nameKana.trim() === '')
-      ) {
-        participantValidationErrors.push('ふりがなの形式が正しくありません');
+      if (nameKanaValidationError) {
+        participantValidationErrors.push(nameKanaValidationError);
       }
 
       if (
@@ -278,8 +280,8 @@ export async function PATCH(
         formId: resolvedParams.formId,
         answers: storedAnswers,
         participantData: {
-          name: effectiveParticipantData.name,
-          nameKana: effectiveParticipantData.nameKana || '',
+          name: normalizeParticipantNameSpacing(effectiveParticipantData.name),
+          nameKana: normalizeParticipantNameSpacing(effectiveParticipantData.nameKana || ''),
           section: effectiveParticipantData.section,
           grade: gradeNum,
           availableSlots: expandAvailabilitySlotsForStorage(

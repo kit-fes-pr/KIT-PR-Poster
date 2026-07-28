@@ -10,12 +10,14 @@ import {
   groupResponseExportRowsByGrade,
   mergeFormAnswers,
   normalizeFormEventContext,
+  normalizeParticipantNameSpacing,
   prepareAnswersForStorage,
   resolveResponseAvailabilitySlots,
   serializeDate,
   sortResponseExportRows,
   toMillis,
   validateFormAnswersPayload,
+  validateParticipantNameSpacing,
 } from '../../lib/utils/forms/forms';
 import type { ParticipantSurveyResponse } from '../../types/forms';
 
@@ -232,6 +234,24 @@ describe('forms utils', () => {
     assert.deepEqual(validateFormAnswersPayload([{ fieldId: 'remarks', value: 'ok' }]), {
       valid: true,
     });
+  });
+
+  test('normalizeParticipantNameSpacing converts half-width spaces and preserves full-width spaces', () => {
+    assert.equal(normalizeParticipantNameSpacing(' 山田 太郎 '), '山田　太郎');
+    assert.equal(normalizeParticipantNameSpacing('やまだ　たろう'), 'やまだ　たろう');
+  });
+
+  test('validateParticipantNameSpacing requires a separator between family and given names', () => {
+    assert.equal(
+      validateParticipantNameSpacing('山田太郎', 'お名前'),
+      '苗字と名前の間に空白を入れてください',
+    );
+    assert.equal(
+      validateParticipantNameSpacing('やまだたろう', 'ふりがな'),
+      '苗字と名前の間に空白を入れてください',
+    );
+    assert.equal(validateParticipantNameSpacing('山田 太郎', 'お名前'), null);
+    assert.equal(validateParticipantNameSpacing('やまだ　たろう', 'ふりがな'), null);
   });
 
   test('sortResponseExportRows sorts by Japanese name and puts blank names last', () => {

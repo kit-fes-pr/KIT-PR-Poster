@@ -24,6 +24,8 @@ import {
   buildRequiredFormFieldErrorMap,
   filterEditableFormFieldsForParticipant,
   filterVisibleFormFieldsForParticipant,
+  normalizeParticipantNameSpacing,
+  validateParticipantNameSpacing,
 } from '@/lib/utils/forms/forms';
 import {
   FormAnswer,
@@ -589,13 +591,17 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
       availableSlots,
       editFormData,
     );
+    const nameValidationError = validateParticipantNameSpacing(
+      editFormData.participantName,
+      'お名前',
+    );
+    const nameKanaValidationError = validateParticipantNameSpacing(
+      editFormData.participantNameKana,
+      'ふりがな',
+    );
     const nextFieldErrors = {
-      ...(!String(editFormData.participantName || '').trim()
-        ? { participantName: 'お名前は必須です' }
-        : {}),
-      ...(!String(editFormData.participantNameKana || '').trim()
-        ? { participantNameKana: 'ふりがなは必須です' }
-        : {}),
+      ...(nameValidationError ? { participantName: nameValidationError } : {}),
+      ...(nameKanaValidationError ? { participantNameKana: nameKanaValidationError } : {}),
       ...(!String(editFormData.participantGrade || '').trim()
         ? { participantGrade: '学年は必須です' }
         : {}),
@@ -626,8 +632,8 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
           body: JSON.stringify({
             answers,
             participantData: {
-              name: String(editFormData.participantName || ''),
-              nameKana: String(editFormData.participantNameKana || ''),
+              name: normalizeParticipantNameSpacing(editFormData.participantName),
+              nameKana: normalizeParticipantNameSpacing(editFormData.participantNameKana),
               section: String(editFormData.participantSection || ''),
               grade: normalizeGrade(editFormData.participantGrade),
               availableSlots,

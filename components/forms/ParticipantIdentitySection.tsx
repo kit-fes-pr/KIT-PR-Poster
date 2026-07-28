@@ -2,6 +2,7 @@
 
 import { Control, Path, useController } from 'react-hook-form';
 import { ParticipantIdentityFields } from '@/components/forms/ParticipantIdentityFields';
+import { validateParticipantNameSpacing } from '@/lib/utils/forms/forms';
 
 export type ParticipantIdentityFormValues = {
   participantName: string;
@@ -19,7 +20,10 @@ export function ParticipantIdentitySection({ control }: ParticipantIdentitySecti
   const nameField = useController({
     control,
     name: 'participantName' as Path<ParticipantIdentityFormValues>,
-    rules: { required: 'お名前は必須です' },
+    rules: {
+      required: 'お名前は必須です',
+      validate: (value) => validateParticipantNameSpacing(value, '名前') || true,
+    },
   });
   const gradeField = useController({
     control,
@@ -29,7 +33,10 @@ export function ParticipantIdentitySection({ control }: ParticipantIdentitySecti
   const nameKanaField = useController({
     control,
     name: 'participantNameKana' as Path<ParticipantIdentityFormValues>,
-    rules: { required: 'ふりがなは必須です' },
+    rules: {
+      required: 'ふりがなが必須です',
+      validate: (value) => validateParticipantNameSpacing(value, 'ふりがな') || true,
+    },
   });
   const sectionField = useController({
     control,

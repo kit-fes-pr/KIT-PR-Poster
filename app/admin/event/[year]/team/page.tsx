@@ -19,6 +19,8 @@ import {
   buildRequiredFormFieldErrorMap,
   filterEditableFormFieldsForParticipant,
   filterVisibleFormFieldsForParticipant,
+  normalizeParticipantNameSpacing,
+  validateParticipantNameSpacing,
 } from '@/lib/utils/forms/forms';
 import { LoadingInline } from '@/components/ui/Loading';
 import { Modal } from '@/components/ui/Modal';
@@ -345,13 +347,17 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       availability,
       responseEditValues,
     );
+    const nameValidationError = validateParticipantNameSpacing(
+      responseEditValues?.participantName,
+      'お名前',
+    );
+    const nameKanaValidationError = validateParticipantNameSpacing(
+      responseEditValues?.participantNameKana,
+      'ふりがな',
+    );
     const nextFieldErrors = {
-      ...(!String(responseEditValues?.participantName || '').trim()
-        ? { participantName: 'お名前は必須です' }
-        : {}),
-      ...(!String(responseEditValues?.participantNameKana || '').trim()
-        ? { participantNameKana: 'ふりがなは必須です' }
-        : {}),
+      ...(nameValidationError ? { participantName: nameValidationError } : {}),
+      ...(nameKanaValidationError ? { participantNameKana: nameKanaValidationError } : {}),
       ...(!String(responseEditValues?.participantGrade || '').trim()
         ? { participantGrade: '学年は必須です' }
         : {}),
@@ -381,8 +387,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         body: JSON.stringify({
           answers,
           participantData: {
-            name: String(responseEditValues?.participantName || ''),
-            nameKana: String(responseEditValues?.participantNameKana || ''),
+            name: normalizeParticipantNameSpacing(responseEditValues?.participantName),
+            nameKana: normalizeParticipantNameSpacing(responseEditValues?.participantNameKana),
             grade: String(responseEditValues?.participantGrade || ''),
             section: String(responseEditValues?.participantSection || ''),
             availableSlots: availability,
