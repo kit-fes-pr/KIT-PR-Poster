@@ -7,6 +7,7 @@ import { useFastPageTransition } from '@/lib/hooks/usePageTransition';
 import { LoadingScreen, LoadingInline } from '@/components/ui/Loading';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { formatTeamAccessPeriod } from '@/lib/utils/team/team-access';
+import { authenticatedFetch } from '@/lib/utils/auth-fetcher';
 
 interface FastDashboardProps {
   year: number;
@@ -32,6 +33,38 @@ export default function FastDashboard({ year, isAdmin }: FastDashboardProps) {
   const visibleTeams = teams.slice(startIndex, startIndex + pageSize);
   const totalResponses = data?.stats?.totalResponses ?? data?.stats?.totalMembers ?? 0;
   const availableResponses = data?.stats?.availableResponses ?? 0;
+
+  const exportTeamManualsZip = async () => {
+    try {
+      const response = await authenticatedFetch('/api/admin/export/team-manuals/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          year: String(year),
+          separate: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'ZIPの生成に失敗しました');
+      }
+
+      const zipBlob = await response.blob();
+      const zipUrl = URL.createObjectURL(zipBlob);
+      const anchor = document.createElement('a');
+      anchor.href = zipUrl;
+      anchor.download = `配布班マニュアル_${year}.zip`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(zipUrl), 60_000);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'ZIPの生成に失敗しました');
+    }
+  };
 
   useEffect(() => {
     setCurrentPage((prev) => Math.min(Math.max(1, prev), totalPages));
@@ -119,6 +152,14 @@ export default function FastDashboard({ year, isAdmin }: FastDashboardProps) {
                 <span className="text-sm text-gray-500">
                   {teams.length} / {data?.stats?.totalTeams || 0} 件
                 </span>
+                <button
+                  type="button"
+                  onClick={exportTeamManualsZip}
+                  disabled={(data?.stats?.totalTeams || teams.length) === 0}
+                  className="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  全班マニュアル出力
+                </button>
                 <button
                   type="button"
                   onClick={() => navigateWithPreload(`/admin/event/${year}/team`)}

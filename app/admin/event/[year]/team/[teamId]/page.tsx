@@ -200,6 +200,52 @@ export default function TeamDetailPage() {
     return matched?.areaName || '-';
   };
 
+  const exportTeamManualPdf = async () => {
+    if (!team || !y) return;
+
+    const viewerWindow = window.open('', '_blank');
+    if (!viewerWindow) {
+      alert('PDFビューアを開けませんでした。ポップアップ設定を確認してください。');
+      return;
+    }
+    viewerWindow.document.write(
+      '<!doctype html><html><head><meta charset="utf-8"><title>PDF生成中</title></head><body style="font-family: sans-serif; padding: 24px;">PDFを生成しています...</body></html>',
+    );
+    viewerWindow.document.close();
+
+    try {
+      const response = await authenticatedFetch('/api/admin/export/team-manuals/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          year: y,
+          rows: [
+            {
+              teamId: team.teamId,
+              teamName: team.teamName,
+              teamCode: team.teamCode,
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        viewerWindow.document.body.textContent = 'PDFの生成に失敗しました';
+        return;
+      }
+
+      const pdfBlob = await response.blob();
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      viewerWindow.location.href = pdfUrl;
+      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
+    } catch (error) {
+      console.error('配布班マニュアルPDF出力エラー:', error);
+      viewerWindow.document.body.textContent = 'PDFの生成に失敗しました';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 space-y-6">
@@ -214,6 +260,14 @@ export default function TeamDetailPage() {
               >
                 チーム管理へ戻る
               </Link>
+              <button
+                type="button"
+                onClick={exportTeamManualPdf}
+                disabled={!team}
+                className="px-4 py-2 border rounded-md text-sm bg-white text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                マニュアルPDF出力
+              </button>
               <button
                 className="px-4 py-2 border border-red-300 text-red-700 rounded-md text-sm bg-white hover:bg-red-50"
                 onClick={async () => {
