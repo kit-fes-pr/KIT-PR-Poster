@@ -17,6 +17,7 @@ import {
 } from '@/lib/utils/team/team-access';
 import { normalizeTeamTimeSlot } from '@/lib/utils/team/team';
 import { FirestoreCache } from '@/lib/utils/server-cache';
+import { generateNextTeamCode } from '@/lib/server/team-code';
 
 async function loadEventAvailabilitySlots(eventId: string): Promise<string[]> {
   const snap = await adminDb.collection('distributionEvents').doc(eventId).get();
@@ -63,26 +64,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 });
     }
 
-    const { teamCode, teamName, timeSlot, areaId, assignedArea, eventId, year, requiresCar } =
+    const { teamName, timeSlot, areaId, assignedArea, eventId, year, requiresCar } =
       await request.json();
 
-    if (!teamCode || !teamName || !eventId) {
+    if (!teamName || !eventId) {
       return NextResponse.json({ error: '必須フィールドが不足しています' }, { status: 400 });
-    }
-
-    // Check if team code already exists
-    const existingTeam = await adminDb
-      .collection('teams')
-      .where('teamCode', '==', teamCode)
-      .where('eventId', '==', eventId)
-      .limit(1)
-      .get();
-
-    if (!existingTeam.empty) {
-      return NextResponse.json(
-        { error: 'このチームコードは既に使用されています' },
-        { status: 400 },
-      );
     }
 
     const eventAvailabilitySlots = await loadEventAvailabilitySlots(String(eventId));
@@ -117,13 +103,23 @@ export async function POST(request: NextRequest) {
     if (!areaSelection) {
       return NextResponse.json({ error: '配布区域が見つかりません' }, { status: 400 });
     }
+    const normalizedYear = normalizeTeamYear(year);
+    const generatedTeamCode = await generateNextTeamCode({
+      timeSlot: normalizedTimeSlot,
+      eventId,
+      year: normalizedYear,
+    });
+    if (!generatedTeamCode) {
+      return NextResponse.json({ error: 'チームコードの生成に失敗しました' }, { status: 400 });
+    }
+
     const teamData: Omit<Team, 'teamId'> = buildTeamCreateData({
-      teamCode,
+      teamCode: generatedTeamCode,
       teamName,
       timeSlot: normalizedTimeSlot,
       area: areaSelection,
       eventId,
-      year: normalizeTeamYear(year),
+      year: normalizedYear,
       requiresCar,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -284,7 +280,6 @@ export async function PATCH(request: NextRequest) {
       Object.assign(update, buildTeamAccessWindowFromTimeSlot(normalizedTimeSlot) || {});
     }
     if (typeof body.teamName === 'string') update.teamName = body.teamName;
-    if (typeof body.teamCode === 'string') update.teamCode = body.teamCode;
     if (typeof body.assignedArea === 'string' || typeof body.areaId === 'string') {
       const area = await loadAreaForTeam(body.areaId, body.assignedArea);
       if (!area) {
@@ -301,6 +296,30 @@ export async function PATCH(request: NextRequest) {
       update.areaId = areaSelection.areaId;
       update.assignedArea = areaSelection.assignedArea;
       update.adjacentAreas = areaSelection.adjacentAreas;
+    }
+
+    const currentYear = typeof currentTeam.year === 'number' ? currentTeam.year : undefined;
+    const targetYear = typeof update.year === 'number' ? update.year : currentYear;
+    const targetTimeSlot =
+      typeof update.timeSlot === 'string'
+        ? update.timeSlot
+        : typeof currentTeam.timeSlot === 'string'
+          ? currentTeam.timeSlot
+          : '';
+    const shouldRegenerateTeamCode =
+      (typeof update.timeSlot === 'string' && update.timeSlot !== currentTeam.timeSlot) ||
+      (typeof update.year === 'number' && update.year !== currentTeam.year);
+    if (shouldRegenerateTeamCode) {
+      const generatedTeamCode = await generateNextTeamCode({
+        timeSlot: targetTimeSlot,
+        eventId: currentTeam.eventId,
+        year: targetYear,
+        excludeTeamId: String(teamId),
+      });
+      if (!generatedTeamCode) {
+        return NextResponse.json({ error: 'チームコードの生成に失敗しました' }, { status: 400 });
+      }
+      update.teamCode = generatedTeamCode;
     }
 
     await ref.update(update);

@@ -34,6 +34,7 @@ import type { FormAnswer } from '@/types/forms';
 import { clearDashboardCache } from '@/lib/utils/dashboard/dashboard-cache';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
 import { buildCsvContent, downloadCsvFile } from '@/lib/utils/export/export';
+import { buildNextTeamCode } from '@/lib/utils/team/team-code';
 
 interface Participant {
   responseId: string;
@@ -171,7 +172,6 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     carRequiredTeamIdsWithoutDriver?: string[];
   } | null>(null);
   const [createTeamForm, setCreateTeamForm] = useState({
-    teamCode: '',
     teamName: '',
     areaId: '',
     timeSlot: '',
@@ -706,13 +706,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   const createTeam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resolvedParams || !user) return;
-    if (
-      !createTeamForm.teamCode ||
-      !createTeamForm.teamName ||
-      !createTeamForm.areaId ||
-      !createTeamForm.timeSlot
-    ) {
-      setError('チームコード、チーム名、配布区域、配布枠は必須です');
+    if (!createTeamForm.teamName || !createTeamForm.areaId || !createTeamForm.timeSlot) {
+      setError('チーム名、配布区域、配布枠は必須です');
       return;
     }
 
@@ -728,7 +723,6 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          teamCode: createTeamForm.teamCode,
           teamName: createTeamForm.teamName,
           timeSlot: createTeamForm.timeSlot,
           areaId: createTeamForm.areaId,
@@ -745,7 +739,6 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       await loadTeams();
       clearDashboardCache(Number(resolvedParams.year));
       setCreateTeamForm({
-        teamCode: '',
         teamName: '',
         areaId: '',
         timeSlot: distributionSlots[0] || '',
@@ -1001,6 +994,11 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     const bn = b.name || '';
     return collator.compare(an, bn);
   });
+  const generatedTeamCodePreview =
+    buildNextTeamCode({
+      timeSlot: createTeamForm.timeSlot,
+      existingCodes: teams.map((team) => team.teamCode),
+    }) || '配布枠選択後に自動設定';
 
   const buildAssignmentExportRows = (): AssignmentExportRow[] => {
     const collator = new Intl.Collator('ja');
@@ -1131,17 +1129,13 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
           {showCreateTeamForm && (
             <form onSubmit={createTeam} className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  チームコード *
-                </label>
-                <input
-                  value={createTeamForm.teamCode}
-                  onChange={(e) =>
-                    setCreateTeamForm({ ...createTeamForm, teamCode: e.target.value })
-                  }
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="A-01"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">チームコード</label>
+                <div className="block w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700">
+                  {generatedTeamCodePreview}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  配布枠から自動設定されます。手動変更はできません。
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">チーム名 *</label>

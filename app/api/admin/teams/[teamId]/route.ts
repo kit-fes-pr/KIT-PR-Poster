@@ -11,6 +11,7 @@ import {
   normalizeTeamRouteAuthHeader,
 } from '@/lib/utils/team/team-route';
 import { FirestoreCache } from '@/lib/utils/server-cache';
+import { generateNextTeamCode } from '@/lib/server/team-code';
 
 async function loadEventAvailabilitySlots(eventId: string): Promise<string[]> {
   const snap = await adminDb.collection('distributionEvents').doc(eventId).get();
@@ -131,7 +132,6 @@ export async function PATCH(
         : null;
     const updateResult = buildTeamRouteUpdatePayload({
       teamName: body.teamName,
-      teamCode: body.teamCode,
       timeSlot: body.timeSlot,
       isActive: body.isActive,
       areaId: body.areaId,
@@ -148,6 +148,41 @@ export async function PATCH(
     const update: Record<string, unknown> = updateResult.update;
     if (typeof body.eventId === 'string' && body.eventId) {
       update.eventId = body.eventId;
+    }
+
+    const targetEventId =
+      typeof update.eventId === 'string'
+        ? update.eventId
+        : typeof currentTeam.eventId === 'string'
+          ? currentTeam.eventId
+          : '';
+    const targetYear =
+      typeof update.year === 'number'
+        ? update.year
+        : typeof currentTeam.year === 'number'
+          ? currentTeam.year
+          : undefined;
+    const targetTimeSlot =
+      typeof update.timeSlot === 'string'
+        ? update.timeSlot
+        : typeof currentTeam.timeSlot === 'string'
+          ? currentTeam.timeSlot
+          : '';
+    const shouldRegenerateTeamCode =
+      (typeof update.timeSlot === 'string' && update.timeSlot !== currentTeam.timeSlot) ||
+      (typeof update.eventId === 'string' && update.eventId !== currentTeam.eventId) ||
+      (typeof update.year === 'number' && update.year !== currentTeam.year);
+    if (shouldRegenerateTeamCode) {
+      const generatedTeamCode = await generateNextTeamCode({
+        timeSlot: targetTimeSlot,
+        eventId: targetEventId,
+        year: targetYear,
+        excludeTeamId: String(teamId),
+      });
+      if (!generatedTeamCode) {
+        return NextResponse.json({ error: 'チームコードの生成に失敗しました' }, { status: 400 });
+      }
+      update.teamCode = generatedTeamCode;
     }
 
     await ref.update(update);
