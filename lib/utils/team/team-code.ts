@@ -17,16 +17,20 @@ export function buildNextTeamCode(input: {
   if (!prefix) return null;
 
   const minSequence = input.minSequence ?? 1;
-  const usedSequences = input.existingCodes
-    .filter((code): code is string => typeof code === 'string')
-    .map((code) => {
-      const match = code.trim().match(new RegExp(`^${prefix}(\\d+)$`));
-      return match ? Number(match[1]) : Number.NaN;
-    })
-    .filter((sequence) => Number.isInteger(sequence) && sequence > 0);
+  if (!Number.isInteger(minSequence) || minSequence < 1) return null;
 
-  let nextSequence = Math.max(1, minSequence);
-  while (usedSequences.includes(nextSequence)) {
+  const usedSequences = new Set(
+    input.existingCodes
+      .filter((code): code is string => typeof code === 'string')
+      .map((code) => {
+        const match = code.trim().match(new RegExp(`^${prefix}(\\d+)$`));
+        return match ? Number(match[1]) : Number.NaN;
+      })
+      .filter((sequence) => Number.isInteger(sequence) && sequence > 0),
+  );
+
+  let nextSequence = minSequence;
+  while (usedSequences.has(nextSequence)) {
     nextSequence++;
   }
 

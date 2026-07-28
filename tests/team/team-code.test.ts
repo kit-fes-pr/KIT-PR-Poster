@@ -38,4 +38,23 @@ describe('team code utils', () => {
       '20260904PM101',
     );
   });
+
+  test('buildNextTeamCode rejects invalid minSequence values', () => {
+    assert.equal(
+      buildNextTeamCode({
+        timeSlot: '2026-09-04_pm',
+        existingCodes: [],
+        minSequence: 2.5,
+      }),
+      null,
+    );
+    assert.equal(
+      buildNextTeamCode({
+        timeSlot: '2026-09-04_pm',
+        existingCodes: [],
+        minSequence: 0,
+      }),
+      null,
+    );
+  });
 });
