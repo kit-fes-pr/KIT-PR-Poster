@@ -1158,7 +1158,19 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                 <label className="block text-sm font-medium text-gray-700 mb-1">配布区域 *</label>
                 <select
                   value={createTeamForm.areaId}
-                  onChange={(e) => setCreateTeamForm({ ...createTeamForm, areaId: e.target.value })}
+                  onChange={(e) => {
+                    const nextAreaId = e.target.value;
+                    const selectedArea = areas.find((area) => area.areaId === nextAreaId);
+                    setCreateTeamForm((current) => ({
+                      ...current,
+                      areaId: nextAreaId,
+                      teamName: current.teamName.trim()
+                        ? current.teamName
+                        : selectedArea
+                          ? getAreaLabel(selectedArea)
+                          : '',
+                    }));
+                  }}
                   className="block w-full px-3 py-2 border border-gray-300 rounded-md"
                 >
                   <option value="">配布区域を選択</option>
