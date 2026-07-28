@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 });
     }
 
-    const { teamCode, teamName, timeSlot, areaId, assignedArea, eventId, year } =
+    const { teamCode, teamName, timeSlot, areaId, assignedArea, eventId, year, requiresCar } =
       await request.json();
 
     if (!teamCode || !teamName || !eventId) {
@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
       area: areaSelection,
       eventId,
       year: normalizeTeamYear(year),
+      requiresCar,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -255,6 +256,9 @@ export async function PATCH(request: NextRequest) {
     const currentTeam = doc.data() as Record<string, unknown>;
     if (typeof body.year === 'number' && Number.isFinite(body.year)) {
       update.year = body.year;
+    }
+    if (typeof body.requiresCar === 'boolean') {
+      update.requiresCar = body.requiresCar;
     }
     if (typeof body.timeSlot === 'string') {
       const normalizedTimeSlot = normalizeTeamTimeSlot(body.timeSlot);

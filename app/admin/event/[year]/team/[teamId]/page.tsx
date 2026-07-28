@@ -45,7 +45,8 @@ export default function TeamDetailPage() {
     teamName: string;
     timeSlot: string;
     assignedArea: string;
-  }>({ teamName: '', timeSlot: '', assignedArea: '' });
+    requiresCar: boolean;
+  }>({ teamName: '', timeSlot: '', assignedArea: '', requiresCar: false });
   const [memberLoading, setMemberLoading] = useState(false);
   const [assignedMembers, setAssignedMembers] = useState<
     Array<{
@@ -119,6 +120,7 @@ export default function TeamDetailPage() {
           teamName: loadedTeam?.teamName || '',
           timeSlot: loadedTeam?.timeSlot || '',
           assignedArea: selectedArea?.areaId || '',
+          requiresCar: loadedTeam?.requiresCar === true,
         });
 
         setStores(st?.stores || []);
@@ -384,6 +386,22 @@ export default function TeamDetailPage() {
                         ))}
                       </select>
                     </div>
+                    <label className="flex items-start gap-3 rounded-md border border-gray-200 p-3">
+                      <input
+                        type="checkbox"
+                        checked={editForm.requiresCar}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, requiresCar: e.target.checked })
+                        }
+                        className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-gray-900">車が必要</span>
+                        <span className="block text-xs text-gray-500">
+                          自動割り当てで運転できる回答者を最低1名割り当てます。
+                        </span>
+                      </span>
+                    </label>
                   </div>
                   <div className="mt-6 flex justify-end gap-3">
                     <button
@@ -399,6 +417,7 @@ export default function TeamDetailPage() {
                             teamName: editForm.teamName,
                             timeSlot: editForm.timeSlot,
                             areaId: editForm.assignedArea,
+                            requiresCar: editForm.requiresCar,
                           };
                           const res = await authenticatedFetch(`/api/admin/teams/${teamId}`, {
                             method: 'PATCH',
@@ -491,6 +510,10 @@ export default function TeamDetailPage() {
                 <p>
                   <span className="text-gray-600">担当区域:</span>{' '}
                   <span className="ml-2">{getTeamAreaName(team)}</span>
+                </p>
+                <p>
+                  <span className="text-gray-600">車:</span>{' '}
+                  <span className="ml-2">{team?.requiresCar ? '必要' : '不要'}</span>
                 </p>
               </div>
             )}

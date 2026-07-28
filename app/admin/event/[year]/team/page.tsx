@@ -41,6 +41,7 @@ interface Participant {
   grade: number;
   section: string;
   availableSlots: string[];
+  carUsage?: string;
   submittedAt: Date;
 }
 
@@ -53,6 +54,7 @@ interface Team {
   assignedArea: string;
   maxMembers: number;
   preferredGrades?: number[];
+  requiresCar?: boolean;
 }
 
 interface Assignment {
@@ -165,12 +167,15 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     skippedUnavailable: number;
     skippedNoMatchingTeam: number;
     skippedFull: number;
+    carRequiredTeamsWithoutDriver?: number;
+    carRequiredTeamIdsWithoutDriver?: string[];
   } | null>(null);
   const [createTeamForm, setCreateTeamForm] = useState({
     teamCode: '',
     teamName: '',
     areaId: '',
     timeSlot: '',
+    requiresCar: false,
   });
 
   useEffect(() => {
@@ -730,6 +735,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
           assignedArea: selectedArea?.areaCode || '',
           eventId: distributionEventId || `kodai${resolvedParams.year}`,
           year: Number(resolvedParams.year),
+          requiresCar: createTeamForm.requiresCar,
         }),
       });
 
@@ -743,6 +749,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         teamName: '',
         areaId: '',
         timeSlot: distributionSlots[0] || '',
+        requiresCar: false,
       });
       setShowCreateTeamForm(false);
     } catch (err) {
@@ -784,6 +791,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
               submittedAt: response.submittedAt,
             };
             const raw = response.answers?.find((a) => a.fieldId === 'availability')?.value;
+            const carUsageAnswer = response.answers?.find((a) => a.fieldId === 'carUsage')?.value;
             const availableSlots = normalizeAvailabilitySlots(
               Array.isArray(raw)
                 ? raw
@@ -798,6 +806,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
               grade: normalizeGrade(response.participantData?.grade),
               section: response.participantData?.section || '',
               availableSlots,
+              carUsage: typeof carUsageAnswer === 'string' ? carUsageAnswer : '',
               submittedAt: new Date(response.submittedAt),
             };
           },
@@ -1183,6 +1192,22 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                   </p>
                 )}
               </div>
+              <label className="flex items-start gap-3 rounded-md border border-gray-200 p-4 md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={createTeamForm.requiresCar}
+                  onChange={(e) =>
+                    setCreateTeamForm({ ...createTeamForm, requiresCar: e.target.checked })
+                  }
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-900">車が必要</span>
+                  <span className="block text-sm text-gray-500">
+                    自動割り当て時に、運転できる回答者をこのチームへ最低1名割り当てます。
+                  </span>
+                </span>
+              </label>
               <div className="md:col-span-2 flex justify-end">
                 <button
                   type="submit"
@@ -1233,6 +1258,13 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                 割り当てをクリア
               </button>
             )}
+            {lastAutoAssignmentStats?.carRequiredTeamsWithoutDriver ? (
+              <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+                車が必要なチームのうち
+                {lastAutoAssignmentStats.carRequiredTeamsWithoutDriver}
+                件で、運転できる回答者を割り当てられませんでした。
+              </div>
+            ) : null}
           </div>
         </div>
 

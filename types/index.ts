@@ -19,6 +19,7 @@ export interface Team {
   assignedArea: string;
   areaId?: string;
   adjacentAreas: string[];
+  requiresCar?: boolean;
   eventId: string;
   year?: number; // 年度情報を追加
   isActive: boolean;
