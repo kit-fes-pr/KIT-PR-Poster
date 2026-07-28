@@ -68,6 +68,7 @@ export function buildTeamCreateData(input: {
   eventId: unknown;
   year: unknown;
   area: TeamAreaSelection;
+  requiresCar?: unknown;
   createdAt?: Date;
   updatedAt?: Date;
 }): Omit<Team, 'teamId'> {
@@ -85,6 +86,7 @@ export function buildTeamCreateData(input: {
     areaId: input.area.areaId,
     assignedArea: input.area.assignedArea,
     adjacentAreas: normalizeAdjacentAreas(input.area.adjacentAreas),
+    requiresCar: input.requiresCar === true,
     eventId: String(input.eventId || ''),
     year: normalizeTeamYear(input.year),
     isActive: true,
@@ -100,6 +102,7 @@ export function buildTeamUpdateData(input: {
   timeSlot?: unknown;
   isActive?: unknown;
   area?: TeamAreaSelection | null;
+  requiresCar?: unknown;
   updatedAt?: Date;
 }): Record<string, unknown> {
   const update: Record<string, unknown> = {
@@ -122,6 +125,7 @@ export function buildTeamUpdateData(input: {
   }
 
   if (typeof input.isActive === 'boolean') update.isActive = input.isActive;
+  if (typeof input.requiresCar === 'boolean') update.requiresCar = input.requiresCar;
 
   if (input.area) {
     update.areaId = input.area.areaId;

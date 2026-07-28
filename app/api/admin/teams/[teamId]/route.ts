@@ -138,6 +138,7 @@ export async function PATCH(
       assignedArea: body.assignedArea,
       area,
       year: body.year,
+      requiresCar: body.requiresCar,
       eventAvailabilitySlots: await loadEventAvailabilitySlotsForTeamUpdate(body, currentTeam),
       updatedAt: new Date(),
     });
