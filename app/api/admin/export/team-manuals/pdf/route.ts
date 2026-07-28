@@ -565,7 +565,7 @@ async function buildPdf(input: { year: string; rows: TeamManualRow[] }) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
   const fontEntry = await loadFontEntry();
-  const font = await pdfDoc.embedFont(fontEntry.bytes, { subset: false });
+  const font = await pdfDoc.embedFont(fontEntry.bytes, { subset: true });
   const rows = [...input.rows].sort((a, b) =>
     new Intl.Collator('ja').compare(a.teamName, b.teamName),
   );
