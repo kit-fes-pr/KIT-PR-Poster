@@ -11,7 +11,7 @@ import {
   normalizeTeamRouteAuthHeader,
 } from '@/lib/utils/team/team-route';
 import { FirestoreCache } from '@/lib/utils/server-cache';
-import { generateNextTeamCode } from '@/lib/server/team-code';
+import { generateNextTeamCodeInTransaction } from '@/lib/server/team-code';
 
 async function loadEventAvailabilitySlots(eventId: string): Promise<string[]> {
   const snap = await adminDb.collection('distributionEvents').doc(eventId).get();
@@ -173,19 +173,23 @@ export async function PATCH(
       (typeof update.eventId === 'string' && update.eventId !== currentTeam.eventId) ||
       (typeof update.year === 'number' && update.year !== currentTeam.year);
     if (shouldRegenerateTeamCode) {
-      const generatedTeamCode = await generateNextTeamCode({
-        timeSlot: targetTimeSlot,
-        eventId: targetEventId,
-        year: targetYear,
-        excludeTeamId: String(teamId),
+      const updatedWithCode = await adminDb.runTransaction(async (transaction) => {
+        const generatedTeamCode = await generateNextTeamCodeInTransaction(transaction, {
+          timeSlot: targetTimeSlot,
+          eventId: targetEventId,
+          year: targetYear,
+          excludeTeamId: String(teamId),
+        });
+        if (!generatedTeamCode) return false;
+        transaction.update(ref, { ...update, teamCode: generatedTeamCode });
+        return true;
       });
-      if (!generatedTeamCode) {
+      if (!updatedWithCode) {
         return NextResponse.json({ error: 'チームコードの生成に失敗しました' }, { status: 400 });
       }
-      update.teamCode = generatedTeamCode;
+    } else {
+      await ref.update(update);
     }
-
-    await ref.update(update);
     const updated = await ref.get();
 
     const yearsToInvalidate = new Set<number>();
