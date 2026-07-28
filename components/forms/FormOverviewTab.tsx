@@ -28,6 +28,8 @@ type FormOverviewTabProps = {
   allAvailabilityChoices: AvailabilityChoice[];
   responsesCardRef: MutableRefObject<HTMLDivElement | null>;
   onOpenEdit: (response: FormResponse | ParticipantSurveyResponse) => void;
+  onDeleteResponse: (response: FormResponse | ParticipantSurveyResponse) => void;
+  deletingResponseId?: string;
   onDeleteForm: () => void;
   deleting: boolean;
   saveStatus: 'saved' | 'saving' | 'error';
@@ -64,6 +66,8 @@ export function FormOverviewTab({
   allAvailabilityChoices,
   responsesCardRef,
   onOpenEdit,
+  onDeleteResponse,
+  deletingResponseId,
   onDeleteForm,
   deleting,
   saveStatus,
@@ -250,13 +254,23 @@ export function FormOverviewTab({
                           );
                         })}
                         <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-900">
-                          <button
-                            type="button"
-                            onClick={() => onOpenEdit(response)}
-                            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                          >
-                            編集
-                          </button>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => onOpenEdit(response)}
+                              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                              編集
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onDeleteResponse(response)}
+                              disabled={deletingResponseId === response.responseId}
+                              className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {deletingResponseId === response.responseId ? '削除中...' : '削除'}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

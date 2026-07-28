@@ -146,6 +146,7 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletingResponseId, setDeletingResponseId] = useState('');
   const [error, setError] = useState('');
   const [eventData, setEventData] = useState<EventSummary | null>(null);
   const [forms, setForms] = useState<FormRecord[]>([]);
@@ -573,6 +574,42 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
     setEditFormData({});
     setEditSaving(false);
     setEditFieldErrors({});
+  };
+
+  const deleteResponse = async (response: FormResponse | ParticipantSurveyResponse) => {
+    if (!currentForm || !user) return;
+
+    const participantName =
+      (response as ParticipantSurveyResponse).participantData?.name || 'この回答';
+    if (!confirm(`${participantName} の回答を削除しますか？この操作は元に戻せません。`)) {
+      return;
+    }
+
+    try {
+      setDeletingResponseId(response.responseId);
+      setError('');
+
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/forms/${currentForm.formId}/responses/${response.responseId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setError(data?.error || '回答の削除に失敗しました');
+        return;
+      }
+
+      await loadDashboard();
+    } catch (err) {
+      console.error(err);
+      setError('回答の削除に失敗しました');
+    } finally {
+      setDeletingResponseId('');
+    }
   };
 
   const updateResponse = async () => {
@@ -1149,6 +1186,8 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
                 allAvailabilityChoices={allAvailabilityChoices}
                 responsesCardRef={responsesCardRef}
                 onOpenEdit={openEditModal}
+                onDeleteResponse={deleteResponse}
+                deletingResponseId={deletingResponseId}
                 onDeleteForm={deleteForm}
                 deleting={deleting}
                 saveStatus={saveStatus}
