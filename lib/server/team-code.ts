@@ -13,7 +13,11 @@ export async function generateNextTeamCode(input: {
   const codesByTeamId = new Map<string, string>();
 
   if (eventId) {
-    const byEvent = await adminDb.collection('teams').where('eventId', '==', eventId).get();
+    const byEvent = await adminDb
+      .collection('teams')
+      .where('eventId', '==', eventId)
+      .select('teamCode')
+      .get();
     byEvent.docs.forEach((doc) => {
       const data = doc.data() as Record<string, unknown>;
       if (typeof data.teamCode === 'string') codesByTeamId.set(doc.id, data.teamCode);
@@ -21,7 +25,11 @@ export async function generateNextTeamCode(input: {
   }
 
   if (year) {
-    const byYear = await adminDb.collection('teams').where('year', '==', year).get();
+    const byYear = await adminDb
+      .collection('teams')
+      .where('year', '==', year)
+      .select('teamCode')
+      .get();
     byYear.docs.forEach((doc) => {
       const data = doc.data() as Record<string, unknown>;
       if (typeof data.teamCode === 'string') codesByTeamId.set(doc.id, data.teamCode);
