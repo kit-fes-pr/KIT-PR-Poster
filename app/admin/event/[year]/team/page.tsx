@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatDate } from '@/lib/utils/dateUtils';
@@ -153,6 +153,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   const [responseEditFieldErrors, setResponseEditFieldErrors] = useState<Record<string, string>>(
     {},
   );
+  const responseEditModalTopRef = useRef<HTMLDivElement | null>(null);
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>('');
   const [showCreateTeamForm, setShowCreateTeamForm] = useState(false);
   const [createTeamSubmitting, setCreateTeamSubmitting] = useState(false);
@@ -331,6 +332,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     const availability = normalizeAvailabilitySlots(responseEditValues?.availability);
     if (availability.length === 0) {
       setResponseEditFieldErrors({ availability: '参加可能日時は一つ以上選択してください' });
+      responseEditModalTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
 
@@ -369,6 +371,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
     if (Object.keys(nextFieldErrors).length > 0) {
       setResponseEditFieldErrors(nextFieldErrors);
+      responseEditModalTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
 
@@ -1655,7 +1658,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
             panelClassName="max-w-3xl"
             contentClassName="px-4 pb-10"
           >
-            <div className="mx-auto mt-10 w-full">
+            <div ref={responseEditModalTopRef} className="mx-auto mt-10 w-full">
               <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">回答を編集</h3>

@@ -163,6 +163,7 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
   const [editFormData, setEditFormData] = useState<{ [key: string]: string | string[] }>({});
   const [editSaving, setEditSaving] = useState(false);
   const [editFieldErrors, setEditFieldErrors] = useState<Record<string, string>>({});
+  const [editScrollToTopSignal, setEditScrollToTopSignal] = useState(0);
   const hasLoadedFormRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedSnapshotRef = useRef('');
@@ -613,6 +614,7 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
 
     if (Object.keys(nextFieldErrors).length > 0) {
       setEditFieldErrors(nextFieldErrors);
+      setEditScrollToTopSignal((current) => current + 1);
       return;
     }
 
@@ -1189,6 +1191,7 @@ export default function FormDashboardPage({ params }: { params: Promise<{ year: 
           submitLabel="変更を保存"
           submitting={editSaving}
           maxWidthClassName="max-w-4xl"
+          scrollToTopSignal={editScrollToTopSignal}
         >
           {filterEditableFormFieldsForParticipant(
             currentForm.fields,

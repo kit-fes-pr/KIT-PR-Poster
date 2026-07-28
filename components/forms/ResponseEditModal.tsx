@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { ParticipantIdentityFields } from '@/components/forms/ParticipantIdentityFields';
 
@@ -27,6 +27,7 @@ type ResponseEditModalProps = {
   children: ReactNode;
   footerNote?: ReactNode;
   maxWidthClassName?: string;
+  scrollToTopSignal?: number;
 };
 
 export function ResponseEditModal({
@@ -52,7 +53,15 @@ export function ResponseEditModal({
   children,
   footerNote,
   maxWidthClassName = 'max-w-4xl',
+  scrollToTopSignal = 0,
 }: ResponseEditModalProps) {
+  const topRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (scrollToTopSignal <= 0) return;
+    topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [scrollToTopSignal]);
+
   return (
     <Modal
       open={open}
@@ -61,7 +70,10 @@ export function ResponseEditModal({
       panelClassName={maxWidthClassName}
       contentClassName="px-6 py-6"
     >
-      <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+      <div
+        ref={topRef}
+        className="flex items-center justify-between border-b border-gray-200 px-6 py-4"
+      >
         <div>
           <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
           {description && <p className="text-sm text-gray-500">{description}</p>}
