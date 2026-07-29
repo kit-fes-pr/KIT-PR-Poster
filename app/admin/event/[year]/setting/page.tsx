@@ -420,6 +420,7 @@ export default function DistributionSettingsPage({
         })
         .filter((update): update is TeamSlotBulkUpdate => update !== null);
 
+      let bulkJson: { teams?: TeamSummary[]; error?: string } | null = null;
       if (updates.length > 0) {
         const res = await fetch('/api/admin/teams/bulk', {
           method: 'PATCH',
@@ -429,18 +430,29 @@ export default function DistributionSettingsPage({
           },
           body: JSON.stringify({ updates }),
         });
-        const json = await res.json().catch(() => null);
+        bulkJson = await res.json().catch(() => null);
         if (!res.ok) {
-          throw new Error(json?.error || 'チーム配布枠の更新に失敗しました');
+          throw new Error(bulkJson?.error || 'チーム配布枠の更新に失敗しました');
         }
+      }
+
+      const updatedTeamsById = new Map<string, TeamSummary>();
+      if (Array.isArray(bulkJson?.teams)) {
+        bulkJson.teams.forEach((team) => {
+          const teamId = team.teamId || team.id || '';
+          if (teamId) updatedTeamsById.set(teamId, team);
+        });
       }
 
       setTeams((current) =>
         current.map((team) => {
           const teamId = team.teamId || team.id || '';
-          return teamId && teamSlotDrafts[teamId]
-            ? { ...team, timeSlot: teamSlotDrafts[teamId] }
-            : team;
+          const updatedTeam = teamId ? updatedTeamsById.get(teamId) : null;
+          return updatedTeam
+            ? { ...team, ...updatedTeam }
+            : teamId && teamSlotDrafts[teamId]
+              ? { ...team, timeSlot: teamSlotDrafts[teamId] }
+              : team;
         }),
       );
       clearDashboardCache(Number(resolvedParams.year));

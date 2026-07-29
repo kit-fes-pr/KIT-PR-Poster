@@ -10,6 +10,10 @@ import {
   normalizeTeamRouteAuthHeader,
 } from '@/lib/utils/team/team-route';
 import { FirestoreCache } from '@/lib/utils/server-cache';
+import {
+  generateAndReserveNextTeamCodeInTransaction,
+  getTeamCodeReservationRef,
+} from '@/lib/server/team-code';
 
 type TeamDocumentReference = FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>;
 type TeamUpdateData = FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>;
@@ -168,6 +172,11 @@ export async function PATCH(request: NextRequest) {
       team: Record<string, unknown>;
       previousYear?: number;
       nextYear?: number;
+      currentTeam: Record<string, unknown>;
+      shouldRegenerateTeamCode: boolean;
+      targetTimeSlot: string;
+      targetEventId: string;
+      targetYear?: number;
     }> = [];
 
     for (let i = 0; i < requestedUpdates.length; i++) {
@@ -202,20 +211,82 @@ export async function PATCH(request: NextRequest) {
         update.eventId = requestedUpdate.eventId;
       }
 
+      const targetTimeSlot =
+        typeof update.timeSlot === 'string'
+          ? update.timeSlot
+          : typeof currentTeam.timeSlot === 'string'
+            ? currentTeam.timeSlot
+            : '';
+      const targetEventId =
+        typeof update.eventId === 'string'
+          ? update.eventId
+          : typeof currentTeam.eventId === 'string'
+            ? currentTeam.eventId
+            : '';
+      const targetYear =
+        typeof update.year === 'number'
+          ? update.year
+          : typeof currentTeam.year === 'number'
+            ? currentTeam.year
+            : undefined;
+      const shouldRegenerateTeamCode =
+        (typeof update.timeSlot === 'string' && update.timeSlot !== currentTeam.timeSlot) ||
+        (typeof update.eventId === 'string' && update.eventId !== currentTeam.eventId) ||
+        (typeof update.year === 'number' && update.year !== currentTeam.year);
+
       batchUpdates.push({
         ref: doc.ref,
         update,
         team: { teamId: doc.id, ...currentTeam, ...update },
         previousYear: typeof currentTeam.year === 'number' ? currentTeam.year : undefined,
         nextYear: typeof update.year === 'number' ? update.year : undefined,
+        currentTeam,
+        shouldRegenerateTeamCode,
+        targetTimeSlot,
+        targetEventId,
+        targetYear,
       });
     }
 
-    const batch = adminDb.batch();
-    for (const item of batchUpdates) {
-      batch.update(item.ref, item.update);
+    const plainUpdates = batchUpdates.filter((item) => !item.shouldRegenerateTeamCode);
+    if (plainUpdates.length > 0) {
+      const batch = adminDb.batch();
+      for (const item of plainUpdates) {
+        batch.update(item.ref, item.update);
+      }
+      await batch.commit();
     }
-    await batch.commit();
+
+    for (const item of batchUpdates.filter((update) => update.shouldRegenerateTeamCode)) {
+      const generatedTeamCode = await adminDb.runTransaction(async (transaction) => {
+        const nextTeamCode = await generateAndReserveNextTeamCodeInTransaction(transaction, {
+          timeSlot: item.targetTimeSlot,
+          eventId: item.targetEventId,
+          year: item.targetYear,
+          excludeTeamId: item.ref.id,
+          teamId: item.ref.id,
+        });
+        if (!nextTeamCode) return null;
+        if (
+          typeof item.currentTeam.teamCode === 'string' &&
+          item.currentTeam.teamCode !== nextTeamCode
+        ) {
+          transaction.delete(getTeamCodeReservationRef(item.currentTeam.teamCode));
+        }
+        transaction.update(item.ref, { ...item.update, teamCode: nextTeamCode });
+        return nextTeamCode;
+      });
+      if (!generatedTeamCode) {
+        return NextResponse.json(
+          {
+            error: `${item.currentTeam.teamCode || item.ref.id}: チームコードの生成に失敗しました`,
+          },
+          { status: 400 },
+        );
+      }
+      item.update.teamCode = generatedTeamCode;
+      item.team.teamCode = generatedTeamCode;
+    }
 
     const years = new Set(
       batchUpdates.flatMap((item) => [item.previousYear, item.nextYear]).filter(isFiniteNumber),
