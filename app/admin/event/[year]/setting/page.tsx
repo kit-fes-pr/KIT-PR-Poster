@@ -423,7 +423,29 @@ export default function DistributionSettingsPage({
         })
         .filter((update): update is TeamSlotBulkUpdate => update !== null);
 
-      let bulkJson: { teams?: TeamSummary[]; error?: string } | null = null;
+      const mergeUpdatedTeams = (updatedTeams: TeamSummary[] | undefined) => {
+        const updatedTeamsById = new Map<string, TeamSummary>();
+        if (Array.isArray(updatedTeams)) {
+          updatedTeams.forEach((team) => {
+            const teamId = team.teamId || team.id || '';
+            if (teamId) updatedTeamsById.set(teamId, team);
+          });
+        }
+
+        setTeams((current) =>
+          current.map((team) => {
+            const teamId = team.teamId || team.id || '';
+            const updatedTeam = teamId ? updatedTeamsById.get(teamId) : null;
+            return updatedTeam
+              ? { ...team, ...updatedTeam }
+              : teamId && teamSlotDrafts[teamId]
+                ? { ...team, timeSlot: teamSlotDrafts[teamId] }
+                : team;
+          }),
+        );
+      };
+
+      let bulkJson: { teams?: TeamSummary[]; error?: string; partial?: boolean } | null = null;
       if (updates.length > 0) {
         const res = await fetch('/api/admin/teams/bulk', {
           method: 'PATCH',
@@ -435,29 +457,15 @@ export default function DistributionSettingsPage({
         });
         bulkJson = await res.json().catch(() => null);
         if (!res.ok) {
+          if (bulkJson?.partial) {
+            mergeUpdatedTeams(bulkJson.teams);
+            clearDashboardCache(Number(resolvedParams.year));
+          }
           throw new Error(bulkJson?.error || 'チーム配布枠の更新に失敗しました');
         }
       }
 
-      const updatedTeamsById = new Map<string, TeamSummary>();
-      if (Array.isArray(bulkJson?.teams)) {
-        bulkJson.teams.forEach((team) => {
-          const teamId = team.teamId || team.id || '';
-          if (teamId) updatedTeamsById.set(teamId, team);
-        });
-      }
-
-      setTeams((current) =>
-        current.map((team) => {
-          const teamId = team.teamId || team.id || '';
-          const updatedTeam = teamId ? updatedTeamsById.get(teamId) : null;
-          return updatedTeam
-            ? { ...team, ...updatedTeam }
-            : teamId && teamSlotDrafts[teamId]
-              ? { ...team, timeSlot: teamSlotDrafts[teamId] }
-              : team;
-        }),
-      );
+      mergeUpdatedTeams(bulkJson?.teams);
       clearDashboardCache(Number(resolvedParams.year));
       setTeamSlotModalOpen(false);
       setTeamSlotDrafts({});
