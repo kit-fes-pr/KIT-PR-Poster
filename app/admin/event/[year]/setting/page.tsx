@@ -177,9 +177,12 @@ export default function DistributionSettingsPage({
   useEffect(() => {
     if (allChoices.length === 0) return;
     setSelectedSlots((current) => {
-      const valid = current.filter((slot) => allChoices.some((choice) => choice.key === slot));
-      if (valid.length > 0) return valid;
-      return allChoices.map((choice) => choice.key);
+      const choiceKeys = allChoices.map((choice) => choice.key);
+      const choiceKeySet = new Set<string>(choiceKeys);
+      const currentSet = new Set<string>(current);
+      const valid = current.filter((slot) => choiceKeySet.has(slot));
+      const added = choiceKeys.filter((slot) => !currentSet.has(slot));
+      return [...valid, ...added];
     });
   }, [allChoices]);
 
