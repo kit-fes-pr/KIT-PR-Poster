@@ -10,6 +10,10 @@ import {
   normalizeTeamRouteAuthHeader,
 } from '@/lib/utils/team/team-route';
 import { FirestoreCache } from '@/lib/utils/server-cache';
+import {
+  generateAndReserveNextTeamCodeInTransaction,
+  getTeamCodeReservationRef,
+} from '@/lib/server/team-code';
 
 type TeamDocumentReference = FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>;
 type TeamUpdateData = FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>;
@@ -21,12 +25,31 @@ type TeamBulkUpdate = {
   year?: unknown;
 };
 
+const TEAM_CODE_REGENERATION_CONCURRENCY = 5;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function invalidateTeamUpdateYears(
+  updates: Array<{ previousYear?: number; nextYear?: number }>,
+): void {
+  const years = new Set(
+    updates.flatMap((item) => [item.previousYear, item.nextYear]).filter(isFiniteNumber),
+  );
+  years.forEach((year) => FirestoreCache.invalidateYear(year));
 }
 
 function normalizeBulkUpdates(updates: unknown[]): TeamBulkUpdate[] | { error: string } {
@@ -168,6 +191,11 @@ export async function PATCH(request: NextRequest) {
       team: Record<string, unknown>;
       previousYear?: number;
       nextYear?: number;
+      currentTeam: Record<string, unknown>;
+      shouldRegenerateTeamCode: boolean;
+      targetTimeSlot: string;
+      targetEventId: string;
+      targetYear?: number;
     }> = [];
 
     for (let i = 0; i < requestedUpdates.length; i++) {
@@ -202,30 +230,137 @@ export async function PATCH(request: NextRequest) {
         update.eventId = requestedUpdate.eventId;
       }
 
+      const targetTimeSlot =
+        typeof update.timeSlot === 'string'
+          ? update.timeSlot
+          : typeof currentTeam.timeSlot === 'string'
+            ? currentTeam.timeSlot
+            : '';
+      const targetEventId =
+        typeof update.eventId === 'string'
+          ? update.eventId
+          : typeof currentTeam.eventId === 'string'
+            ? currentTeam.eventId
+            : '';
+      const targetYear =
+        typeof update.year === 'number'
+          ? update.year
+          : typeof currentTeam.year === 'number'
+            ? currentTeam.year
+            : undefined;
+      const shouldRegenerateTeamCode =
+        (typeof update.timeSlot === 'string' && update.timeSlot !== currentTeam.timeSlot) ||
+        (typeof update.eventId === 'string' && update.eventId !== currentTeam.eventId) ||
+        (typeof update.year === 'number' && update.year !== currentTeam.year);
+
       batchUpdates.push({
         ref: doc.ref,
         update,
         team: { teamId: doc.id, ...currentTeam, ...update },
         previousYear: typeof currentTeam.year === 'number' ? currentTeam.year : undefined,
         nextYear: typeof update.year === 'number' ? update.year : undefined,
+        currentTeam,
+        shouldRegenerateTeamCode,
+        targetTimeSlot,
+        targetEventId,
+        targetYear,
       });
     }
 
-    const batch = adminDb.batch();
-    for (const item of batchUpdates) {
-      batch.update(item.ref, item.update);
-    }
-    await batch.commit();
+    const regenerationUpdates = batchUpdates.filter((item) => item.shouldRegenerateTeamCode);
+    const committedUpdates: typeof batchUpdates = [];
+    for (const chunk of chunkArray(regenerationUpdates, TEAM_CODE_REGENERATION_CONCURRENCY)) {
+      const results = await Promise.all(
+        chunk.map(async (item) => {
+          try {
+            const generatedTeamCode = await adminDb.runTransaction(async (transaction) => {
+              const nextTeamCode = await generateAndReserveNextTeamCodeInTransaction(transaction, {
+                timeSlot: item.targetTimeSlot,
+                eventId: item.targetEventId,
+                year: item.targetYear,
+                excludeTeamId: item.ref.id,
+                teamId: item.ref.id,
+              });
+              if (!nextTeamCode) return null;
+              if (
+                typeof item.currentTeam.teamCode === 'string' &&
+                item.currentTeam.teamCode !== nextTeamCode
+              ) {
+                transaction.delete(getTeamCodeReservationRef(item.currentTeam.teamCode));
+              }
+              transaction.update(item.ref, { ...item.update, teamCode: nextTeamCode });
+              return nextTeamCode;
+            });
+            if (!generatedTeamCode) {
+              return {
+                item,
+                error: `${item.currentTeam.teamCode || item.ref.id}: チームコードの生成に失敗しました`,
+              };
+            }
+            return { item, generatedTeamCode, error: null };
+          } catch (error) {
+            console.error('Bulk team code regeneration error:', error);
+            return {
+              item,
+              error: `${item.currentTeam.teamCode || item.ref.id}: チームコードの生成に失敗しました`,
+            };
+          }
+        }),
+      );
 
-    const years = new Set(
-      batchUpdates.flatMap((item) => [item.previousYear, item.nextYear]).filter(isFiniteNumber),
-    );
-    years.forEach((year) => FirestoreCache.invalidateYear(year));
+      const failed = results.find((result) => result.error);
+      if (failed?.error) {
+        const committedTeams = committedUpdates.map((item) => item.team);
+        invalidateTeamUpdateYears(committedUpdates);
+        return NextResponse.json(
+          {
+            error: failed.error,
+            partial: committedUpdates.length > 0,
+            teams: committedTeams,
+            updatedCount: committedUpdates.length,
+          },
+          { status: 400 },
+        );
+      }
+
+      results.forEach((result) => {
+        if (!result.generatedTeamCode) return;
+        result.item.update.teamCode = result.generatedTeamCode;
+        result.item.team.teamCode = result.generatedTeamCode;
+        committedUpdates.push(result.item);
+      });
+    }
+
+    const plainUpdates = batchUpdates.filter((item) => !item.shouldRegenerateTeamCode);
+    if (plainUpdates.length > 0) {
+      try {
+        const batch = adminDb.batch();
+        for (const item of plainUpdates) {
+          batch.update(item.ref, item.update);
+        }
+        await batch.commit();
+        committedUpdates.push(...plainUpdates);
+      } catch (error) {
+        console.error('Bulk plain team update error:', error);
+        invalidateTeamUpdateYears(committedUpdates);
+        return NextResponse.json(
+          {
+            error: '一部のチーム更新に失敗しました',
+            partial: committedUpdates.length > 0,
+            teams: committedUpdates.map((item) => item.team),
+            updatedCount: committedUpdates.length,
+          },
+          { status: 500 },
+        );
+      }
+    }
+
+    invalidateTeamUpdateYears(committedUpdates);
 
     return NextResponse.json({
       success: true,
-      teams: batchUpdates.map((item) => item.team),
-      updatedCount: batchUpdates.length,
+      teams: committedUpdates.map((item) => item.team),
+      updatedCount: committedUpdates.length,
     });
   } catch (error) {
     console.error('Bulk update teams error:', error);

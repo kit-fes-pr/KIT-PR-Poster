@@ -177,9 +177,12 @@ export default function DistributionSettingsPage({
   useEffect(() => {
     if (allChoices.length === 0) return;
     setSelectedSlots((current) => {
-      const valid = current.filter((slot) => allChoices.some((choice) => choice.key === slot));
-      if (valid.length > 0) return valid;
-      return allChoices.map((choice) => choice.key);
+      const choiceKeys = allChoices.map((choice) => choice.key);
+      const choiceKeySet = new Set<string>(choiceKeys);
+      const currentSet = new Set<string>(current);
+      const valid = current.filter((slot) => choiceKeySet.has(slot));
+      const added = choiceKeys.filter((slot) => !currentSet.has(slot));
+      return [...valid, ...added];
     });
   }, [allChoices]);
 
@@ -420,6 +423,29 @@ export default function DistributionSettingsPage({
         })
         .filter((update): update is TeamSlotBulkUpdate => update !== null);
 
+      const mergeUpdatedTeams = (updatedTeams: TeamSummary[] | undefined) => {
+        const updatedTeamsById = new Map<string, TeamSummary>();
+        if (Array.isArray(updatedTeams)) {
+          updatedTeams.forEach((team) => {
+            const teamId = team.teamId || team.id || '';
+            if (teamId) updatedTeamsById.set(teamId, team);
+          });
+        }
+
+        setTeams((current) =>
+          current.map((team) => {
+            const teamId = team.teamId || team.id || '';
+            const updatedTeam = teamId ? updatedTeamsById.get(teamId) : null;
+            return updatedTeam
+              ? { ...team, ...updatedTeam }
+              : teamId && teamSlotDrafts[teamId]
+                ? { ...team, timeSlot: teamSlotDrafts[teamId] }
+                : team;
+          }),
+        );
+      };
+
+      let bulkJson: { teams?: TeamSummary[]; error?: string; partial?: boolean } | null = null;
       if (updates.length > 0) {
         const res = await fetch('/api/admin/teams/bulk', {
           method: 'PATCH',
@@ -429,20 +455,17 @@ export default function DistributionSettingsPage({
           },
           body: JSON.stringify({ updates }),
         });
-        const json = await res.json().catch(() => null);
+        bulkJson = await res.json().catch(() => null);
         if (!res.ok) {
-          throw new Error(json?.error || 'チーム配布枠の更新に失敗しました');
+          if (bulkJson?.partial) {
+            mergeUpdatedTeams(bulkJson.teams);
+            clearDashboardCache(Number(resolvedParams.year));
+          }
+          throw new Error(bulkJson?.error || 'チーム配布枠の更新に失敗しました');
         }
       }
 
-      setTeams((current) =>
-        current.map((team) => {
-          const teamId = team.teamId || team.id || '';
-          return teamId && teamSlotDrafts[teamId]
-            ? { ...team, timeSlot: teamSlotDrafts[teamId] }
-            : team;
-        }),
-      );
+      mergeUpdatedTeams(bulkJson?.teams);
       clearDashboardCache(Number(resolvedParams.year));
       setTeamSlotModalOpen(false);
       setTeamSlotDrafts({});

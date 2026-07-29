@@ -30,6 +30,7 @@ export default function DashboardHeader({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const roleLabel = authUser?.isAdmin ? '管理者' : 'ユーザー';
+  const adminYearHref = `/admin/event/${year}`;
   const navItems = [
     ...(authUser?.role === 'team' && ownTeam
       ? [{ href: `/${year}`, label: '自班店舗', active: mode === 'self' }]
@@ -82,7 +83,7 @@ export default function DashboardHeader({
           <div className="hidden flex-wrap items-center gap-2 md:flex">
             {authUser?.isAdmin && (
               <Link
-                href="/admin"
+                href={adminYearHref}
                 className="rounded-md border border-gray-300 px-3 py-2 text-center text-sm text-gray-700 hover:bg-gray-50"
               >
                 管理画面
@@ -123,7 +124,7 @@ export default function DashboardHeader({
             ))}
             {authUser?.isAdmin && (
               <Link
-                href="/admin"
+                href={adminYearHref}
                 onClick={() => setMenuOpen(false)}
                 className="block rounded-md border border-gray-300 px-3 py-3 text-sm text-gray-700"
               >
