@@ -17,6 +17,7 @@ export default function YearSidebar({ year, distributionPeriod }: YearSidebarPro
       { href: `/admin/event/${year}`, label: '年度トップ', exact: true },
       { href: `/admin/event/${year}/form`, label: 'フォーム管理' },
       { href: `/admin/event/${year}/team`, label: 'チーム管理' },
+      { href: `/${year}/all`, label: '配布班管理' },
       { href: `/admin/event/${year}/setting`, label: 'イベント設定' },
     ],
     [year],
