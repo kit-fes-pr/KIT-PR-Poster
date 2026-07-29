@@ -25,12 +25,22 @@ type TeamBulkUpdate = {
   year?: unknown;
 };
 
+const TEAM_CODE_REGENERATION_CONCURRENCY = 5;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
 }
 
 function normalizeBulkUpdates(updates: unknown[]): TeamBulkUpdate[] | { error: string } {
@@ -257,35 +267,48 @@ export async function PATCH(request: NextRequest) {
       await batch.commit();
     }
 
-    for (const item of batchUpdates.filter((update) => update.shouldRegenerateTeamCode)) {
-      const generatedTeamCode = await adminDb.runTransaction(async (transaction) => {
-        const nextTeamCode = await generateAndReserveNextTeamCodeInTransaction(transaction, {
-          timeSlot: item.targetTimeSlot,
-          eventId: item.targetEventId,
-          year: item.targetYear,
-          excludeTeamId: item.ref.id,
-          teamId: item.ref.id,
-        });
-        if (!nextTeamCode) return null;
-        if (
-          typeof item.currentTeam.teamCode === 'string' &&
-          item.currentTeam.teamCode !== nextTeamCode
-        ) {
-          transaction.delete(getTeamCodeReservationRef(item.currentTeam.teamCode));
-        }
-        transaction.update(item.ref, { ...item.update, teamCode: nextTeamCode });
-        return nextTeamCode;
-      });
-      if (!generatedTeamCode) {
+    const regenerationUpdates = batchUpdates.filter((item) => item.shouldRegenerateTeamCode);
+    for (const chunk of chunkArray(regenerationUpdates, TEAM_CODE_REGENERATION_CONCURRENCY)) {
+      const results = await Promise.all(
+        chunk.map(async (item) => {
+          const generatedTeamCode = await adminDb.runTransaction(async (transaction) => {
+            const nextTeamCode = await generateAndReserveNextTeamCodeInTransaction(transaction, {
+              timeSlot: item.targetTimeSlot,
+              eventId: item.targetEventId,
+              year: item.targetYear,
+              excludeTeamId: item.ref.id,
+              teamId: item.ref.id,
+            });
+            if (!nextTeamCode) return null;
+            if (
+              typeof item.currentTeam.teamCode === 'string' &&
+              item.currentTeam.teamCode !== nextTeamCode
+            ) {
+              transaction.delete(getTeamCodeReservationRef(item.currentTeam.teamCode));
+            }
+            transaction.update(item.ref, { ...item.update, teamCode: nextTeamCode });
+            return nextTeamCode;
+          });
+          if (!generatedTeamCode) {
+            return {
+              error: `${item.currentTeam.teamCode || item.ref.id}: チームコードの生成に失敗しました`,
+            };
+          }
+          item.update.teamCode = generatedTeamCode;
+          item.team.teamCode = generatedTeamCode;
+          return { error: null };
+        }),
+      );
+
+      const failed = results.find((result) => result.error);
+      if (failed?.error) {
         return NextResponse.json(
           {
-            error: `${item.currentTeam.teamCode || item.ref.id}: チームコードの生成に失敗しました`,
+            error: failed.error,
           },
           { status: 400 },
         );
       }
-      item.update.teamCode = generatedTeamCode;
-      item.team.teamCode = generatedTeamCode;
     }
 
     const years = new Set(
