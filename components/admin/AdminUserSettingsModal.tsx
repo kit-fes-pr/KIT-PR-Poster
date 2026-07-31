@@ -7,6 +7,7 @@ type AdminUserSettingsModalProps = {
   currentUserId: string;
   editName: string;
   error: string;
+  passwordResetMessage: string;
   loading: boolean;
   onClose: () => void;
   onEditNameChange: (name: string) => void;
@@ -25,6 +26,7 @@ export function AdminUserSettingsModal({
   currentUserId,
   editName,
   error,
+  passwordResetMessage,
   loading,
   onClose,
   onEditNameChange,
@@ -50,6 +52,11 @@ export function AdminUserSettingsModal({
           {error && (
             <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               {error}
+            </div>
+          )}
+          {passwordResetMessage && (
+            <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+              {passwordResetMessage}
             </div>
           )}
 
