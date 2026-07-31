@@ -47,7 +47,13 @@ export async function GET(request: NextRequest) {
           },
           { merge: true },
         );
-      await adminDb.collection('adminInvites').doc(decodedToken.uid).delete();
+      const invitesSnap = await adminDb
+        .collection('adminInvites')
+        .where('uid', '==', decodedToken.uid)
+        .get();
+      const deleteBatch = adminDb.batch();
+      invitesSnap.docs.forEach((doc) => deleteBatch.delete(doc.ref));
+      await deleteBatch.commit();
     }
 
     return NextResponse.json({
