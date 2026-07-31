@@ -375,9 +375,7 @@ export function StoreDistributionMap({
         } else {
           unresolved += 1;
         }
-        if (geocodeRequests > 0 && geocodeRequests % 1 === 0) {
-          await sleep(1100);
-        }
+await sleep(1100);
       }
 
       if (!cancelled) {
