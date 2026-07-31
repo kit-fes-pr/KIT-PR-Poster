@@ -129,7 +129,9 @@ export default function AdminEventIndex() {
                   return (
                     <div
                       key={ev.id as string}
-                      className="group relative border border-gray-200 rounded-lg bg-white p-4 transition transform duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-500 md:hover:-translate-y-1 md:hover:shadow-lg"
+                      className={`group relative border border-gray-200 rounded-lg bg-white p-4 transition transform duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-500 md:hover:-translate-y-1 md:hover:shadow-lg ${
+                        menuEventId === ev.id ? 'z-50' : 'z-0'
+                      }`}
                     >
                       <Link
                         href={`/admin/event/${eventYear}`}
