@@ -54,6 +54,7 @@ interface Team {
   areaId?: string;
   assignedArea: string;
   maxMembers: number;
+  memberCount?: number;
   preferredGrades?: number[];
   requiresCar?: boolean;
 }
@@ -871,6 +872,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         setAssignments(data.assignments || []);
         setLastAutoAssignmentStats(data.stats || null);
         await loadAssignments();
+        await loadTeams();
         clearDashboardCache(Number(year));
         if ((data?.stats?.assigned || 0) === 0) {
           setError(
@@ -910,7 +912,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       });
 
       if (res.ok) {
-        setAssignments([]);
+        await loadAssignments();
+        await loadTeams();
         clearDashboardCache(Number(year));
         setError('');
       } else {
@@ -1660,6 +1663,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                         if (!res.ok) throw new Error(data.error || '更新に失敗しました');
                         // 再読込
                         await loadAssignments();
+                        await loadTeams();
                         if (resolvedParams?.year) {
                           clearDashboardCache(Number(resolvedParams.year));
                         }

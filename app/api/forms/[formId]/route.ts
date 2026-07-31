@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
+import { FirestoreCache } from '@/lib/utils/server-cache';
 import { SurveyForm, FormUpdateData } from '@/types/forms';
 
 function serializeDate(value: unknown): string | unknown {
@@ -189,6 +190,17 @@ export async function DELETE(
     if (!formDoc.exists) {
       return NextResponse.json({ error: 'フォームが見つかりません' }, { status: 404 });
     }
+    const formData = formDoc.data() as Record<string, unknown>;
+    const yearsToInvalidate = new Set<number>();
+    const formYear =
+      typeof formData.year === 'number'
+        ? formData.year
+        : typeof formData.year === 'string' && formData.year.trim()
+          ? Number(formData.year)
+          : NaN;
+    if (Number.isFinite(formYear)) {
+      yearsToInvalidate.add(formYear);
+    }
 
     // 回答を含めて削除する
     const responsesCollection = adminDb
@@ -205,11 +217,32 @@ export async function DELETE(
       await batch.commit();
     }
 
+    const assignmentsSnapshot = await adminDb
+      .collection('assignments')
+      .where('formId', '==', resolvedParams.formId)
+      .get();
+    const assignmentRefs = assignmentsSnapshot.docs.map((doc) => {
+      const assignmentYear = Number(doc.data().year);
+      if (Number.isFinite(assignmentYear)) {
+        yearsToInvalidate.add(assignmentYear);
+      }
+      return doc.ref;
+    });
+
+    for (let index = 0; index < assignmentRefs.length; index += 400) {
+      const batch = adminDb.batch();
+      const chunk = assignmentRefs.slice(index, index + 400);
+      chunk.forEach((doc) => batch.delete(doc));
+      await batch.commit();
+    }
+
     // フォームを削除
     await adminDb.collection('forms').doc(resolvedParams.formId).delete();
+    yearsToInvalidate.forEach((year) => FirestoreCache.invalidateYear(year));
 
     return NextResponse.json({
       message: 'フォームが削除されました',
+      deletedAssignments: assignmentRefs.length,
     });
   } catch (error) {
     console.error('フォーム削除エラー:', error);
