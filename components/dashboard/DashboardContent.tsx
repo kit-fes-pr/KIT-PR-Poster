@@ -26,6 +26,9 @@ type DashboardTeam = {
   isOwnTeam?: boolean;
 };
 
+const isPosterPickupStore = (store: Store) =>
+  store.requiresPosterPickup === true || store.distributionStatus === 'revisit';
+
 export default function DashboardContent({
   mode,
   teamId,
@@ -74,7 +77,11 @@ export default function DashboardContent({
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<StoreFormData>({
-    defaultValues: { distributionStatus: 'pending', distributedCount: 0 },
+    defaultValues: {
+      distributionStatus: 'pending',
+      distributedCount: 0,
+      requiresPosterPickup: false,
+    },
   });
 
   const {
@@ -85,7 +92,11 @@ export default function DashboardContent({
     setValue: setEditValue,
     formState: { errors: editErrors, isSubmitting: isEditSubmitting },
   } = useForm<StoreFormData>({
-    defaultValues: { distributionStatus: 'pending', distributedCount: 0 },
+    defaultValues: {
+      distributionStatus: 'pending',
+      distributedCount: 0,
+      requiresPosterPickup: false,
+    },
   });
 
   const watchStatus = watch('distributionStatus');
@@ -98,9 +109,12 @@ export default function DashboardContent({
       resetEdit({
         storeName: store.storeName,
         address: store.address,
-        distributionStatus: store.distributionStatus,
+        distributionStatus:
+          store.distributionStatus === 'revisit' ? 'completed' : store.distributionStatus,
         failureReason: store.failureReason,
         distributedCount: store.distributedCount || 0,
+        requiresPosterPickup:
+          store.requiresPosterPickup === true || store.distributionStatus === 'revisit',
         notes: store.notes || '',
       });
     }
@@ -142,7 +156,11 @@ export default function DashboardContent({
   const filteredStores: Store[] = useMemo(() => {
     const list: Store[] = storesData?.stores || [];
     const filtered = list.filter((store) => {
-      const matchesStatus = filterStatus === 'all' || store.distributionStatus === filterStatus;
+      const displayStatus =
+        store.distributionStatus === 'revisit' ? 'completed' : store.distributionStatus;
+      const matchesStatus =
+        filterStatus === 'all' ||
+        (filterStatus === 'pickup' ? isPosterPickupStore(store) : displayStatus === filterStatus);
       const matchesSearch =
         store.storeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         store.address.toLowerCase().includes(searchQuery.toLowerCase());
@@ -160,8 +178,11 @@ export default function DashboardContent({
   }, [storesData, filterStatus, searchQuery]);
 
   const totalStores = filteredStores.length;
-  const completedStores = filteredStores.filter((s) => s.distributionStatus === 'completed').length;
+  const completedStores = filteredStores.filter(
+    (s) => s.distributionStatus === 'completed' || s.distributionStatus === 'revisit',
+  ).length;
   const failedStores = filteredStores.filter((s) => s.distributionStatus === 'failed').length;
+  const posterPickupStores = filteredStores.filter(isPosterPickupStore);
   const totalDistributedCount = filteredStores.reduce(
     (sum, s) => sum + (Number(s.distributedCount) || 0),
     0,
@@ -194,6 +215,8 @@ export default function DashboardContent({
           ...data,
           distributedCount:
             data.distributionStatus === 'completed' ? Number(data.distributedCount || 0) : 0,
+          requiresPosterPickup:
+            data.distributionStatus === 'completed' && data.requiresPosterPickup === true,
           failureReason: data.distributionStatus === 'failed' ? data.failureReason : undefined,
           notes: data.notes,
         }),
@@ -233,6 +256,7 @@ export default function DashboardContent({
     status: Store['distributionStatus'],
     count?: number,
     reason?: string,
+    requiresPosterPickup = false,
   ) => {
     try {
       const response = await authenticatedFetch(`/api/stores/${storeId}`, {
@@ -242,6 +266,7 @@ export default function DashboardContent({
           distributionStatus: status,
           distributedCount: count || 0,
           failureReason: reason,
+          requiresPosterPickup: status === 'completed' && requiresPosterPickup,
         }),
       });
       if (response.ok) mutate();
@@ -266,6 +291,8 @@ export default function DashboardContent({
           distributionStatus: data.distributionStatus,
           distributedCount:
             data.distributionStatus === 'completed' ? Number(data.distributedCount || 0) : 0,
+          requiresPosterPickup:
+            data.distributionStatus === 'completed' && data.requiresPosterPickup === true,
           failureReason: data.distributionStatus === 'failed' ? data.failureReason : undefined,
           notes: data.notes,
         }),
@@ -309,7 +336,7 @@ export default function DashboardContent({
       case 'failed':
         return 'bg-red-100 text-red-800';
       case 'revisit':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -322,7 +349,7 @@ export default function DashboardContent({
       case 'failed':
         return '配布不可';
       case 'revisit':
-        return '工大祭後にポスター回収';
+        return '配布済み';
       default:
         return '未配布';
     }
@@ -340,7 +367,7 @@ export default function DashboardContent({
           </div>
         )}
 
-        <div className="mb-4 grid grid-cols-2 gap-3 lg:mb-6 lg:grid-cols-4 lg:gap-6">
+        <div className="mb-4 grid grid-cols-2 gap-3 lg:mb-6 lg:grid-cols-5 lg:gap-6">
           <div className="rounded-lg bg-white p-4 shadow sm:p-6">
             <h3 className="text-sm font-medium text-gray-500 sm:text-base">総店舗数</h3>
             <p className="mt-1 text-2xl font-bold text-gray-900 sm:text-3xl">{totalStores}</p>
@@ -359,6 +386,12 @@ export default function DashboardContent({
               {totalDistributedCount}
             </p>
           </div>
+          <div className="rounded-lg bg-white p-4 shadow sm:p-6">
+            <h3 className="text-sm font-medium text-gray-500 sm:text-base">回収対象</h3>
+            <p className="mt-1 text-2xl font-bold text-yellow-600 sm:text-3xl">
+              {posterPickupStores.length}
+            </p>
+          </div>
         </div>
 
         {!readOnly && (
@@ -369,6 +402,54 @@ export default function DashboardContent({
             >
               店舗を追加
             </button>
+          </div>
+        )}
+
+        {posterPickupStores.length > 0 && (
+          <div className="mb-4 rounded-lg bg-white shadow lg:mb-6">
+            <div className="border-b border-gray-200 px-4 py-4 sm:px-6">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-gray-900">回収対象店舗</h2>
+                </div>
+                {posterPickupStores.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFilterStatus('pickup')}
+                    className="rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-800 hover:bg-yellow-100"
+                  >
+                    一覧で絞り込み
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="p-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {posterPickupStores.map((store) => (
+                  <div key={store.storeId} className="rounded-lg border border-yellow-200 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-gray-900">
+                          {store.storeName}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">{store.address}</p>
+                        {(mode === 'all' || mode === 'teams') && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            班コード: {store.distributedBy || store.createdByTeamCode || '-'}
+                          </p>
+                        )}
+                      </div>
+                      <span className="shrink-0 rounded-full bg-yellow-100 px-2 py-1 text-xs text-yellow-800">
+                        回収
+                      </span>
+                    </div>
+                    {store.notes && (
+                      <p className="mt-2 text-xs text-gray-500">備考: {store.notes}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -415,7 +496,7 @@ export default function DashboardContent({
                     <option value="pending">未配布</option>
                     <option value="completed">配布済み</option>
                     <option value="failed">配布不可</option>
-                    <option value="revisit">工大祭後にポスター回収</option>
+                    <option value="pickup">回収対象</option>
                   </select>
                 </div>
                 <div>
@@ -459,6 +540,12 @@ export default function DashboardContent({
                         <span className="inline-block px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
                           配布枚数: {store.distributedCount || 0}
                         </span>
+                        {(store.requiresPosterPickup === true ||
+                          store.distributionStatus === 'revisit') && (
+                          <span className="inline-block rounded-full bg-yellow-100 px-2 py-1 text-xs text-yellow-800">
+                            工大祭終了後に回収
+                          </span>
+                        )}
                       </div>
                       {store.notes && (
                         <p className="text-xs text-gray-500 mt-1">備考: {store.notes}</p>
@@ -473,7 +560,14 @@ export default function DashboardContent({
                               onClick={() => {
                                 const count = prompt('配布枚数を入力してください:', '1');
                                 if (count)
-                                  updateStoreStatus(store.storeId, 'completed', parseInt(count));
+                                  updateStoreStatus(
+                                    store.storeId,
+                                    'completed',
+                                    parseInt(count),
+                                    undefined,
+                                    store.requiresPosterPickup === true ||
+                                      store.distributionStatus === 'revisit',
+                                  );
                               }}
                               className="px-3 py-1 bg-green-600 text-white rounded text-sm"
                             >
@@ -497,12 +591,6 @@ export default function DashboardContent({
                               className="px-3 py-1 bg-red-600 text-white rounded text-sm"
                             >
                               配布不可
-                            </button>
-                            <button
-                              onClick={() => updateStoreStatus(store.storeId, 'revisit')}
-                              className="px-3 py-1 bg-yellow-600 text-white rounded text-sm"
-                            >
-                              祭後回収
                             </button>
                           </>
                         )}
@@ -585,27 +673,40 @@ export default function DashboardContent({
                   <option value="pending">未配布</option>
                   <option value="completed">配布完了</option>
                   <option value="failed">配布不可</option>
-                  <option value="revisit">工大祭後にポスター回収</option>
                 </select>
               </div>
               {watchStatus === 'completed' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">配布枚数</label>
-                  <input
-                    type="number"
-                    min={1}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                    {...register('distributedCount', {
-                      required: '配布枚数は必須です',
-                      min: { value: 1, message: '1以上を入力してください' },
-                    })}
-                  />
-                  {errors.distributedCount && (
-                    <p className="text-red-600 text-sm">
-                      {String(errors.distributedCount.message)}
-                    </p>
-                  )}
-                </div>
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">配布枚数</label>
+                    <input
+                      type="number"
+                      min={1}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                      {...register('distributedCount', {
+                        required: '配布枚数は必須です',
+                        min: { value: 1, message: '1以上を入力してください' },
+                      })}
+                    />
+                    {errors.distributedCount && (
+                      <p className="text-red-600 text-sm">
+                        {String(errors.distributedCount.message)}
+                      </p>
+                    )}
+                  </div>
+                  <label className="flex items-start gap-3 rounded-md border border-gray-200 p-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600"
+                      {...register('requiresPosterPickup')}
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-gray-900">
+                        工大祭終了後にポスター回収が必要
+                      </span>
+                    </span>
+                  </label>
+                </>
               )}
               {watchStatus === 'failed' && (
                 <div>
@@ -685,7 +786,7 @@ export default function DashboardContent({
                     <textarea
                       rows={3}
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                      placeholder="例: 工大祭終了後にポスター回収希望 / 夕方なら対応可 など"
+                      placeholder="例: 夕方なら対応可 / 担当者不在時は電話確認 など"
                       {...registerEdit('notes')}
                     />
                   </div>
@@ -697,34 +798,50 @@ export default function DashboardContent({
                       onChange={(e) => {
                         const val = e.target.value as Store['distributionStatus'];
                         setEditValue('distributionStatus', val);
-                        if (val !== 'completed') setEditValue('distributedCount', 0);
+                        if (val !== 'completed') {
+                          setEditValue('distributedCount', 0);
+                          setEditValue('requiresPosterPickup', false);
+                        }
                         if (val !== 'failed') setEditValue('failureReason', undefined);
                       }}
                     >
                       <option value="pending">未配布</option>
                       <option value="completed">配布完了</option>
                       <option value="failed">配布不可</option>
-                      <option value="revisit">工大祭後にポスター回収</option>
                     </select>
                   </div>
                   {watchEditStatus === 'completed' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">配布枚数</label>
-                      <input
-                        type="number"
-                        min={1}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                        {...registerEdit('distributedCount', {
-                          required: '配布枚数は必須です',
-                          min: { value: 1, message: '1以上を入力してください' },
-                        })}
-                      />
-                      {editErrors.distributedCount && (
-                        <p className="text-red-600 text-sm">
-                          {String(editErrors.distributedCount.message)}
-                        </p>
-                      )}
-                    </div>
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">配布枚数</label>
+                        <input
+                          type="number"
+                          min={1}
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                          {...registerEdit('distributedCount', {
+                            required: '配布枚数は必須です',
+                            min: { value: 1, message: '1以上を入力してください' },
+                          })}
+                        />
+                        {editErrors.distributedCount && (
+                          <p className="text-red-600 text-sm">
+                            {String(editErrors.distributedCount.message)}
+                          </p>
+                        )}
+                      </div>
+                      <label className="flex items-start gap-3 rounded-md border border-gray-200 p-3">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600"
+                          {...registerEdit('requiresPosterPickup')}
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-gray-900">
+                            工大祭終了後にポスター回収が必要
+                          </span>
+                        </span>
+                      </label>
+                    </>
                   )}
                   {watchEditStatus === 'failed' && (
                     <div>

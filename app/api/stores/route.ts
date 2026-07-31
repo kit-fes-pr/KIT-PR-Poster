@@ -205,6 +205,7 @@ export async function POST(request: NextRequest) {
       distributionStatus,
       failureReason,
       distributedCount,
+      requiresPosterPickup,
       areaCode,
       notes,
     } = await request.json();
@@ -250,6 +251,7 @@ export async function POST(request: NextRequest) {
       distributedBy: decodedToken.teamCode || '',
       createdByTeamCode: decodedToken.teamCode || '',
       ...(distributionStatus === 'completed' && { distributedAt: new Date() }),
+      requiresPosterPickup: distributionStatus === 'completed' && requiresPosterPickup === true,
       ...(notes && { notes }),
       registrationMethod: 'manual',
       eventId: teamValidation.eventId || targetEventId || 'kodai2025',

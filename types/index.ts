@@ -51,6 +51,7 @@ export interface Store {
   distributedBy: string;
   createdByTeamCode?: string;
   distributedAt?: Date;
+  requiresPosterPickup?: boolean;
   notes?: string;
   registrationMethod: 'preset' | 'manual';
   eventId: string;
@@ -119,6 +120,7 @@ export interface StoreFormData {
   distributionStatus: Store['distributionStatus'];
   failureReason?: Store['failureReason'];
   distributedCount: number;
+  requiresPosterPickup?: boolean;
   notes?: string;
 }
 
@@ -193,6 +195,7 @@ export interface StoreDistributionRecord {
   distributedBy: string;
   distributedAt: Date;
   teamMembers: string[];
+  requiresPosterPickup?: boolean;
   notes?: string;
 }
 

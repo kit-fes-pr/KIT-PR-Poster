@@ -18,8 +18,15 @@ export async function PUT(
     const idToken = authHeader.split('Bearer ')[1];
     const decodedToken = await adminAuth.verifyIdToken(idToken);
 
-    const { storeName, address, distributionStatus, failureReason, distributedCount, notes } =
-      await request.json();
+    const {
+      storeName,
+      address,
+      distributionStatus,
+      failureReason,
+      distributedCount,
+      requiresPosterPickup,
+      notes,
+    } = await request.json();
 
     const resolvedParams = await params;
     const storeRef = adminDb.collection('stores').doc(resolvedParams.storeId);
@@ -66,17 +73,20 @@ export async function PUT(
       if (distributionStatus === 'completed') {
         updateData.distributedAt = new Date();
         updateData.distributedCount = distributedCount || 0;
+        updateData.requiresPosterPickup = requiresPosterPickup === true;
       } else if (distributionStatus === 'failed') {
         if (failureReason) {
           updateData.failureReason = failureReason;
         }
         // completed 以外では配布枚数は 0 にリセット
         updateData.distributedCount = 0;
+        updateData.requiresPosterPickup = false;
         // completed 以外へ戻したら distributedAt を削除
         updateData.distributedAt = FieldValue.delete();
       } else {
         // pending / revisit の場合は枚数 0
         updateData.distributedCount = 0;
+        updateData.requiresPosterPickup = false;
         // completed 以外へ戻したら distributedAt を削除
         updateData.distributedAt = FieldValue.delete();
       }
