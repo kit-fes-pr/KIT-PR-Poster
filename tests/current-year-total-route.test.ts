@@ -45,7 +45,8 @@ describe('current-year-total route utils', () => {
     assert.equal(payload.totalStores, 5);
     assert.equal(payload.completedStores, 3);
     assert.equal(payload.failedStores, 1);
-    assert.equal(payload.revisitStores, 2);
+    assert.equal(payload.revisitStores, 1);
+    assert.equal(payload.posterPickupStores, 2);
     assert.equal(payload.pendingStores, 1);
     assert.equal(payload.totalDistributedCount, 10);
     assert.equal(payload.updatedAt.toISOString(), '2026-06-21T00:00:00.000Z');

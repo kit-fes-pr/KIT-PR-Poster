@@ -55,7 +55,8 @@ export function buildCurrentYearTotalPayload(input: {
       (s) => s.distributionStatus === 'completed' || s.distributionStatus === 'revisit',
     ).length,
     failedStores: stores.filter((s) => s.distributionStatus === 'failed').length,
-    revisitStores: stores.filter(
+    revisitStores: stores.filter((s) => s.distributionStatus === 'revisit').length,
+    posterPickupStores: stores.filter(
       (s) => s.requiresPosterPickup === true || s.distributionStatus === 'revisit',
     ).length,
     pendingStores: stores.filter((s) => s.distributionStatus === 'pending').length,
