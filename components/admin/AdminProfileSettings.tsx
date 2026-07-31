@@ -5,7 +5,6 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   updatePassword,
-  updateProfile,
   type User,
 } from 'firebase/auth';
 
@@ -59,9 +58,16 @@ export function AdminProfileSettings({ user, onNameSaved }: AdminProfileSettings
         throw new Error(data?.error || '表示名の保存に失敗しました');
       }
 
-      await updateProfile(user, { displayName: nextName });
-      setName(nextName);
-      onNameSaved(nextName);
+      // The backend is the source of truth; refresh the local Auth cache only for display.
+      let refreshedName = nextName;
+      try {
+        await user.reload();
+        refreshedName = user.displayName || nextName;
+      } catch (refreshError) {
+        console.warn('管理者表示名のAuth状態更新に失敗しました:', refreshError);
+      }
+      setName(refreshedName);
+      onNameSaved(refreshedName);
       setMessage('表示名を保存しました');
     } catch (err) {
       setError(err instanceof Error ? err.message : '表示名の保存に失敗しました');
