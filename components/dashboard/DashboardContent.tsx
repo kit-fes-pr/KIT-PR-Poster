@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { Modal } from '@/components/ui/Modal';
@@ -70,6 +77,7 @@ export default function DashboardContent({
   const [detailsStoreId, setDetailsStoreId] = useState<string | null>(null);
   const [mapStoreId, setMapStoreId] = useState<string | null>(null);
   const [menuStoreId, setMenuStoreId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 128 });
   const [showEditPlacePicker, setShowEditPlacePicker] = useState(false);
 
   const {
@@ -358,6 +366,34 @@ export default function DashboardContent({
     }
   };
 
+  const toggleStoreMenu = (event: ReactMouseEvent<HTMLButtonElement>, storeId: string) => {
+    if (menuStoreId === storeId) {
+      setMenuStoreId(null);
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const viewportPadding = 8;
+    const menuWidth = Math.min(128, window.innerWidth - viewportPadding * 2);
+    const menuHeight = 112;
+    const opensUpward = rect.bottom + menuHeight > window.innerHeight - viewportPadding;
+    const top =
+      (opensUpward
+        ? Math.max(viewportPadding, rect.top - menuHeight - viewportPadding)
+        : Math.min(
+            rect.bottom + viewportPadding,
+            window.innerHeight - menuHeight - viewportPadding,
+          )) + window.scrollY;
+    const left =
+      Math.min(
+        Math.max(viewportPadding, rect.right - menuWidth),
+        window.innerWidth - menuWidth - viewportPadding,
+      ) + window.scrollX;
+
+    setMenuPosition({ top, left, width: menuWidth });
+    setMenuStoreId(storeId);
+  };
+
   const getStatusColor = (status: Store['distributionStatus']) => {
     switch (status) {
       case 'completed':
@@ -555,7 +591,7 @@ export default function DashboardContent({
                     }
                   }}
                   className={`relative rounded-lg border border-gray-200 p-4 ${
-                    menuStoreId === store.storeId ? 'z-20' : 'z-0'
+                    menuStoreId === store.storeId ? 'z-50' : 'z-0'
                   } cursor-pointer hover:bg-gray-50`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -630,34 +666,46 @@ export default function DashboardContent({
                       {!readOnly && (
                         <div className="relative" data-menu-root>
                           <button
-                            onClick={() =>
-                              setMenuStoreId(menuStoreId === store.storeId ? null : store.storeId)
-                            }
-                            className="px-3 py-1 border border-gray-300 text-gray-700 rounded text-sm"
+                            type="button"
+                            onClick={(event) => toggleStoreMenu(event, store.storeId)}
+                            className="min-h-10 min-w-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
                             aria-label="メニュー"
                             title="メニュー"
                           >
                             ≡
                           </button>
-                          {menuStoreId === store.storeId && (
-                            <div className="absolute right-0 z-30 mt-2 w-28 rounded border border-gray-200 bg-white shadow-md">
-                              <button
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                                onClick={() => {
-                                  setDetailsStoreId(store.storeId);
-                                  setMenuStoreId(null);
+                          {menuStoreId === store.storeId &&
+                            typeof document !== 'undefined' &&
+                            createPortal(
+                              <div
+                                className="absolute z-[100] max-h-[calc(100dvh-1rem)] overflow-y-auto overflow-x-hidden rounded-md border border-gray-200 bg-white py-1 text-gray-800 shadow-lg ring-1 ring-black/5"
+                                data-menu-root
+                                style={{
+                                  top: menuPosition.top,
+                                  left: menuPosition.left,
+                                  width: menuPosition.width,
                                 }}
                               >
-                                編集
-                              </button>
-                              <button
-                                className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                                onClick={() => deleteStore(store.storeId)}
-                              >
-                                削除
-                              </button>
-                            </div>
-                          )}
+                                <button
+                                  type="button"
+                                  className="min-h-11 w-full whitespace-nowrap px-4 py-3 text-left text-sm font-medium leading-5 hover:bg-gray-50"
+                                  onClick={() => {
+                                    setDetailsStoreId(store.storeId);
+                                    setMenuStoreId(null);
+                                  }}
+                                >
+                                  編集
+                                </button>
+                                <button
+                                  type="button"
+                                  className="min-h-11 w-full whitespace-nowrap px-4 py-3 text-left text-sm font-medium leading-5 text-red-600 hover:bg-red-50"
+                                  onClick={() => deleteStore(store.storeId)}
+                                >
+                                  削除
+                                </button>
+                              </div>,
+                              document.body,
+                            )}
                         </div>
                       )}
                     </div>
