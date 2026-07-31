@@ -14,6 +14,18 @@ import { AdminUserSettingsModal } from '@/components/admin/AdminUserSettingsModa
 import type { AdminInviteSuccess, AdminUser } from '@/components/admin/admin-users';
 import type { AdminUserAction } from '@/lib/utils/admin/invites';
 
+function getFirebaseAuthErrorMessage(error: unknown, fallback: string) {
+  const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+  const messages: Record<string, string> = {
+    'auth/invalid-email': 'メールアドレスの形式が正しくありません',
+    'auth/user-not-found': '対象のユーザーが見つかりません',
+    'auth/too-many-requests': '試行回数が多すぎます。しばらく待ってから再度お試しください',
+    'auth/network-request-failed': '通信に失敗しました。ネットワーク接続を確認してください',
+    'auth/operation-not-allowed': 'この操作は現在利用できません',
+  };
+  return messages[code] || fallback;
+}
+
 export default function AdminInvitePage() {
   const { user, loading: authLoading } = useRequireAdmin();
   const [admins, setAdmins] = useState<AdminUser[]>([]);
@@ -171,7 +183,7 @@ export default function AdminInvitePage() {
       await sendPasswordResetEmail(auth, selectedAdmin.email);
       setPasswordResetMessage('パスワード再設定メールを送信しました');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'パスワード再設定メールの送信に失敗しました');
+      setError(getFirebaseAuthErrorMessage(err, 'パスワード再設定メールの送信に失敗しました'));
     } finally {
       setActionLoading(false);
     }
