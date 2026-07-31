@@ -263,12 +263,11 @@ export async function GET(request: NextRequest) {
     }
 
     const firstTeamYear = (teamsWithoutCounts[0] as { year?: unknown }).year;
-    const inferredYear =
-      Number.isFinite(targetYear)
-        ? targetYear
-        : typeof firstTeamYear === 'number' && Number.isFinite(firstTeamYear)
-          ? firstTeamYear
-          : undefined;
+    const inferredYear = Number.isFinite(targetYear)
+      ? targetYear
+      : typeof firstTeamYear === 'number' && Number.isFinite(firstTeamYear)
+        ? firstTeamYear
+        : undefined;
 
     const countsByTeam = await loadMemberCountsByTeam(inferredYear);
     const teams = attachMemberCounts(teamsWithoutCounts, countsByTeam);
