@@ -38,16 +38,16 @@ export async function PUT(
       requiresPosterPickup,
       notes,
     } = await request.json();
-const parsedLatitudeRaw = parseOptionalCoordinate(latitude);
-const parsedLongitudeRaw = parseOptionalCoordinate(longitude);
-const parsedLatitude =
-  parsedLatitudeRaw !== undefined && parsedLatitudeRaw >= -90 && parsedLatitudeRaw <= 90
-    ? parsedLatitudeRaw
-    : undefined;
-const parsedLongitude =
-  parsedLongitudeRaw !== undefined && parsedLongitudeRaw >= -180 && parsedLongitudeRaw <= 180
-    ? parsedLongitudeRaw
-    : undefined;
+    const parsedLatitudeRaw = parseOptionalCoordinate(latitude);
+    const parsedLongitudeRaw = parseOptionalCoordinate(longitude);
+    const parsedLatitude =
+      parsedLatitudeRaw !== undefined && parsedLatitudeRaw >= -90 && parsedLatitudeRaw <= 90
+        ? parsedLatitudeRaw
+        : undefined;
+    const parsedLongitude =
+      parsedLongitudeRaw !== undefined && parsedLongitudeRaw >= -180 && parsedLongitudeRaw <= 180
+        ? parsedLongitudeRaw
+        : undefined;
 
     const resolvedParams = await params;
     const storeRef = adminDb.collection('stores').doc(resolvedParams.storeId);

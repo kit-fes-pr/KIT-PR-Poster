@@ -96,12 +96,12 @@ function loadMapLibre() {
     const script = document.createElement('script');
     script.src = mapLibreJsUrl;
     script.async = true;
-script.onload = () => resolve();
-script.onerror = () => {
-  window.kitMapLibreLoader = undefined;
-  reject(new Error('地図ライブラリの読み込みに失敗しました'));
-};
-document.head.appendChild(script);
+    script.onload = () => resolve();
+    script.onerror = () => {
+      window.kitMapLibreLoader = undefined;
+      reject(new Error('地図ライブラリの読み込みに失敗しました'));
+    };
+    document.head.appendChild(script);
   });
 
   return window.kitMapLibreLoader;
@@ -378,7 +378,7 @@ export function StoreDistributionMap({
         } else {
           unresolved += 1;
         }
-await sleep(1100);
+        await sleep(1100);
       }
 
       if (!cancelled) {
