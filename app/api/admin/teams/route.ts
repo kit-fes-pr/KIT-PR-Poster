@@ -52,6 +52,35 @@ async function loadAreaForTeam(areaId: unknown, assignedArea: unknown) {
   return null;
 }
 
+async function loadMemberCountsByTeam(year?: number) {
+  let query: FirebaseFirestore.Query = adminDb.collection('assignments');
+  if (typeof year === 'number' && Number.isFinite(year)) {
+    query = query.where('year', '==', year);
+  }
+  const snapshot = await query.get();
+  const counts: Record<string, number> = {};
+  snapshot.docs.forEach((doc) => {
+    const teamId = doc.data().teamId;
+    if (typeof teamId !== 'string' || !teamId) return;
+    counts[teamId] = (counts[teamId] || 0) + 1;
+  });
+  return counts;
+}
+
+function attachMemberCounts<T extends { id?: unknown; teamId?: unknown }>(
+  teams: T[],
+  countsByTeam: Record<string, number>,
+) {
+  return teams.map((team) => {
+    const teamId =
+      typeof team.teamId === 'string' ? team.teamId : typeof team.id === 'string' ? team.id : '';
+    return {
+      ...team,
+      memberCount: teamId ? countsByTeam[teamId] || 0 : 0,
+    };
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -180,7 +209,7 @@ export async function GET(request: NextRequest) {
 
     if (scope === 'all') {
       const teamsSnapshot = await adminDb.collection('teams').get();
-      const teams = teamsSnapshot.docs
+      const teamsWithoutCounts = teamsSnapshot.docs
         .map((doc) => {
           const data = doc.data() as Record<string, unknown>;
           return {
@@ -190,6 +219,8 @@ export async function GET(request: NextRequest) {
           };
         })
         .filter((team) => (team as Record<string, unknown>).isActive !== false);
+      const countsByTeam = await loadMemberCountsByTeam();
+      const teams = attachMemberCounts(teamsWithoutCounts, countsByTeam);
 
       return NextResponse.json({ teams });
     }
@@ -217,7 +248,7 @@ export async function GET(request: NextRequest) {
     }
 
     const teamDocs = Array.from(snapshotMap.values());
-    const teams = teamDocs
+    const teamsWithoutCounts = teamDocs
       .map((doc) => {
         const data = doc.data() as Record<string, unknown>;
         return {
@@ -227,6 +258,19 @@ export async function GET(request: NextRequest) {
         };
       })
       .filter((team) => (team as Record<string, unknown>).isActive !== false);
+    if (teamsWithoutCounts.length === 0) {
+      return NextResponse.json({ teams: [] });
+    }
+
+    const firstTeamYear = (teamsWithoutCounts[0] as { year?: unknown }).year;
+    const inferredYear = Number.isFinite(targetYear)
+      ? targetYear
+      : typeof firstTeamYear === 'number' && Number.isFinite(firstTeamYear)
+        ? firstTeamYear
+        : undefined;
+
+    const countsByTeam = await loadMemberCountsByTeam(inferredYear);
+    const teams = attachMemberCounts(teamsWithoutCounts, countsByTeam);
 
     return NextResponse.json({ teams });
   } catch (error) {

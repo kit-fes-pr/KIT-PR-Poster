@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     if (isAdmin && searchParams.get('recordLogin') === '1') {
       const now = new Date();
+      const adminRef = adminDb.collection('admins').doc(decodedToken.uid);
+      const adminDoc = await adminRef.get();
       await adminDb
         .collection('admins')
         .doc(decodedToken.uid)
@@ -39,11 +41,19 @@ export async function GET(request: NextRequest) {
           {
             adminId: decodedToken.uid,
             email: decodedToken.email || '',
+            ...(adminDoc.exists ? {} : { createdAt: now }),
             lastLoginAt: now,
             updatedAt: now,
           },
           { merge: true },
         );
+      const invitesSnap = await adminDb
+        .collection('adminInvites')
+        .where('uid', '==', decodedToken.uid)
+        .get();
+      const deleteBatch = adminDb.batch();
+      invitesSnap.docs.forEach((doc) => deleteBatch.delete(doc.ref));
+      await deleteBatch.commit();
     }
 
     return NextResponse.json({

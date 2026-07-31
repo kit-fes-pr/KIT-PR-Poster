@@ -163,16 +163,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await adminDb.collection('adminInvites').add(
-      buildAdminInviteLogPayload({
-        email,
-        displayName: userRecord.displayName || fallbackDisplayName,
-        invitedBy: decodedToken.email || decodedToken.uid,
-        now: new Date(),
-        operation,
-        uid: userRecord.uid,
-      }),
-    );
+    await adminDb
+      .collection('adminInvites')
+      .doc(userRecord.uid)
+      .set(
+        buildAdminInviteLogPayload({
+          email,
+          displayName: userRecord.displayName || fallbackDisplayName,
+          invitedBy: decodedToken.email || decodedToken.uid,
+          now: new Date(),
+          operation,
+          uid: userRecord.uid,
+        }),
+        { merge: false },
+      );
 
     return NextResponse.json({
       success: true,
