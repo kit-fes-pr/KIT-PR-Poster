@@ -21,7 +21,7 @@ export default function AdminSettingsPage() {
         <p className="text-sm font-medium text-gray-500">Admin</p>
         <h1 className="text-2xl font-semibold text-gray-900">アカウント設定</h1>
       </div>
-      <AdminProfileSettings user={user} onNameSaved={() => undefined} />
+      <AdminProfileSettings user={user} />
     </main>
   );
 }

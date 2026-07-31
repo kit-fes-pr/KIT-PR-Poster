@@ -10,10 +10,13 @@ import {
 
 type AdminProfileSettingsProps = {
   user: User;
-  onNameSaved: (name: string) => void;
+  onNameSaved?: (name: string) => void;
 };
 
-export function AdminProfileSettings({ user, onNameSaved }: AdminProfileSettingsProps) {
+export function AdminProfileSettings({
+  user,
+  onNameSaved = () => undefined,
+}: AdminProfileSettingsProps) {
   const [name, setName] = useState(user.displayName || '');
   const [saving, setSaving] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
