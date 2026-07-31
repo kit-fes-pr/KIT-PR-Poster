@@ -3,6 +3,7 @@ import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb } from 'pdf-lib';
+import TwoDimensionalCodeGenerator from 'qrcode';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { formatDate } from '@/lib/utils/dateUtils';
@@ -25,11 +26,6 @@ type FontEntry = {
   bytes: Uint8Array;
 };
 
-type QrMatrix = {
-  size: number;
-  modules: boolean[][];
-};
-
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
 const MARGIN_X = 48;
@@ -39,11 +35,6 @@ const TITLE_SIZE = 22;
 const HEADING_SIZE = 13;
 const BODY_SIZE = 11;
 const SMALL_SIZE = 9;
-const QR_VERSION = 4;
-const QR_SIZE = 21 + (QR_VERSION - 1) * 4;
-const QR_DATA_CODEWORDS = 80;
-const QR_ECC_CODEWORDS = 20;
-const QR_REMAINDER_BITS = 7;
 
 let fontEntryCache: Promise<FontEntry> | null = null;
 
@@ -302,230 +293,18 @@ function drawWrappedText(input: {
   });
 }
 
-function gfMultiply(x: number, y: number): number {
-  let z = 0;
-  for (let i = 7; i >= 0; i--) {
-    z = (z << 1) ^ ((z >>> 7) * 0x11d);
-    z ^= ((y >>> i) & 1) * x;
-  }
-  return z & 0xff;
-}
-
-function gfPow(x: number, power: number): number {
-  let result = 1;
-  for (let i = 0; i < power; i++) {
-    result = gfMultiply(result, x);
-  }
-  return result;
-}
-
-function reedSolomonGenerator(degree: number): number[] {
-  let result = [1];
-  for (let i = 0; i < degree; i++) {
-    const next = new Array(result.length + 1).fill(0) as number[];
-    const root = gfPow(2, i);
-    for (let j = 0; j < result.length; j++) {
-      next[j] ^= result[j];
-      next[j + 1] ^= gfMultiply(result[j], root);
-    }
-    result = next;
-  }
-  return result;
-}
-
-function reedSolomonComputeRemainder(data: number[], degree: number): number[] {
-  const generator = reedSolomonGenerator(degree);
-  const result = new Array(degree).fill(0) as number[];
-
-  for (const byte of data) {
-    const factor = byte ^ result.shift()!;
-    result.push(0);
-    for (let i = 0; i < degree; i++) {
-      result[i] ^= gfMultiply(generator[i + 1], factor);
-    }
-  }
-
-  return result;
-}
-
-function appendBits(bits: boolean[], value: number, length: number) {
-  for (let i = length - 1; i >= 0; i--) {
-    bits.push(((value >>> i) & 1) !== 0);
-  }
-}
-
-function encodeQrData(text: string): boolean[] {
-  const bytes = Array.from(Buffer.from(text, 'utf8'));
-  const bits: boolean[] = [];
-  appendBits(bits, 0b0100, 4);
-  appendBits(bits, bytes.length, 8);
-  bytes.forEach((byte) => appendBits(bits, byte, 8));
-  appendBits(bits, 0, Math.min(4, QR_DATA_CODEWORDS * 8 - bits.length));
-  while (bits.length % 8 !== 0) bits.push(false);
-
-  const data = [];
-  for (let i = 0; i < bits.length; i += 8) {
-    let byte = 0;
-    for (let j = 0; j < 8; j++) {
-      byte = (byte << 1) | (bits[i + j] ? 1 : 0);
-    }
-    data.push(byte);
-  }
-
-  for (let pad = 0xec; data.length < QR_DATA_CODEWORDS; pad ^= 0xfd) {
-    data.push(pad);
-  }
-
-  return [...data, ...reedSolomonComputeRemainder(data, QR_ECC_CODEWORDS)].flatMap((byte) => {
-    const byteBits: boolean[] = [];
-    appendBits(byteBits, byte, 8);
-    return byteBits;
+async function embedTwoDimensionalCode(pdfDoc: PDFDocument, value: string) {
+  const pngBytes = await TwoDimensionalCodeGenerator.toBuffer(value, {
+    type: 'png',
+    errorCorrectionLevel: 'M',
+    margin: 4,
+    width: 680,
+    color: {
+      dark: '#000000',
+      light: '#FFFFFF',
+    },
   });
-}
-
-function createEmptyQrMatrix() {
-  return {
-    modules: Array.from({ length: QR_SIZE }, () => new Array(QR_SIZE).fill(false) as boolean[]),
-    reserved: Array.from({ length: QR_SIZE }, () => new Array(QR_SIZE).fill(false) as boolean[]),
-  };
-}
-
-function setFunctionModule(
-  matrix: boolean[][],
-  reserved: boolean[][],
-  x: number,
-  y: number,
-  dark: boolean,
-) {
-  if (x < 0 || y < 0 || x >= QR_SIZE || y >= QR_SIZE) return;
-  matrix[y][x] = dark;
-  reserved[y][x] = true;
-}
-
-function drawFinderPattern(matrix: boolean[][], reserved: boolean[][], x: number, y: number) {
-  for (let dy = -1; dy <= 7; dy++) {
-    for (let dx = -1; dx <= 7; dx++) {
-      const xx = x + dx;
-      const yy = y + dy;
-      const dark =
-        dx >= 0 &&
-        dx <= 6 &&
-        dy >= 0 &&
-        dy <= 6 &&
-        (dx === 0 ||
-          dx === 6 ||
-          dy === 0 ||
-          dy === 6 ||
-          (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4));
-      setFunctionModule(matrix, reserved, xx, yy, dark);
-    }
-  }
-}
-
-function drawAlignmentPattern(
-  matrix: boolean[][],
-  reserved: boolean[][],
-  centerX: number,
-  centerY: number,
-) {
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
-      const dark = Math.max(Math.abs(dx), Math.abs(dy)) !== 1;
-      setFunctionModule(matrix, reserved, centerX + dx, centerY + dy, dark);
-    }
-  }
-}
-
-function getFormatBits(mask: number): number {
-  const data = (1 << 3) | mask;
-  let bits = data;
-  for (let i = 0; i < 10; i++) {
-    bits = (bits << 1) ^ (((bits >>> 9) & 1) * 0x537);
-  }
-  return ((data << 10) | bits) ^ 0x5412;
-}
-
-function setFormatBits(matrix: boolean[][], reserved: boolean[][], mask: number) {
-  const bits = getFormatBits(mask);
-  const bit = (index: number) => ((bits >>> index) & 1) !== 0;
-
-  for (let i = 0; i <= 5; i++) setFunctionModule(matrix, reserved, 8, i, bit(i));
-  setFunctionModule(matrix, reserved, 8, 7, bit(6));
-  setFunctionModule(matrix, reserved, 8, 8, bit(7));
-  setFunctionModule(matrix, reserved, 7, 8, bit(8));
-  for (let i = 9; i < 15; i++) setFunctionModule(matrix, reserved, 14 - i, 8, bit(i));
-
-  for (let i = 0; i < 8; i++) setFunctionModule(matrix, reserved, QR_SIZE - 1 - i, 8, bit(i));
-  for (let i = 8; i < 15; i++) setFunctionModule(matrix, reserved, 8, QR_SIZE - 15 + i, bit(i));
-  setFunctionModule(matrix, reserved, 8, QR_SIZE - 8, true);
-}
-
-function shouldMask(x: number, y: number): boolean {
-  return (x + y) % 2 === 0;
-}
-
-function buildQrMatrix(text: string): QrMatrix {
-  const { modules, reserved } = createEmptyQrMatrix();
-  drawFinderPattern(modules, reserved, 0, 0);
-  drawFinderPattern(modules, reserved, QR_SIZE - 7, 0);
-  drawFinderPattern(modules, reserved, 0, QR_SIZE - 7);
-  drawAlignmentPattern(modules, reserved, 26, 26);
-
-  for (let i = 0; i < QR_SIZE; i++) {
-    setFunctionModule(modules, reserved, 6, i, i % 2 === 0);
-    setFunctionModule(modules, reserved, i, 6, i % 2 === 0);
-  }
-  setFormatBits(modules, reserved, 0);
-
-  const dataBits = [...encodeQrData(text), ...new Array(QR_REMAINDER_BITS).fill(false)];
-  let bitIndex = 0;
-  let upward = true;
-  for (let right = QR_SIZE - 1; right >= 1; right -= 2) {
-    if (right === 6) right--;
-    for (let vert = 0; vert < QR_SIZE; vert++) {
-      const y = upward ? QR_SIZE - 1 - vert : vert;
-      for (let dx = 0; dx < 2; dx++) {
-        const x = right - dx;
-        if (reserved[y][x]) continue;
-        const dark = Boolean(dataBits[bitIndex++]) !== shouldMask(x, y);
-        modules[y][x] = dark;
-      }
-    }
-    upward = !upward;
-  }
-
-  return { size: QR_SIZE, modules };
-}
-
-function drawQrCode(input: {
-  page: PDFPage;
-  matrix: QrMatrix;
-  x: number;
-  y: number;
-  size: number;
-}) {
-  const quietZone = 4;
-  const moduleSize = input.size / (input.matrix.size + quietZone * 2);
-  input.page.drawRectangle({
-    x: input.x,
-    y: input.y,
-    width: input.size,
-    height: input.size,
-    color: rgb(1, 1, 1),
-  });
-
-  for (let row = 0; row < input.matrix.size; row++) {
-    for (let col = 0; col < input.matrix.size; col++) {
-      if (!input.matrix.modules[row][col]) continue;
-      input.page.drawRectangle({
-        x: input.x + (col + quietZone) * moduleSize,
-        y: input.y + input.size - (row + quietZone + 1) * moduleSize,
-        width: moduleSize,
-        height: moduleSize,
-        color: rgb(0, 0, 0),
-      });
-    }
-  }
+  return pdfDoc.embedPng(pngBytes);
 }
 
 function drawHeaderFooter(input: {
@@ -578,7 +357,7 @@ async function buildPdf(input: { year: string; rows: TeamManualRow[] }) {
   for (const [index, row] of rows.entries()) {
     const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     const loginUrl = buildTeamManualLoginUrl(row.teamCode);
-    const qrMatrix = buildQrMatrix(loginUrl);
+    const twoDimensionalCodeImage = await embedTwoDimensionalCode(pdfDoc, loginUrl);
 
     drawHeaderFooter({
       page,
@@ -631,8 +410,13 @@ async function buildPdf(input: { year: string; rows: TeamManualRow[] }) {
     drawText({ page, font, text: 'アクセス先URL', x: MARGIN_X, y: 472, size: HEADING_SIZE });
     drawText({ page, font, text: TEAM_MANUAL_BASE_URL, x: MARGIN_X, y: 448, size: BODY_SIZE });
 
-    drawText({ page, font, text: 'QRコード', x: 365, y: 678, size: HEADING_SIZE });
-    drawQrCode({ page, matrix: qrMatrix, x: 350, y: 500, size: 170 });
+    drawText({ page, font, text: '2次元コード', x: 365, y: 678, size: HEADING_SIZE });
+    page.drawImage(twoDimensionalCodeImage, {
+      x: 350,
+      y: 500,
+      width: 170,
+      height: 170,
+    });
 
     page.drawRectangle({
       x: MARGIN_X,
@@ -645,7 +429,7 @@ async function buildPdf(input: { year: string; rows: TeamManualRow[] }) {
     });
     drawText({ page, font, text: '使い方', x: MARGIN_X + 18, y: 358, size: HEADING_SIZE });
     [
-      '1. QRコードを読み取る、またはURLを開きます。',
+      '1. 上のコードを読み取る、またはURLを開きます。',
       '2. ログインコードが入力済みであることを確認します。',
       '3. ログインボタンを押して、配布管理画面を開きます。',
       '4. 担当店舗の配布状況を入力してください。',
