@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
@@ -28,7 +28,7 @@ export function AdminProfileSettings({ user, onNameSaved }: AdminProfileSettings
     setName(user.displayName || '');
   }, [user]);
 
-  const saveName = async (event: React.FormEvent<HTMLFormElement>) => {
+  const saveName = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextName = name.trim();
     if (!nextName) {
@@ -71,7 +71,7 @@ export function AdminProfileSettings({ user, onNameSaved }: AdminProfileSettings
     }
   };
 
-  const changePassword = async (event: React.FormEvent<HTMLFormElement>) => {
+  const changePassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user.email) {
       setError('メールアドレスが取得できません');
