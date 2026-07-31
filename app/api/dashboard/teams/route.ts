@@ -34,11 +34,17 @@ export async function GET(request: NextRequest) {
     const areaMap = await loadAreaMap();
 
     const snapshot = await adminDb.collection('teams').get();
-    const teams = snapshot.docs
+    const teamsBase = snapshot.docs
       .map((doc) => {
         const data = doc.data() as Record<string, unknown>;
         const areaId = String(data.areaId || '');
         const assignedArea = String(data.assignedArea || '');
+        const adjacentAreas = Array.isArray(data.adjacentAreas)
+          ? data.adjacentAreas
+              .filter((area): area is string => typeof area === 'string')
+              .map((area) => area.trim())
+              .filter(Boolean)
+          : [];
         const area =
           areaMap.byId.get(areaId) ||
           areaMap.byId.get(assignedArea) ||
@@ -48,6 +54,7 @@ export async function GET(request: NextRequest) {
           teamCode: typeof data.teamCode === 'string' ? data.teamCode : '',
           teamName: typeof data.teamName === 'string' ? data.teamName : '',
           assignedArea: typeof data.assignedArea === 'string' ? data.assignedArea : '',
+          adjacentAreas,
           areaName: area?.areaName || '',
           timeSlot: typeof data.timeSlot === 'string' ? data.timeSlot : '',
           year: getTeamYearValue(data) || undefined,
@@ -60,7 +67,16 @@ export async function GET(request: NextRequest) {
         if (!team.isActive || !team.teamCode || !team.teamName) return false;
         if (!year) return true;
         return teamBelongsToDashboardYear(team as Record<string, unknown>, year, eventId);
-      })
+      });
+
+    const ownTeam = teamsBase.find((team) => team.isOwnTeam);
+    const ownAdjacentAreas = new Set(ownTeam?.adjacentAreas || []);
+    const teams = teamsBase
+      .map((team) => ({
+        ...team,
+        isAdjacentTeam:
+          !team.isOwnTeam && !!team.assignedArea && ownAdjacentAreas.has(team.assignedArea),
+      }))
       .sort((a, b) => {
         const yearCompare = Number(b.year || 0) - Number(a.year || 0);
         if (yearCompare !== 0) return yearCompare;
