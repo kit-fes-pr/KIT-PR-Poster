@@ -70,6 +70,7 @@ export default function DashboardContent({
   const [detailsStoreId, setDetailsStoreId] = useState<string | null>(null);
   const [mapStoreId, setMapStoreId] = useState<string | null>(null);
   const [menuStoreId, setMenuStoreId] = useState<string | null>(null);
+  const [showEditPlacePicker, setShowEditPlacePicker] = useState(false);
 
   const {
     register,
@@ -106,6 +107,7 @@ export default function DashboardContent({
 
   useEffect(() => {
     if (!detailsStoreId) return;
+    setShowEditPlacePicker(false);
     const store = (storesData?.stores || []).find((s: Store) => s.storeId === detailsStoreId);
     if (store) {
       resetEdit({
@@ -214,6 +216,19 @@ export default function DashboardContent({
       }
     },
     [setValue],
+  );
+
+  const applyEditSelectedPlace = useCallback(
+    (place: { name: string; address: string; latitude?: number; longitude?: number }) => {
+      setEditValue('address', place.address, { shouldDirty: true, shouldValidate: true });
+      if (typeof place.latitude === 'number') {
+        setEditValue('latitude', place.latitude, { shouldDirty: true, shouldValidate: true });
+      }
+      if (typeof place.longitude === 'number') {
+        setEditValue('longitude', place.longitude, { shouldDirty: true, shouldValidate: true });
+      }
+    },
+    [setEditValue],
   );
 
   const onSubmitStore = async (data: StoreFormData) => {
@@ -772,7 +787,14 @@ export default function DashboardContent({
           const store = (storesData?.stores || []).find((s: Store) => s.storeId === detailsStoreId);
           if (!store) return null;
           return (
-            <Modal open onClose={() => setDetailsStoreId(null)} panelClassName="max-w-md p-6">
+            <Modal
+              open
+              onClose={() => {
+                setDetailsStoreId(null);
+                setShowEditPlacePicker(false);
+              }}
+              panelClassName={`${showEditPlacePicker ? 'max-w-3xl' : 'max-w-md'} p-6`}
+            >
               <div className="w-full">
                 <h2 className="text-lg font-medium mb-4">詳細編集</h2>
                 <form
@@ -793,7 +815,16 @@ export default function DashboardContent({
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">住所</label>
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-700">住所</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowEditPlacePicker((current) => !current)}
+                        className="rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                      >
+                        {showEditPlacePicker ? '地図を閉じる' : '地図で位置を修正'}
+                      </button>
+                    </div>
                     <input
                       type="text"
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
@@ -803,6 +834,14 @@ export default function DashboardContent({
                       <p className="text-red-600 text-sm">{String(editErrors.address.message)}</p>
                     )}
                   </div>
+                  {showEditPlacePicker && (
+                    <div className="rounded-md border border-gray-200 p-3">
+                      <StorePlacePicker onSelectPlace={applyEditSelectedPlace} />
+                      <p className="mt-2 text-xs text-gray-500">
+                        店名は変更せず、選択した地点の住所と位置だけを反映します。
+                      </p>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700">備考</label>
                     <textarea
@@ -889,7 +928,10 @@ export default function DashboardContent({
                   <div className="flex justify-end space-x-3">
                     <button
                       type="button"
-                      onClick={() => setDetailsStoreId(null)}
+                      onClick={() => {
+                        setDetailsStoreId(null);
+                        setShowEditPlacePicker(false);
+                      }}
                       className="px-4 py-2 bg-gray-200 text-gray-800 rounded"
                     >
                       キャンセル
