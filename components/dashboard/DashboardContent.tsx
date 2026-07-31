@@ -408,20 +408,7 @@ export default function DashboardContent({
         {posterPickupStores.length > 0 && (
           <div className="mb-4 rounded-lg bg-white shadow lg:mb-6">
             <div className="border-b border-gray-200 px-4 py-4 sm:px-6">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-semibold text-gray-900">回収対象店舗</h2>
-                </div>
-                {posterPickupStores.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setFilterStatus('pickup')}
-                    className="rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-800 hover:bg-yellow-100"
-                  >
-                    一覧で絞り込み
-                  </button>
-                )}
-              </div>
+              <h2 className="text-base font-semibold text-gray-900">回収対象店舗</h2>
             </div>
             <div className="p-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
