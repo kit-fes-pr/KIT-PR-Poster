@@ -7,10 +7,12 @@ type AdminUserSettingsModalProps = {
   currentUserId: string;
   editName: string;
   error: string;
+  passwordResetMessage: string;
   loading: boolean;
   onClose: () => void;
   onEditNameChange: (name: string) => void;
   onAction: (action: AdminUserAction, confirmationMessage?: string) => void;
+  onResetPassword: () => void;
 };
 
 function getStatusLabel(admin: AdminUser) {
@@ -24,10 +26,12 @@ export function AdminUserSettingsModal({
   currentUserId,
   editName,
   error,
+  passwordResetMessage,
   loading,
   onClose,
   onEditNameChange,
   onAction,
+  onResetPassword,
 }: AdminUserSettingsModalProps) {
   return (
     <Modal
@@ -48,6 +52,11 @@ export function AdminUserSettingsModal({
           {error && (
             <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               {error}
+            </div>
+          )}
+          {passwordResetMessage && (
+            <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+              {passwordResetMessage}
             </div>
           )}
 
@@ -84,6 +93,14 @@ export function AdminUserSettingsModal({
               権限を剥奪
             </button>
             <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={onResetPassword}
+                disabled={loading || !admin.email}
+                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                パスワード再設定
+              </button>
               <button
                 type="button"
                 onClick={() =>

@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { auth } from '@/lib/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { LoadingInline } from '@/components/ui/Loading';
+import { Modal } from '@/components/ui/Modal';
 import { ADMIN_EMAIL_PATTERN } from '@/lib/utils/admin/invites';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
 import { AdminInviteModal } from '@/components/admin/AdminInviteModal';
@@ -12,6 +13,18 @@ import { AdminUsersTable } from '@/components/admin/AdminUsersTable';
 import { AdminUserSettingsModal } from '@/components/admin/AdminUserSettingsModal';
 import type { AdminInviteSuccess, AdminUser } from '@/components/admin/admin-users';
 import type { AdminUserAction } from '@/lib/utils/admin/invites';
+
+function getFirebaseAuthErrorMessage(error: unknown, fallback: string) {
+  const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+  const messages: Record<string, string> = {
+    'auth/invalid-email': 'メールアドレスの形式が正しくありません',
+    'auth/user-not-found': '対象のユーザーが見つかりません',
+    'auth/too-many-requests': '試行回数が多すぎます。しばらく待ってから再度お試しください',
+    'auth/network-request-failed': '通信に失敗しました。ネットワーク接続を確認してください',
+    'auth/operation-not-allowed': 'この操作は現在利用できません',
+  };
+  return messages[code] || fallback;
+}
 
 export default function AdminInvitePage() {
   const { user, loading: authLoading } = useRequireAdmin();
@@ -25,6 +38,11 @@ export default function AdminInvitePage() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState<AdminInviteSuccess | null>(null);
+  const [passwordResetMessage, setPasswordResetMessage] = useState('');
+  const [pendingAction, setPendingAction] = useState<{
+    action: AdminUserAction;
+    message: string;
+  } | null>(null);
 
   const loadAdmins = useCallback(async () => {
     if (!user) return;
@@ -54,7 +72,7 @@ export default function AdminInvitePage() {
     void loadAdmins();
   }, [loadAdmins]);
 
-  const submitInvite = async (event: React.FormEvent<HTMLFormElement>) => {
+  const submitInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedEmail = email.trim().toLowerCase();
     if (!user || !normalizedEmail) return;
@@ -110,11 +128,11 @@ export default function AdminInvitePage() {
     setSelectedAdmin(admin);
     setEditName(admin.name || '');
     setError('');
+    setPasswordResetMessage('');
   };
 
-  const submitAdminAction = async (action: AdminUserAction, confirmationMessage?: string) => {
+  const executeAdminAction = async (action: AdminUserAction) => {
     if (!user || !selectedAdmin) return;
-    if (confirmationMessage && !window.confirm(confirmationMessage)) return;
 
     try {
       setActionLoading(true);
@@ -141,6 +159,31 @@ export default function AdminInvitePage() {
       setSelectedAdmin(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : '管理者ユーザーの更新に失敗しました');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const submitAdminAction = (action: AdminUserAction, confirmationMessage?: string) => {
+    if (confirmationMessage) {
+      setPendingAction({ action, message: confirmationMessage });
+      return;
+    }
+    void executeAdminAction(action);
+  };
+
+  const sendAdminPasswordReset = async () => {
+    if (!selectedAdmin?.email) return;
+
+    try {
+      setActionLoading(true);
+      setError('');
+      setPasswordResetMessage('');
+      auth.languageCode = 'ja';
+      await sendPasswordResetEmail(auth, selectedAdmin.email);
+      setPasswordResetMessage('パスワード再設定メールを送信しました');
+    } catch (err) {
+      setError(getFirebaseAuthErrorMessage(err, 'パスワード再設定メールの送信に失敗しました'));
     } finally {
       setActionLoading(false);
     }
@@ -204,13 +247,51 @@ export default function AdminInvitePage() {
         currentUserId={user.uid}
         editName={editName}
         error={error}
+        passwordResetMessage={passwordResetMessage}
         loading={actionLoading}
-        onClose={() => setSelectedAdmin(null)}
+        onClose={() => {
+          setSelectedAdmin(null);
+          setPasswordResetMessage('');
+        }}
         onEditNameChange={setEditName}
-        onAction={(action, confirmationMessage) =>
-          void submitAdminAction(action, confirmationMessage)
-        }
+        onAction={submitAdminAction}
+        onResetPassword={() => void sendAdminPasswordReset()}
       />
+
+      <Modal
+        open={Boolean(pendingAction)}
+        onClose={() => {
+          if (!actionLoading) setPendingAction(null);
+        }}
+        panelClassName="max-w-md p-6"
+      >
+        {pendingAction && (
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">操作の確認</h2>
+            <p className="mt-3 text-sm leading-6 text-gray-700">{pendingAction.message}</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingAction(null)}
+                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const action = pendingAction.action;
+                  setPendingAction(null);
+                  void executeAdminAction(action);
+                }}
+                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                実行する
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <AdminInviteSuccessModal success={success} onClose={() => setSuccess(null)} />
     </div>

@@ -22,9 +22,14 @@ const quickLinks: QuickLink[] = [
     href: '/admin/event/areas',
   },
   {
-    title: 'ユーザー招待',
+    title: 'ユーザー管理',
     description: '管理者を招待して初回パスワード設定を案内します。',
     href: '/admin/invite',
+  },
+  {
+    title: 'アカウント設定',
+    description: '管理者の表示名など、自分の情報を設定します。',
+    href: '/admin/settings',
   },
 ];
 
