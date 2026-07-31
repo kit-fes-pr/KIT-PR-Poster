@@ -258,7 +258,19 @@ export async function GET(request: NextRequest) {
         };
       })
       .filter((team) => (team as Record<string, unknown>).isActive !== false);
-    const countsByTeam = await loadMemberCountsByTeam(targetYear);
+    if (teamsWithoutCounts.length === 0) {
+      return NextResponse.json({ teams: [] });
+    }
+
+    const firstTeamYear = (teamsWithoutCounts[0] as { year?: unknown }).year;
+    const inferredYear =
+      Number.isFinite(targetYear)
+        ? targetYear
+        : typeof firstTeamYear === 'number' && Number.isFinite(firstTeamYear)
+          ? firstTeamYear
+          : undefined;
+
+    const countsByTeam = await loadMemberCountsByTeam(inferredYear);
     const teams = attachMemberCounts(teamsWithoutCounts, countsByTeam);
 
     return NextResponse.json({ teams });
