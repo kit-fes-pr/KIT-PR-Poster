@@ -4,6 +4,15 @@ import { generateKana } from '@/lib/kanaUtils';
 import { FieldValue } from 'firebase-admin/firestore';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 
+function parseOptionalCoordinate(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ storeId: string }> },
@@ -18,8 +27,27 @@ export async function PUT(
     const idToken = authHeader.split('Bearer ')[1];
     const decodedToken = await adminAuth.verifyIdToken(idToken);
 
-    const { storeName, address, distributionStatus, failureReason, distributedCount, notes } =
-      await request.json();
+    const {
+      storeName,
+      address,
+      latitude,
+      longitude,
+      distributionStatus,
+      failureReason,
+      distributedCount,
+      requiresPosterPickup,
+      notes,
+    } = await request.json();
+    const parsedLatitudeRaw = parseOptionalCoordinate(latitude);
+    const parsedLongitudeRaw = parseOptionalCoordinate(longitude);
+    const parsedLatitude =
+      parsedLatitudeRaw !== undefined && parsedLatitudeRaw >= -90 && parsedLatitudeRaw <= 90
+        ? parsedLatitudeRaw
+        : undefined;
+    const parsedLongitude =
+      parsedLongitudeRaw !== undefined && parsedLongitudeRaw >= -180 && parsedLongitudeRaw <= 180
+        ? parsedLongitudeRaw
+        : undefined;
 
     const resolvedParams = await params;
     const storeRef = adminDb.collection('stores').doc(resolvedParams.storeId);
@@ -54,6 +82,12 @@ export async function PUT(
       updateData.address = addr;
       updateData.addressKana = generateKana(addr);
     }
+    if (parsedLatitude !== undefined) {
+      updateData.latitude = parsedLatitude;
+    }
+    if (parsedLongitude !== undefined) {
+      updateData.longitude = parsedLongitude;
+    }
 
     if (typeof notes === 'string') {
       updateData.notes = notes.trim();
@@ -66,17 +100,20 @@ export async function PUT(
       if (distributionStatus === 'completed') {
         updateData.distributedAt = new Date();
         updateData.distributedCount = distributedCount || 0;
+        updateData.requiresPosterPickup = requiresPosterPickup === true;
       } else if (distributionStatus === 'failed') {
         if (failureReason) {
           updateData.failureReason = failureReason;
         }
         // completed 以外では配布枚数は 0 にリセット
         updateData.distributedCount = 0;
+        updateData.requiresPosterPickup = false;
         // completed 以外へ戻したら distributedAt を削除
         updateData.distributedAt = FieldValue.delete();
       } else {
         // pending / revisit の場合は枚数 0
         updateData.distributedCount = 0;
+        updateData.requiresPosterPickup = false;
         // completed 以外へ戻したら distributedAt を削除
         updateData.distributedAt = FieldValue.delete();
       }

@@ -44,6 +44,8 @@ export interface Store {
   storeNameKana: string;
   address: string;
   addressKana: string;
+  latitude?: number;
+  longitude?: number;
   areaCode: string;
   distributionStatus: 'pending' | 'completed' | 'failed' | 'revisit';
   failureReason?: 'absent' | 'refused' | 'closed' | 'other';
@@ -51,6 +53,7 @@ export interface Store {
   distributedBy: string;
   createdByTeamCode?: string;
   distributedAt?: Date;
+  requiresPosterPickup?: boolean;
   notes?: string;
   registrationMethod: 'preset' | 'manual';
   eventId: string;
@@ -116,9 +119,12 @@ export interface AuthUser {
 export interface StoreFormData {
   storeName: string;
   address: string;
+  latitude?: number;
+  longitude?: number;
   distributionStatus: Store['distributionStatus'];
   failureReason?: Store['failureReason'];
   distributedCount: number;
+  requiresPosterPickup?: boolean;
   notes?: string;
 }
 
@@ -193,6 +199,7 @@ export interface StoreDistributionRecord {
   distributedBy: string;
   distributedAt: Date;
   teamMembers: string[];
+  requiresPosterPickup?: boolean;
   notes?: string;
 }
 

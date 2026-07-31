@@ -35,13 +35,15 @@ export async function GET(
 
     // 追加の集計
     const completed = stores.filter(
-      (s: Record<string, unknown>) => s.distributionStatus === 'completed',
+      (s: Record<string, unknown>) =>
+        s.distributionStatus === 'completed' || s.distributionStatus === 'revisit',
     ).length;
     const failed = stores.filter(
       (s: Record<string, unknown>) => s.distributionStatus === 'failed',
     ).length;
     const revisit = stores.filter(
-      (s: Record<string, unknown>) => s.distributionStatus === 'revisit',
+      (s: Record<string, unknown>) =>
+        s.requiresPosterPickup === true || s.distributionStatus === 'revisit',
     ).length;
     const total = stores.length;
 

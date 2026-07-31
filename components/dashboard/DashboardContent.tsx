@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { Modal } from '@/components/ui/Modal';
+import { StorePlacePicker } from '@/components/dashboard/StorePlacePicker';
+import { StoreDistributionMap } from '@/components/dashboard/StoreDistributionMap';
 import { Store, StoreFormData } from '@/types';
 import { useForm } from 'react-hook-form';
 import {
@@ -24,6 +26,9 @@ type DashboardTeam = {
   year?: number;
   isOwnTeam?: boolean;
 };
+
+const isPosterPickupStore = (store: Store) =>
+  store.requiresPosterPickup === true || store.distributionStatus === 'revisit';
 
 export default function DashboardContent({
   mode,
@@ -63,16 +68,23 @@ export default function DashboardContent({
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingStore, setIsAddingStore] = useState(false);
   const [detailsStoreId, setDetailsStoreId] = useState<string | null>(null);
+  const [mapStoreId, setMapStoreId] = useState<string | null>(null);
   const [menuStoreId, setMenuStoreId] = useState<string | null>(null);
+  const [showEditPlacePicker, setShowEditPlacePicker] = useState(false);
 
   const {
     register,
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<StoreFormData>({
-    defaultValues: { distributionStatus: 'pending', distributedCount: 0 },
+    defaultValues: {
+      distributionStatus: 'pending',
+      distributedCount: 0,
+      requiresPosterPickup: false,
+    },
   });
 
   const {
@@ -83,7 +95,11 @@ export default function DashboardContent({
     setValue: setEditValue,
     formState: { errors: editErrors, isSubmitting: isEditSubmitting },
   } = useForm<StoreFormData>({
-    defaultValues: { distributionStatus: 'pending', distributedCount: 0 },
+    defaultValues: {
+      distributionStatus: 'pending',
+      distributedCount: 0,
+      requiresPosterPickup: false,
+    },
   });
 
   const watchStatus = watch('distributionStatus');
@@ -91,14 +107,20 @@ export default function DashboardContent({
 
   useEffect(() => {
     if (!detailsStoreId) return;
+    setShowEditPlacePicker(false);
     const store = (storesData?.stores || []).find((s: Store) => s.storeId === detailsStoreId);
     if (store) {
       resetEdit({
         storeName: store.storeName,
         address: store.address,
-        distributionStatus: store.distributionStatus,
+        latitude: store.latitude,
+        longitude: store.longitude,
+        distributionStatus:
+          store.distributionStatus === 'revisit' ? 'completed' : store.distributionStatus,
         failureReason: store.failureReason,
         distributedCount: store.distributedCount || 0,
+        requiresPosterPickup:
+          store.requiresPosterPickup === true || store.distributionStatus === 'revisit',
         notes: store.notes || '',
       });
     }
@@ -140,7 +162,11 @@ export default function DashboardContent({
   const filteredStores: Store[] = useMemo(() => {
     const list: Store[] = storesData?.stores || [];
     const filtered = list.filter((store) => {
-      const matchesStatus = filterStatus === 'all' || store.distributionStatus === filterStatus;
+      const displayStatus =
+        store.distributionStatus === 'revisit' ? 'completed' : store.distributionStatus;
+      const matchesStatus =
+        filterStatus === 'all' ||
+        (filterStatus === 'pickup' ? isPosterPickupStore(store) : displayStatus === filterStatus);
       const matchesSearch =
         store.storeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         store.address.toLowerCase().includes(searchQuery.toLowerCase());
@@ -158,8 +184,11 @@ export default function DashboardContent({
   }, [storesData, filterStatus, searchQuery]);
 
   const totalStores = filteredStores.length;
-  const completedStores = filteredStores.filter((s) => s.distributionStatus === 'completed').length;
+  const completedStores = filteredStores.filter(
+    (s) => s.distributionStatus === 'completed' || s.distributionStatus === 'revisit',
+  ).length;
   const failedStores = filteredStores.filter((s) => s.distributionStatus === 'failed').length;
+  const posterPickupStores = filteredStores.filter(isPosterPickupStore);
   const totalDistributedCount = filteredStores.reduce(
     (sum, s) => sum + (Number(s.distributedCount) || 0),
     0,
@@ -175,6 +204,33 @@ export default function DashboardContent({
   const isViewingOtherTeam =
     mode === 'teams' && !!currentTeam && !!ownTeam && currentTeam.teamId !== ownTeam.teamId;
 
+  const applySelectedPlace = useCallback(
+    (place: { name: string; address: string; latitude?: number; longitude?: number }) => {
+      setValue('storeName', place.name, { shouldDirty: true, shouldValidate: true });
+      setValue('address', place.address, { shouldDirty: true, shouldValidate: true });
+      if (typeof place.latitude === 'number') {
+        setValue('latitude', place.latitude, { shouldDirty: true, shouldValidate: true });
+      }
+      if (typeof place.longitude === 'number') {
+        setValue('longitude', place.longitude, { shouldDirty: true, shouldValidate: true });
+      }
+    },
+    [setValue],
+  );
+
+  const applyEditSelectedPlace = useCallback(
+    (place: { name: string; address: string; latitude?: number; longitude?: number }) => {
+      setEditValue('address', place.address, { shouldDirty: true, shouldValidate: true });
+      if (typeof place.latitude === 'number') {
+        setEditValue('latitude', place.latitude, { shouldDirty: true, shouldValidate: true });
+      }
+      if (typeof place.longitude === 'number') {
+        setEditValue('longitude', place.longitude, { shouldDirty: true, shouldValidate: true });
+      }
+    },
+    [setEditValue],
+  );
+
   const onSubmitStore = async (data: StoreFormData) => {
     try {
       const response = await authenticatedFetch(withYearQuery('/api/stores'), {
@@ -182,8 +238,12 @@ export default function DashboardContent({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...data,
+          latitude: data.latitude,
+          longitude: data.longitude,
           distributedCount:
             data.distributionStatus === 'completed' ? Number(data.distributedCount || 0) : 0,
+          requiresPosterPickup:
+            data.distributionStatus === 'completed' && data.requiresPosterPickup === true,
           failureReason: data.distributionStatus === 'failed' ? data.failureReason : undefined,
           notes: data.notes,
         }),
@@ -223,6 +283,7 @@ export default function DashboardContent({
     status: Store['distributionStatus'],
     count?: number,
     reason?: string,
+    requiresPosterPickup = false,
   ) => {
     try {
       const response = await authenticatedFetch(`/api/stores/${storeId}`, {
@@ -232,6 +293,7 @@ export default function DashboardContent({
           distributionStatus: status,
           distributedCount: count || 0,
           failureReason: reason,
+          requiresPosterPickup: status === 'completed' && requiresPosterPickup,
         }),
       });
       if (response.ok) mutate();
@@ -253,9 +315,13 @@ export default function DashboardContent({
         body: JSON.stringify({
           storeName: data.storeName,
           address: data.address,
+          latitude: data.latitude,
+          longitude: data.longitude,
           distributionStatus: data.distributionStatus,
           distributedCount:
             data.distributionStatus === 'completed' ? Number(data.distributedCount || 0) : 0,
+          requiresPosterPickup:
+            data.distributionStatus === 'completed' && data.requiresPosterPickup === true,
           failureReason: data.distributionStatus === 'failed' ? data.failureReason : undefined,
           notes: data.notes,
         }),
@@ -299,7 +365,7 @@ export default function DashboardContent({
       case 'failed':
         return 'bg-red-100 text-red-800';
       case 'revisit':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -312,7 +378,7 @@ export default function DashboardContent({
       case 'failed':
         return '配布不可';
       case 'revisit':
-        return '要再訪問';
+        return '配布済み';
       default:
         return '未配布';
     }
@@ -330,7 +396,7 @@ export default function DashboardContent({
           </div>
         )}
 
-        <div className="mb-4 grid grid-cols-2 gap-3 lg:mb-6 lg:grid-cols-4 lg:gap-6">
+        <div className="mb-4 grid grid-cols-2 gap-3 lg:mb-6 lg:grid-cols-5 lg:gap-6">
           <div className="rounded-lg bg-white p-4 shadow sm:p-6">
             <h3 className="text-sm font-medium text-gray-500 sm:text-base">総店舗数</h3>
             <p className="mt-1 text-2xl font-bold text-gray-900 sm:text-3xl">{totalStores}</p>
@@ -349,6 +415,12 @@ export default function DashboardContent({
               {totalDistributedCount}
             </p>
           </div>
+          <div className="rounded-lg bg-white p-4 shadow sm:p-6">
+            <h3 className="text-sm font-medium text-gray-500 sm:text-base">回収対象</h3>
+            <p className="mt-1 text-2xl font-bold text-yellow-600 sm:text-3xl">
+              {posterPickupStores.length}
+            </p>
+          </div>
         </div>
 
         {!readOnly && (
@@ -359,6 +431,41 @@ export default function DashboardContent({
             >
               店舗を追加
             </button>
+          </div>
+        )}
+
+        {posterPickupStores.length > 0 && (
+          <div className="mb-4 rounded-lg bg-white shadow lg:mb-6">
+            <div className="border-b border-gray-200 px-4 py-4 sm:px-6">
+              <h2 className="text-base font-semibold text-gray-900">回収対象店舗</h2>
+            </div>
+            <div className="p-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {posterPickupStores.map((store) => (
+                  <div key={store.storeId} className="rounded-lg border border-yellow-200 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-gray-900">
+                          {store.storeName}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">{store.address}</p>
+                        {(mode === 'all' || mode === 'teams') && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            班コード: {store.distributedBy || store.createdByTeamCode || '-'}
+                          </p>
+                        )}
+                      </div>
+                      <span className="shrink-0 rounded-full bg-yellow-100 px-2 py-1 text-xs text-yellow-800">
+                        回収
+                      </span>
+                    </div>
+                    {store.notes && (
+                      <p className="mt-2 text-xs text-gray-500">備考: {store.notes}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -405,7 +512,7 @@ export default function DashboardContent({
                     <option value="pending">未配布</option>
                     <option value="completed">配布済み</option>
                     <option value="failed">配布不可</option>
-                    <option value="revisit">要再訪問</option>
+                    <option value="pickup">回収対象</option>
                   </select>
                 </div>
                 <div>
@@ -433,10 +540,24 @@ export default function DashboardContent({
             </div>
           </div>
 
-          <div className="overflow-hidden">
+          <div className="overflow-visible">
             <div className="space-y-2 p-4">
               {filteredStores.map((store) => (
-                <div key={store.storeId} className="border border-gray-200 rounded-lg p-4">
+                <div
+                  key={store.storeId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setMapStoreId(store.storeId)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setMapStoreId(store.storeId);
+                    }
+                  }}
+                  className={`relative rounded-lg border border-gray-200 p-4 ${
+                    menuStoreId === store.storeId ? 'z-20' : 'z-0'
+                  } cursor-pointer hover:bg-gray-50`}
+                >
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex-1">
                       <h3 className="text-lg font-medium">{store.storeName}</h3>
@@ -449,12 +570,21 @@ export default function DashboardContent({
                         <span className="inline-block px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
                           配布枚数: {store.distributedCount || 0}
                         </span>
+                        {(store.requiresPosterPickup === true ||
+                          store.distributionStatus === 'revisit') && (
+                          <span className="inline-block rounded-full bg-yellow-100 px-2 py-1 text-xs text-yellow-800">
+                            工大祭終了後に回収
+                          </span>
+                        )}
                       </div>
                       {store.notes && (
                         <p className="text-xs text-gray-500 mt-1">備考: {store.notes}</p>
                       )}
                     </div>
-                    <div className="mt-3 sm:mt-0 sm:ml-4 flex items-center space-x-2">
+                    <div
+                      className="mt-3 flex items-center space-x-2 sm:mt-0 sm:ml-4"
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       {!readOnly &&
                         (store.distributionStatus === 'pending' ||
                           store.distributionStatus === 'revisit') && (
@@ -463,7 +593,14 @@ export default function DashboardContent({
                               onClick={() => {
                                 const count = prompt('配布枚数を入力してください:', '1');
                                 if (count)
-                                  updateStoreStatus(store.storeId, 'completed', parseInt(count));
+                                  updateStoreStatus(
+                                    store.storeId,
+                                    'completed',
+                                    parseInt(count),
+                                    undefined,
+                                    store.requiresPosterPickup === true ||
+                                      store.distributionStatus === 'revisit',
+                                  );
                               }}
                               className="px-3 py-1 bg-green-600 text-white rounded text-sm"
                             >
@@ -488,12 +625,6 @@ export default function DashboardContent({
                             >
                               配布不可
                             </button>
-                            <button
-                              onClick={() => updateStoreStatus(store.storeId, 'revisit')}
-                              className="px-3 py-1 bg-yellow-600 text-white rounded text-sm"
-                            >
-                              要再訪問
-                            </button>
                           </>
                         )}
                       {!readOnly && (
@@ -509,7 +640,7 @@ export default function DashboardContent({
                             ≡
                           </button>
                           {menuStoreId === store.storeId && (
-                            <div className="absolute right-0 mt-2 w-28 bg-white border border-gray-200 rounded shadow-md z-10">
+                            <div className="absolute right-0 z-30 mt-2 w-28 rounded border border-gray-200 bg-white shadow-md">
                               <button
                                 className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
                                 onClick={() => {
@@ -539,10 +670,13 @@ export default function DashboardContent({
       </div>
 
       {!readOnly && isAddingStore && (
-        <Modal open onClose={() => setIsAddingStore(false)} panelClassName="max-w-md p-6">
+        <Modal open onClose={() => setIsAddingStore(false)} panelClassName="max-w-3xl p-6">
           <div className="w-full">
             <h2 className="text-lg font-medium mb-4">新規店舗を追加</h2>
             <form className="space-y-4" onSubmit={handleSubmit(onSubmitStore)}>
+              <StorePlacePicker onSelectPlace={applySelectedPlace} />
+              <input type="hidden" {...register('latitude', { valueAsNumber: true })} />
+              <input type="hidden" {...register('longitude', { valueAsNumber: true })} />
               <div>
                 <label className="block text-sm font-medium text-gray-700">店名</label>
                 <input
@@ -574,27 +708,40 @@ export default function DashboardContent({
                   <option value="pending">未配布</option>
                   <option value="completed">配布完了</option>
                   <option value="failed">配布不可</option>
-                  <option value="revisit">要再訪問</option>
                 </select>
               </div>
               {watchStatus === 'completed' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">配布枚数</label>
-                  <input
-                    type="number"
-                    min={1}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                    {...register('distributedCount', {
-                      required: '配布枚数は必須です',
-                      min: { value: 1, message: '1以上を入力してください' },
-                    })}
-                  />
-                  {errors.distributedCount && (
-                    <p className="text-red-600 text-sm">
-                      {String(errors.distributedCount.message)}
-                    </p>
-                  )}
-                </div>
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">配布枚数</label>
+                    <input
+                      type="number"
+                      min={1}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                      {...register('distributedCount', {
+                        required: '配布枚数は必須です',
+                        min: { value: 1, message: '1以上を入力してください' },
+                      })}
+                    />
+                    {errors.distributedCount && (
+                      <p className="text-red-600 text-sm">
+                        {String(errors.distributedCount.message)}
+                      </p>
+                    )}
+                  </div>
+                  <label className="flex items-start gap-3 rounded-md border border-gray-200 p-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600"
+                      {...register('requiresPosterPickup')}
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-gray-900">
+                        工大祭終了後にポスター回収が必要
+                      </span>
+                    </span>
+                  </label>
+                </>
               )}
               {watchStatus === 'failed' && (
                 <div>
@@ -640,13 +787,22 @@ export default function DashboardContent({
           const store = (storesData?.stores || []).find((s: Store) => s.storeId === detailsStoreId);
           if (!store) return null;
           return (
-            <Modal open onClose={() => setDetailsStoreId(null)} panelClassName="max-w-md p-6">
+            <Modal
+              open
+              onClose={() => {
+                setDetailsStoreId(null);
+                setShowEditPlacePicker(false);
+              }}
+              panelClassName={`${showEditPlacePicker ? 'max-w-3xl' : 'max-w-md'} p-6`}
+            >
               <div className="w-full">
                 <h2 className="text-lg font-medium mb-4">詳細編集</h2>
                 <form
                   className="space-y-4"
                   onSubmit={handleEditSubmit((d) => updateStoreDetails(store.storeId, d))}
                 >
+                  <input type="hidden" {...registerEdit('latitude', { valueAsNumber: true })} />
+                  <input type="hidden" {...registerEdit('longitude', { valueAsNumber: true })} />
                   <div>
                     <label className="block text-sm font-medium text-gray-700">店名</label>
                     <input
@@ -659,7 +815,16 @@ export default function DashboardContent({
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">住所</label>
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-700">住所</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowEditPlacePicker((current) => !current)}
+                        className="rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                      >
+                        {showEditPlacePicker ? '地図を閉じる' : '地図で位置を修正'}
+                      </button>
+                    </div>
                     <input
                       type="text"
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
@@ -669,12 +834,20 @@ export default function DashboardContent({
                       <p className="text-red-600 text-sm">{String(editErrors.address.message)}</p>
                     )}
                   </div>
+                  {showEditPlacePicker && (
+                    <div className="rounded-md border border-gray-200 p-3">
+                      <StorePlacePicker onSelectPlace={applyEditSelectedPlace} />
+                      <p className="mt-2 text-xs text-gray-500">
+                        店名は変更せず、選択した地点の住所と位置だけを反映します。
+                      </p>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700">備考</label>
                     <textarea
                       rows={3}
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                      placeholder="例: 夕方なら対応可 / 来週再訪問予定など"
+                      placeholder="例: 夕方なら対応可 / 担当者不在時は電話確認 など"
                       {...registerEdit('notes')}
                     />
                   </div>
@@ -686,34 +859,50 @@ export default function DashboardContent({
                       onChange={(e) => {
                         const val = e.target.value as Store['distributionStatus'];
                         setEditValue('distributionStatus', val);
-                        if (val !== 'completed') setEditValue('distributedCount', 0);
+                        if (val !== 'completed') {
+                          setEditValue('distributedCount', 0);
+                          setEditValue('requiresPosterPickup', false);
+                        }
                         if (val !== 'failed') setEditValue('failureReason', undefined);
                       }}
                     >
                       <option value="pending">未配布</option>
                       <option value="completed">配布完了</option>
                       <option value="failed">配布不可</option>
-                      <option value="revisit">要再訪問</option>
                     </select>
                   </div>
                   {watchEditStatus === 'completed' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">配布枚数</label>
-                      <input
-                        type="number"
-                        min={1}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                        {...registerEdit('distributedCount', {
-                          required: '配布枚数は必須です',
-                          min: { value: 1, message: '1以上を入力してください' },
-                        })}
-                      />
-                      {editErrors.distributedCount && (
-                        <p className="text-red-600 text-sm">
-                          {String(editErrors.distributedCount.message)}
-                        </p>
-                      )}
-                    </div>
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">配布枚数</label>
+                        <input
+                          type="number"
+                          min={1}
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                          {...registerEdit('distributedCount', {
+                            required: '配布枚数は必須です',
+                            min: { value: 1, message: '1以上を入力してください' },
+                          })}
+                        />
+                        {editErrors.distributedCount && (
+                          <p className="text-red-600 text-sm">
+                            {String(editErrors.distributedCount.message)}
+                          </p>
+                        )}
+                      </div>
+                      <label className="flex items-start gap-3 rounded-md border border-gray-200 p-3">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600"
+                          {...registerEdit('requiresPosterPickup')}
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-gray-900">
+                            工大祭終了後にポスター回収が必要
+                          </span>
+                        </span>
+                      </label>
+                    </>
                   )}
                   {watchEditStatus === 'failed' && (
                     <div>
@@ -739,7 +928,10 @@ export default function DashboardContent({
                   <div className="flex justify-end space-x-3">
                     <button
                       type="button"
-                      onClick={() => setDetailsStoreId(null)}
+                      onClick={() => {
+                        setDetailsStoreId(null);
+                        setShowEditPlacePicker(false);
+                      }}
                       className="px-4 py-2 bg-gray-200 text-gray-800 rounded"
                     >
                       キャンセル
@@ -754,6 +946,35 @@ export default function DashboardContent({
                   </div>
                 </form>
               </div>
+            </Modal>
+          );
+        })()}
+
+      {mapStoreId &&
+        (() => {
+          const store = (storesData?.stores || []).find((s: Store) => s.storeId === mapStoreId);
+          if (!store) return null;
+          return (
+            <Modal
+              open
+              onClose={() => setMapStoreId(null)}
+              panelClassName="max-w-5xl"
+              contentClassName="p-4"
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-medium text-gray-900">{store.storeName}</h2>
+                  <p className="text-sm text-gray-500">{store.address}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMapStoreId(null)}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  閉じる
+                </button>
+              </div>
+              <StoreDistributionMap stores={[store]} title="店舗位置" showList={false} />
             </Modal>
           );
         })()}

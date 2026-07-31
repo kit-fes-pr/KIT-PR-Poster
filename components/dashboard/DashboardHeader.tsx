@@ -17,6 +17,8 @@ export default function DashboardHeader({
   title,
   authUser,
   ownTeam,
+  mapHref,
+  mapActive,
   isLoggingOut,
   onLogout,
 }: {
@@ -25,6 +27,8 @@ export default function DashboardHeader({
   title: string;
   authUser: VerifiedAuthUser | null;
   ownTeam?: HeaderTeam;
+  mapHref?: string;
+  mapActive?: boolean;
   isLoggingOut: boolean;
   onLogout: () => void;
 }) {
@@ -33,14 +37,15 @@ export default function DashboardHeader({
   const adminYearHref = `/admin/event/${year}`;
   const navItems = [
     ...(authUser?.role === 'team' && ownTeam
-      ? [{ href: `/${year}`, label: '自班店舗', active: mode === 'self' }]
+      ? [{ href: `/${year}`, label: '自班店舗', active: mode === 'self' && mapActive !== true }]
       : []),
-    { href: `/${year}/all`, label: '全班店舗', active: mode === 'all' },
+    { href: `/${year}/all`, label: '全班店舗', active: mode === 'all' && mapActive !== true },
     {
       href: `/${year}/teams`,
       label: '班を選ぶ',
-      active: mode === 'teams',
+      active: mode === 'teams' && mapActive !== true,
     },
+    ...(mapHref ? [{ href: mapHref, label: 'マップ', active: mapActive === true }] : []),
   ];
 
   return (
@@ -87,6 +92,18 @@ export default function DashboardHeader({
                 className="rounded-md border border-gray-300 px-3 py-2 text-center text-sm text-gray-700 hover:bg-gray-50"
               >
                 管理画面
+              </Link>
+            )}
+            {mapHref && (
+              <Link
+                href={mapHref}
+                className={`rounded-md border px-3 py-2 text-center text-sm ${
+                  mapActive
+                    ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                マップ
               </Link>
             )}
             <button

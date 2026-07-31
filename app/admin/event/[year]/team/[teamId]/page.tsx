@@ -28,15 +28,21 @@ export default function TeamDetailPage() {
   const [stores, setStores] = useState<Store[]>([]);
   const [distributionSlots, setDistributionSlots] = useState<string[]>([]);
   const completed = useMemo(
-    () => stores.filter((s: Store) => s.distributionStatus === 'completed'),
+    () =>
+      stores.filter(
+        (s: Store) => s.distributionStatus === 'completed' || s.distributionStatus === 'revisit',
+      ),
     [stores],
   );
   const failed = useMemo(
     () => stores.filter((s: Store) => s.distributionStatus === 'failed'),
     [stores],
   );
-  const revisit = useMemo(
-    () => stores.filter((s: Store) => s.distributionStatus === 'revisit'),
+  const posterPickupStores = useMemo(
+    () =>
+      stores.filter(
+        (s: Store) => s.requiresPosterPickup === true || s.distributionStatus === 'revisit',
+      ),
     [stores],
   );
   const [loading, setLoading] = useState(true);
@@ -177,13 +183,13 @@ export default function TeamDetailPage() {
     const map: Record<string, string> = {
       completed: 'bg-green-100 text-green-800',
       failed: 'bg-red-100 text-red-800',
-      revisit: 'bg-yellow-100 text-yellow-800',
+      revisit: 'bg-green-100 text-green-800',
       pending: 'bg-gray-100 text-gray-800',
     };
     const label: Record<string, string> = {
       completed: '配布済み',
       failed: '配布不可',
-      revisit: '要再訪問',
+      revisit: '配布済み',
       pending: '未配布',
     };
     const cls = map[status] || map.pending;
@@ -315,8 +321,8 @@ export default function TeamDetailPage() {
                 <p className="text-2xl font-bold text-red-600">{failed.length}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">要再訪問</p>
-                <p className="text-2xl font-bold text-yellow-600">{revisit.length}</p>
+                <p className="text-sm text-gray-600">祭後回収</p>
+                <p className="text-2xl font-bold text-yellow-600">{posterPickupStores.length}</p>
               </div>
             </div>
           </div>
@@ -332,6 +338,11 @@ export default function TeamDetailPage() {
                   </div>
                   <p className="text-sm text-gray-600">{s.address}</p>
                   <p className="text-xs text-gray-500 mt-1">配布枚数: {s.distributedCount || 0}</p>
+                  {(s.requiresPosterPickup === true || s.distributionStatus === 'revisit') && (
+                    <p className="mt-1 text-xs font-medium text-yellow-700">
+                      工大祭終了後にポスター回収が必要
+                    </p>
+                  )}
                   {s.notes && <p className="text-xs text-gray-500 mt-1">備考: {s.notes}</p>}
                 </div>
               ))}
@@ -466,9 +477,9 @@ export default function TeamDetailPage() {
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow lg:col-span-1">
-            <h2 className="text-lg font-medium mb-3">要再訪問</h2>
+            <h2 className="text-lg font-medium mb-3">工大祭後にポスター回収</h2>
             <div className="space-y-3 max-h-[60vh] overflow-auto pr-2">
-              {revisit.map((s: Store) => (
+              {posterPickupStores.map((s: Store) => (
                 <div key={s.storeId} className="border rounded p-3">
                   <div className="flex items-center justify-between">
                     <p className="font-medium">{s.storeName}</p>
@@ -478,7 +489,7 @@ export default function TeamDetailPage() {
                   {s.notes && <p className="text-xs text-gray-500 mt-1">備考: {s.notes}</p>}
                 </div>
               ))}
-              {revisit.length === 0 && <p className="text-sm text-gray-500">なし</p>}
+              {posterPickupStores.length === 0 && <p className="text-sm text-gray-500">なし</p>}
             </div>
           </div>
           <div className="bg-white p-6 rounded-lg shadow lg:col-span-3">

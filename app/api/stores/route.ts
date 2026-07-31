@@ -8,7 +8,17 @@ import {
   parseDashboardYear,
   teamBelongsToDashboardYear,
 } from '@/lib/server/dashboard-year';
+import { geocodeAddress } from '@/lib/server/geocoding';
 import { validateTeamForStoreCreate } from '@/lib/utils/stores/store-route';
+
+function parseOptionalCoordinate(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -202,15 +212,32 @@ export async function POST(request: NextRequest) {
     const {
       storeName,
       address,
+      latitude,
+      longitude,
       distributionStatus,
       failureReason,
       distributedCount,
+      requiresPosterPickup,
       areaCode,
       notes,
     } = await request.json();
+    let parsedLatitude = parseOptionalCoordinate(latitude);
+    let parsedLongitude = parseOptionalCoordinate(longitude);
+    if (parsedLatitude !== undefined && (parsedLatitude < -90 || parsedLatitude > 90))
+      parsedLatitude = undefined;
+    if (parsedLongitude !== undefined && (parsedLongitude < -180 || parsedLongitude > 180))
+      parsedLongitude = undefined;
 
     if (!storeName || !address) {
       return NextResponse.json({ error: '店名と住所は必須です' }, { status: 400 });
+    }
+
+    if (parsedLatitude === undefined || parsedLongitude === undefined) {
+      const geocodedLocation = await geocodeAddress(String(address));
+      if (geocodedLocation) {
+        parsedLatitude = geocodedLocation.lat;
+        parsedLongitude = geocodedLocation.lng;
+      }
     }
 
     // チームの担当区域を解決（areaCode が指定されない場合の既定値に使用）
@@ -238,6 +265,8 @@ export async function POST(request: NextRequest) {
       storeNameKana: generateKana(storeName),
       address,
       addressKana: generateKana(address),
+      ...(parsedLatitude !== undefined && { latitude: parsedLatitude }),
+      ...(parsedLongitude !== undefined && { longitude: parsedLongitude }),
       // areaCode が未指定ならチームの担当区域を使用（なければ teamCode 先頭要素→最後に unknown）
       areaCode:
         areaCode ||
@@ -250,6 +279,7 @@ export async function POST(request: NextRequest) {
       distributedBy: decodedToken.teamCode || '',
       createdByTeamCode: decodedToken.teamCode || '',
       ...(distributionStatus === 'completed' && { distributedAt: new Date() }),
+      requiresPosterPickup: distributionStatus === 'completed' && requiresPosterPickup === true,
       ...(notes && { notes }),
       registrationMethod: 'manual',
       eventId: teamValidation.eventId || targetEventId || 'kodai2025',
