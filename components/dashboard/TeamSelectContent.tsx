@@ -11,9 +11,11 @@ type DashboardTeam = {
   teamCode: string;
   teamName: string;
   areaName?: string;
+  adjacentAreas?: string[];
   timeSlot?: string;
   year?: number;
   isOwnTeam?: boolean;
+  isAdjacentTeam?: boolean;
 };
 
 export default function TeamSelectContent({ year }: { year: number }) {
@@ -52,7 +54,13 @@ export default function TeamSelectContent({ year }: { year: number }) {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return teams;
     return teams.filter((team) =>
-      [team.teamId, team.teamName, team.teamCode, team.areaName]
+      [
+        team.teamId,
+        team.teamName,
+        team.teamCode,
+        team.areaName,
+        team.isAdjacentTeam ? '近隣班' : '',
+      ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(keyword)),
     );
@@ -87,12 +95,17 @@ export default function TeamSelectContent({ year }: { year: number }) {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {filteredTeams.map((team) => {
           const isOwnTeam = team.teamId === ownTeam?.teamId || team.isOwnTeam;
+          const isAdjacentTeam = team.isAdjacentTeam === true;
           return (
             <Link
               key={team.teamId}
               href={`/${year}/${team.teamId}`}
               className={`rounded-lg border bg-white p-4 shadow-sm transition hover:border-indigo-300 hover:shadow ${
-                isOwnTeam ? 'border-green-300 ring-2 ring-green-100' : 'border-gray-200'
+                isOwnTeam
+                  ? 'border-green-300 ring-2 ring-green-100'
+                  : isAdjacentTeam
+                    ? 'border-amber-300 ring-2 ring-amber-100'
+                    : 'border-gray-200'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -101,11 +114,18 @@ export default function TeamSelectContent({ year }: { year: number }) {
                     {team.teamName}
                   </div>
                 </div>
-                {isOwnTeam && (
-                  <span className="shrink-0 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
-                    自班
-                  </span>
-                )}
+                <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                  {isOwnTeam && (
+                    <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                      自班
+                    </span>
+                  )}
+                  {isAdjacentTeam && (
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                      近隣班
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 <div>
