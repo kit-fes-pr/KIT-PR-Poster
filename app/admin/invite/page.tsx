@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { auth } from '@/lib/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { LoadingInline } from '@/components/ui/Loading';
@@ -54,7 +54,7 @@ export default function AdminInvitePage() {
     void loadAdmins();
   }, [loadAdmins]);
 
-  const submitInvite = async (event: React.FormEvent<HTMLFormElement>) => {
+  const submitInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedEmail = email.trim().toLowerCase();
     if (!user || !normalizedEmail) return;

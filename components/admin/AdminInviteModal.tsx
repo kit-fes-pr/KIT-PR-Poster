@@ -1,3 +1,4 @@
+import type { FormEvent } from 'react';
 import { Modal } from '@/components/ui/Modal';
 
 type AdminInviteModalProps = {
@@ -7,7 +8,7 @@ type AdminInviteModalProps = {
   submitting: boolean;
   onClose: () => void;
   onEmailChange: (email: string) => void;
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
 
 export function AdminInviteModal({

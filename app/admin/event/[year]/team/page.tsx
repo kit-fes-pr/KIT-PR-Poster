@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatDate } from '@/lib/utils/dateUtils';
@@ -704,7 +704,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     return team.timeSlot || '';
   };
 
-  const createTeam = async (e: React.FormEvent) => {
+  const createTeam = async (e: FormEvent) => {
     e.preventDefault();
     if (!resolvedParams || !user) return;
     if (!createTeamForm.teamName || !createTeamForm.areaId || !createTeamForm.timeSlot) {
