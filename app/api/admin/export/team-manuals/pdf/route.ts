@@ -472,8 +472,12 @@ function buildQrMatrix(text: string): QrMatrix {
   drawAlignmentPattern(modules, reserved, 26, 26);
 
   for (let i = 0; i < QR_SIZE; i++) {
-    setFunctionModule(modules, reserved, 6, i, i % 2 === 0);
-    setFunctionModule(modules, reserved, i, 6, i % 2 === 0);
+    if (!reserved[i][6]) {
+      setFunctionModule(modules, reserved, 6, i, i % 2 === 0);
+    }
+    if (!reserved[6][i]) {
+      setFunctionModule(modules, reserved, i, 6, i % 2 === 0);
+    }
   }
   setFormatBits(modules, reserved, 0);
 
@@ -505,7 +509,11 @@ function drawQrCode(input: {
   size: number;
 }) {
   const quietZone = 4;
-  const moduleSize = input.size / (input.matrix.size + quietZone * 2);
+  const moduleSize = Math.floor(input.size / (input.matrix.size + quietZone * 2));
+  const actualSize = moduleSize * (input.matrix.size + quietZone * 2);
+  const offset = (input.size - actualSize) / 2;
+  const originX = input.x + offset;
+  const originY = input.y + offset;
   input.page.drawRectangle({
     x: input.x,
     y: input.y,
@@ -518,8 +526,8 @@ function drawQrCode(input: {
     for (let col = 0; col < input.matrix.size; col++) {
       if (!input.matrix.modules[row][col]) continue;
       input.page.drawRectangle({
-        x: input.x + (col + quietZone) * moduleSize,
-        y: input.y + input.size - (row + quietZone + 1) * moduleSize,
+        x: originX + (col + quietZone) * moduleSize,
+        y: originY + actualSize - (row + quietZone + 1) * moduleSize,
         width: moduleSize,
         height: moduleSize,
         color: rgb(0, 0, 0),
