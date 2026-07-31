@@ -146,6 +146,23 @@ export default function AdminInvitePage() {
     }
   };
 
+  const sendAdminPasswordReset = async () => {
+    if (!selectedAdmin?.email) return;
+    if (!window.confirm(`${selectedAdmin.email} にパスワード再設定メールを送信しますか？`)) return;
+
+    try {
+      setActionLoading(true);
+      setError('');
+      auth.languageCode = 'ja';
+      await sendPasswordResetEmail(auth, selectedAdmin.email);
+      window.alert('パスワード再設定メールを送信しました');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'パスワード再設定メールの送信に失敗しました');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -210,6 +227,7 @@ export default function AdminInvitePage() {
         onAction={(action, confirmationMessage) =>
           void submitAdminAction(action, confirmationMessage)
         }
+        onResetPassword={() => void sendAdminPasswordReset()}
       />
 
       <AdminInviteSuccessModal success={success} onClose={() => setSuccess(null)} />
