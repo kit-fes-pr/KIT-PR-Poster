@@ -252,8 +252,10 @@ export async function POST(request: NextRequest) {
       areaCode,
       notes,
     } = await request.json();
-    let parsedLatitude = parseOptionalCoordinate(latitude);
-    let parsedLongitude = parseOptionalCoordinate(longitude);
+let parsedLatitude = parseOptionalCoordinate(latitude);
+let parsedLongitude = parseOptionalCoordinate(longitude);
+if (parsedLatitude !== undefined && (parsedLatitude < -90 || parsedLatitude > 90)) parsedLatitude = undefined;
+if (parsedLongitude !== undefined && (parsedLongitude < -180 || parsedLongitude > 180)) parsedLongitude = undefined;
 
     if (!storeName || !address) {
       return NextResponse.json({ error: '店名と住所は必須です' }, { status: 400 });
