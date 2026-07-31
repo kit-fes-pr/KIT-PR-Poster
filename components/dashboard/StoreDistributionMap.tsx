@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Store } from '@/types';
+import { authenticatedFetch } from '@/lib/utils/auth-fetcher';
 
 type LatLngLiteral = {
   lat: number;
@@ -186,6 +187,15 @@ async function geocodeAddress(address: string) {
   return location;
 }
 
+async function persistStoreLocation(storeId: string, location: LatLngLiteral) {
+  const response = await authenticatedFetch(`/api/stores/${storeId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ latitude: location.lat, longitude: location.lng }),
+  });
+  return response.ok;
+}
+
 function buildPlaceFromReverseGeocode(result: NominatimResult, location: LatLngLiteral) {
   const address =
     typeof result.display_name === 'string' && result.display_name.trim()
@@ -221,6 +231,7 @@ export function StoreDistributionMap({
   showList = true,
   initialStatus = 'all',
   addMode = false,
+  persistResolvedLocations = false,
   onSelectCreateLocation,
 }: {
   stores: Store[];
@@ -228,6 +239,7 @@ export function StoreDistributionMap({
   showList?: boolean;
   initialStatus?: MapStatus;
   addMode?: boolean;
+  persistResolvedLocations?: boolean;
   onSelectCreateLocation?: (place: SelectedMapPlace) => void;
 }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -345,7 +357,21 @@ export function StoreDistributionMap({
         const location = await geocodeAddress(store.address);
         geocodeRequests += 1;
         if (location) {
-          resolved.push({ store, location, resolvedByGeocode: true });
+          let persisted = false;
+          if (persistResolvedLocations) {
+            try {
+              persisted = await persistStoreLocation(store.storeId, location);
+            } catch (error) {
+              console.error('Store coordinate persistence failed:', error);
+            }
+          }
+          resolved.push({
+            store: persisted
+              ? { ...store, latitude: location.lat, longitude: location.lng }
+              : store,
+            location,
+            resolvedByGeocode: !persisted,
+          });
         } else {
           unresolved += 1;
         }
@@ -365,7 +391,7 @@ export function StoreDistributionMap({
     return () => {
       cancelled = true;
     };
-  }, [stores, status]);
+  }, [persistResolvedLocations, stores, status]);
 
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -464,7 +490,7 @@ export function StoreDistributionMap({
               </div>
             )}
             <div className="space-y-2">
-              {visibleStores.map(({ store, location, resolvedByGeocode }) => (
+              {visibleStores.map(({ store, location }) => (
                 <button
                   key={store.storeId}
                   type="button"
@@ -485,11 +511,6 @@ export function StoreDistributionMap({
                     {isPosterPickupStore(store) && (
                       <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">
                         回収対象
-                      </span>
-                    )}
-                    {resolvedByGeocode && (
-                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
-                        住所から表示
                       </span>
                     )}
                   </span>

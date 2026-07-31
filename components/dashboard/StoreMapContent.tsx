@@ -68,6 +68,7 @@ export default function StoreMapContent({
         ? '班別 配布店舗マップ'
         : '自班の配布店舗マップ';
   const canAddStore = mode === 'self' && authUser?.role === 'team';
+  const canPersistResolvedLocations = canAddStore || authUser?.isAdmin === true;
 
   if (!authChecked) return null;
 
@@ -127,6 +128,7 @@ export default function StoreMapContent({
           stores={stores}
           title={title}
           addMode={addMode}
+          persistResolvedLocations={canPersistResolvedLocations}
           onSelectCreateLocation={
             canAddStore
               ? (place) => {

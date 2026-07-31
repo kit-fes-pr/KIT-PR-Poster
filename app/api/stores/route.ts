@@ -19,6 +19,38 @@ function parseOptionalCoordinate(value: unknown) {
   return undefined;
 }
 
+async function geocodeAddressForStore(address: string) {
+  const trimmedAddress = address.trim();
+  if (!trimmedAddress) return null;
+
+  const params = new URLSearchParams({
+    q: trimmedAddress,
+    format: 'jsonv2',
+    limit: '1',
+    countrycodes: 'jp',
+    'accept-language': 'ja',
+  });
+
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+      headers: {
+        'User-Agent': 'KIT-PR-Poster/1.0',
+      },
+    });
+    if (!response.ok) return null;
+    const results = (await response.json()) as Array<{ lat?: string; lon?: string }>;
+    const first = results[0];
+    if (!first) return null;
+    const lat = Number(first.lat);
+    const lng = Number(first.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  } catch (error) {
+    console.error('Store address geocoding failed:', error);
+    return null;
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -220,11 +252,19 @@ export async function POST(request: NextRequest) {
       areaCode,
       notes,
     } = await request.json();
-    const parsedLatitude = parseOptionalCoordinate(latitude);
-    const parsedLongitude = parseOptionalCoordinate(longitude);
+    let parsedLatitude = parseOptionalCoordinate(latitude);
+    let parsedLongitude = parseOptionalCoordinate(longitude);
 
     if (!storeName || !address) {
       return NextResponse.json({ error: '店名と住所は必須です' }, { status: 400 });
+    }
+
+    if (parsedLatitude === undefined || parsedLongitude === undefined) {
+      const geocodedLocation = await geocodeAddressForStore(String(address));
+      if (geocodedLocation) {
+        parsedLatitude = geocodedLocation.lat;
+        parsedLongitude = geocodedLocation.lng;
+      }
     }
 
     // チームの担当区域を解決（areaCode が指定されない場合の既定値に使用）
