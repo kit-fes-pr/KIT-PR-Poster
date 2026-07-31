@@ -524,10 +524,15 @@ export default function DashboardContent({
             </div>
           </div>
 
-          <div className="overflow-hidden">
+          <div className="overflow-visible">
             <div className="space-y-2 p-4">
               {filteredStores.map((store) => (
-                <div key={store.storeId} className="border border-gray-200 rounded-lg p-4">
+                <div
+                  key={store.storeId}
+                  className={`relative rounded-lg border border-gray-200 p-4 ${
+                    menuStoreId === store.storeId ? 'z-20' : 'z-0'
+                  }`}
+                >
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex-1">
                       <h3 className="text-lg font-medium">{store.storeName}</h3>
@@ -607,7 +612,7 @@ export default function DashboardContent({
                             ≡
                           </button>
                           {menuStoreId === store.storeId && (
-                            <div className="absolute right-0 mt-2 w-28 bg-white border border-gray-200 rounded shadow-md z-10">
+                            <div className="absolute right-0 z-30 mt-2 w-28 rounded border border-gray-200 bg-white shadow-md">
                               <button
                                 className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
                                 onClick={() => {
