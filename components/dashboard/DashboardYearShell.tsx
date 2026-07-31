@@ -65,9 +65,12 @@ export default function DashboardYearShell({
   const routeState = useMemo(() => {
     const parts = pathname.split('/').filter(Boolean);
     const afterYear = parts[1];
+    const isMap = parts.includes('map');
     if (!afterYear) return { mode: 'self' as const };
-    if (afterYear === 'all') return { mode: 'all' as const };
-    return { mode: 'teams' as const, teamId: afterYear };
+    if (afterYear === 'map') return { mode: 'self' as const, isMap };
+    if (afterYear === 'all') return { mode: 'all' as const, isMap };
+    if (afterYear === 'teams') return { mode: 'teams' as const, isMap };
+    return { mode: 'teams' as const, teamId: afterYear, isMap };
   }, [pathname]);
 
   const teams = teamsData?.teams || [];
@@ -81,14 +84,25 @@ export default function DashboardYearShell({
 
   const title =
     routeState.mode === 'all'
-      ? '全班の配布店舗'
+      ? routeState.isMap
+        ? '全班の配布店舗マップ'
+        : '全班の配布店舗'
       : routeState.mode === 'teams'
         ? currentTeam
-          ? `${currentTeam.teamName} の配布店舗`
+          ? `${currentTeam.teamName} の配布店舗${routeState.isMap ? 'マップ' : ''}`
           : '班を選ぶ'
         : currentTeam
-          ? `${currentTeam.teamName} の配布店舗`
-          : '自班の配布店舗';
+          ? `${currentTeam.teamName} の配布店舗${routeState.isMap ? 'マップ' : ''}`
+          : `自班の配布店舗${routeState.isMap ? 'マップ' : ''}`;
+
+  const mapHref =
+    routeState.mode === 'all'
+      ? `/${year}/all/map`
+      : routeState.mode === 'teams' && routeState.teamId
+        ? `/${year}/${routeState.teamId}/map`
+        : routeState.mode === 'teams'
+          ? `/${year}/all/map`
+          : `/${year}/map`;
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
@@ -119,6 +133,8 @@ export default function DashboardYearShell({
             title={title}
             authUser={authUser}
             ownTeam={ownTeam}
+            mapHref={mapHref}
+            mapActive={routeState.isMap === true}
             isLoggingOut={isLoggingOut}
             onLogout={handleLogout}
           />

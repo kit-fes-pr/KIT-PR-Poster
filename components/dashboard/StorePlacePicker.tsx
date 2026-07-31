@@ -68,7 +68,12 @@ declare global {
 }
 
 type StorePlacePickerProps = {
-  onSelectPlace: (place: { name: string; address: string }) => void;
+  onSelectPlace: (place: {
+    name: string;
+    address: string;
+    latitude?: number;
+    longitude?: number;
+  }) => void;
 };
 
 const defaultCenter = { lat: 36.529242958649505, lng: 136.62814814587682 };
@@ -260,7 +265,7 @@ export function StorePlacePicker({ onSelectPlace }: StorePlacePickerProps) {
       .setPopup(new window.maplibregl.Popup({ offset: 25 }).setText(place.name))
       .addTo(mapInstanceRef.current);
     setSelectedPlace(place);
-    onSelectPlace(place);
+    onSelectPlace({ ...place, latitude: location.lat, longitude: location.lng });
   };
 
   const updateCurrentLocationMarker = (location: LatLngLiteral, shouldCenter: boolean) => {

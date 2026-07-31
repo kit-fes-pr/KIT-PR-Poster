@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { Modal } from '@/components/ui/Modal';
 import { StorePlacePicker } from '@/components/dashboard/StorePlacePicker';
+import { StoreDistributionMap } from '@/components/dashboard/StoreDistributionMap';
 import { Store, StoreFormData } from '@/types';
 import { useForm } from 'react-hook-form';
 import {
@@ -67,6 +68,7 @@ export default function DashboardContent({
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingStore, setIsAddingStore] = useState(false);
   const [detailsStoreId, setDetailsStoreId] = useState<string | null>(null);
+  const [mapStoreId, setMapStoreId] = useState<string | null>(null);
   const [menuStoreId, setMenuStoreId] = useState<string | null>(null);
 
   const {
@@ -109,6 +111,8 @@ export default function DashboardContent({
       resetEdit({
         storeName: store.storeName,
         address: store.address,
+        latitude: store.latitude,
+        longitude: store.longitude,
         distributionStatus:
           store.distributionStatus === 'revisit' ? 'completed' : store.distributionStatus,
         failureReason: store.failureReason,
@@ -199,9 +203,15 @@ export default function DashboardContent({
     mode === 'teams' && !!currentTeam && !!ownTeam && currentTeam.teamId !== ownTeam.teamId;
 
   const applySelectedPlace = useCallback(
-    (place: { name: string; address: string }) => {
+    (place: { name: string; address: string; latitude?: number; longitude?: number }) => {
       setValue('storeName', place.name, { shouldDirty: true, shouldValidate: true });
       setValue('address', place.address, { shouldDirty: true, shouldValidate: true });
+      if (typeof place.latitude === 'number') {
+        setValue('latitude', place.latitude, { shouldDirty: true, shouldValidate: true });
+      }
+      if (typeof place.longitude === 'number') {
+        setValue('longitude', place.longitude, { shouldDirty: true, shouldValidate: true });
+      }
     },
     [setValue],
   );
@@ -213,6 +223,8 @@ export default function DashboardContent({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...data,
+          latitude: data.latitude,
+          longitude: data.longitude,
           distributedCount:
             data.distributionStatus === 'completed' ? Number(data.distributedCount || 0) : 0,
           requiresPosterPickup:
@@ -288,6 +300,8 @@ export default function DashboardContent({
         body: JSON.stringify({
           storeName: data.storeName,
           address: data.address,
+          latitude: data.latitude,
+          longitude: data.longitude,
           distributionStatus: data.distributionStatus,
           distributedCount:
             data.distributionStatus === 'completed' ? Number(data.distributedCount || 0) : 0,
@@ -516,9 +530,18 @@ export default function DashboardContent({
               {filteredStores.map((store) => (
                 <div
                   key={store.storeId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setMapStoreId(store.storeId)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setMapStoreId(store.storeId);
+                    }
+                  }}
                   className={`relative rounded-lg border border-gray-200 p-4 ${
                     menuStoreId === store.storeId ? 'z-20' : 'z-0'
-                  }`}
+                  } cursor-pointer hover:bg-gray-50`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex-1">
@@ -543,7 +566,10 @@ export default function DashboardContent({
                         <p className="text-xs text-gray-500 mt-1">備考: {store.notes}</p>
                       )}
                     </div>
-                    <div className="mt-3 sm:mt-0 sm:ml-4 flex items-center space-x-2">
+                    <div
+                      className="mt-3 flex items-center space-x-2 sm:mt-0 sm:ml-4"
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       {!readOnly &&
                         (store.distributionStatus === 'pending' ||
                           store.distributionStatus === 'revisit') && (
@@ -634,6 +660,8 @@ export default function DashboardContent({
             <h2 className="text-lg font-medium mb-4">新規店舗を追加</h2>
             <form className="space-y-4" onSubmit={handleSubmit(onSubmitStore)}>
               <StorePlacePicker onSelectPlace={applySelectedPlace} />
+              <input type="hidden" {...register('latitude', { valueAsNumber: true })} />
+              <input type="hidden" {...register('longitude', { valueAsNumber: true })} />
               <div>
                 <label className="block text-sm font-medium text-gray-700">店名</label>
                 <input
@@ -751,6 +779,8 @@ export default function DashboardContent({
                   className="space-y-4"
                   onSubmit={handleEditSubmit((d) => updateStoreDetails(store.storeId, d))}
                 >
+                  <input type="hidden" {...registerEdit('latitude', { valueAsNumber: true })} />
+                  <input type="hidden" {...registerEdit('longitude', { valueAsNumber: true })} />
                   <div>
                     <label className="block text-sm font-medium text-gray-700">店名</label>
                     <input
@@ -874,6 +904,35 @@ export default function DashboardContent({
                   </div>
                 </form>
               </div>
+            </Modal>
+          );
+        })()}
+
+      {mapStoreId &&
+        (() => {
+          const store = (storesData?.stores || []).find((s: Store) => s.storeId === mapStoreId);
+          if (!store) return null;
+          return (
+            <Modal
+              open
+              onClose={() => setMapStoreId(null)}
+              panelClassName="max-w-5xl"
+              contentClassName="p-4"
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-medium text-gray-900">{store.storeName}</h2>
+                  <p className="text-sm text-gray-500">{store.address}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMapStoreId(null)}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  閉じる
+                </button>
+              </div>
+              <StoreDistributionMap stores={[store]} title="店舗位置" showList={false} />
             </Modal>
           );
         })()}

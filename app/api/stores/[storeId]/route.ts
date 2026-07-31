@@ -21,6 +21,8 @@ export async function PUT(
     const {
       storeName,
       address,
+      latitude,
+      longitude,
       distributionStatus,
       failureReason,
       distributedCount,
@@ -60,6 +62,12 @@ export async function PUT(
       const addr = address.trim();
       updateData.address = addr;
       updateData.addressKana = generateKana(addr);
+    }
+    if (Number.isFinite(Number(latitude))) {
+      updateData.latitude = Number(latitude);
+    }
+    if (Number.isFinite(Number(longitude))) {
+      updateData.longitude = Number(longitude);
     }
 
     if (typeof notes === 'string') {

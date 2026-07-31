@@ -202,6 +202,8 @@ export async function POST(request: NextRequest) {
     const {
       storeName,
       address,
+      latitude,
+      longitude,
       distributionStatus,
       failureReason,
       distributedCount,
@@ -239,6 +241,8 @@ export async function POST(request: NextRequest) {
       storeNameKana: generateKana(storeName),
       address,
       addressKana: generateKana(address),
+      ...(Number.isFinite(Number(latitude)) && { latitude: Number(latitude) }),
+      ...(Number.isFinite(Number(longitude)) && { longitude: Number(longitude) }),
       // areaCode が未指定ならチームの担当区域を使用（なければ teamCode 先頭要素→最後に unknown）
       areaCode:
         areaCode ||
