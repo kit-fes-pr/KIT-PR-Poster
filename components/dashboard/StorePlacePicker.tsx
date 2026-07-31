@@ -50,6 +50,14 @@ type NominatimResult = {
   lat: string;
   lon: string;
   name?: string;
+  address?: {
+    city?: string;
+    town?: string;
+    village?: string;
+    municipality?: string;
+    county?: string;
+    state_district?: string;
+  };
 };
 
 declare global {
@@ -67,6 +75,15 @@ const defaultCenter = { lat: 36.529242958649505, lng: 136.62814814587682 };
 const mapLibreCssUrl = 'https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css';
 const mapLibreJsUrl = 'https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js';
 const openFreeMapStyleUrl = 'https://tiles.openfreemap.org/styles/positron';
+const allowedSearchMunicipalities = [
+  '金沢市',
+  '野々市市',
+  '白山市',
+  'Kanazawa',
+  'Nonoichi',
+  'Hakusan',
+];
+const allowedSearchViewbox = '136.39,36.74,136.85,36.18';
 
 function loadMapLibre() {
   if (typeof window === 'undefined') return Promise.reject(new Error('ブラウザでのみ利用できます'));
@@ -129,20 +146,38 @@ function buildPlaceFromResult(result: NominatimResult, fallbackName = '') {
   return { name, address };
 }
 
+function isAllowedSearchResult(result: NominatimResult) {
+  const addressParts = result.address
+    ? [
+        result.address.city,
+        result.address.town,
+        result.address.village,
+        result.address.municipality,
+        result.address.county,
+        result.address.state_district,
+      ]
+    : [];
+  const searchableText = [result.display_name, ...addressParts].filter(Boolean).join(' ');
+  return allowedSearchMunicipalities.some((municipality) => searchableText.includes(municipality));
+}
+
 async function searchPlaces(query: string) {
   const params = new URLSearchParams({
     q: query,
     format: 'jsonv2',
     addressdetails: '1',
-    limit: '5',
+    limit: '10',
     countrycodes: 'jp',
+    viewbox: allowedSearchViewbox,
+    bounded: '1',
     extratags: '1',
     namedetails: '1',
     'accept-language': 'ja',
   });
   const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
   if (!response.ok) throw new Error('店舗候補の検索に失敗しました');
-  return (await response.json()) as NominatimResult[];
+  const results = (await response.json()) as NominatimResult[];
+  return results.filter(isAllowedSearchResult).slice(0, 5);
 }
 
 async function reverseGeocode(location: LatLngLiteral) {
@@ -409,7 +444,9 @@ export function StorePlacePicker({ onSelectPlace }: StorePlacePickerProps) {
     <div className="space-y-3">
       <div>
         <div className="flex items-center justify-between gap-3">
-          <label className="block text-sm font-medium text-gray-700">店名で検索</label>
+          <label className="block text-sm font-medium text-gray-700">
+            店名で検索（金沢市・野々市市・白山市）
+          </label>
           <button
             type="button"
             onClick={showCurrentLocation}
@@ -482,8 +519,8 @@ export function StorePlacePicker({ onSelectPlace }: StorePlacePickerProps) {
 
       {status === 'ready' && (
         <p className="text-xs text-gray-500">
-          候補を選択、または地図上の店舗位置をクリックすると店名と住所に反映されます。 地図データ: ©
-          OpenFreeMap / © OpenMapTiles / © OpenStreetMap contributors
+          店名検索は金沢市・野々市市・白山市の候補のみ表示します。候補を選択、または地図上の店舗位置をクリックすると店名と住所に反映されます。
+          地図データ: © OpenFreeMap / © OpenMapTiles / © OpenStreetMap contributors
         </p>
       )}
       {message && <p className="text-xs text-gray-600">{message}</p>}
