@@ -8,6 +8,7 @@ import {
   parseDashboardYear,
   teamBelongsToDashboardYear,
 } from '@/lib/server/dashboard-year';
+import { geocodeAddress } from '@/lib/server/geocoding';
 import { validateTeamForStoreCreate } from '@/lib/utils/stores/store-route';
 
 function parseOptionalCoordinate(value: unknown) {
@@ -17,38 +18,6 @@ function parseOptionalCoordinate(value: unknown) {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
-}
-
-async function geocodeAddressForStore(address: string) {
-  const trimmedAddress = address.trim();
-  if (!trimmedAddress) return null;
-
-  const params = new URLSearchParams({
-    q: trimmedAddress,
-    format: 'jsonv2',
-    limit: '1',
-    countrycodes: 'jp',
-    'accept-language': 'ja',
-  });
-
-  try {
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
-      headers: {
-        'User-Agent': 'KIT-PR-Poster/1.0',
-      },
-    });
-    if (!response.ok) return null;
-    const results = (await response.json()) as Array<{ lat?: string; lon?: string }>;
-    const first = results[0];
-    if (!first) return null;
-    const lat = Number(first.lat);
-    const lng = Number(first.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    return { lat, lng };
-  } catch (error) {
-    console.error('Store address geocoding failed:', error);
-    return null;
-  }
 }
 
 export async function GET(request: NextRequest) {
@@ -264,7 +233,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (parsedLatitude === undefined || parsedLongitude === undefined) {
-      const geocodedLocation = await geocodeAddressForStore(String(address));
+      const geocodedLocation = await geocodeAddress(String(address));
       if (geocodedLocation) {
         parsedLatitude = geocodedLocation.lat;
         parsedLongitude = geocodedLocation.lng;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { authenticatedFetch } from '@/lib/utils/auth-fetcher';
 
 type LatLngLiteral = {
   lat: number;
@@ -48,8 +49,8 @@ type MapLibreNamespace = {
 
 type NominatimResult = {
   display_name: string;
-  lat: string;
-  lon: string;
+  lat?: string;
+  lon?: string;
   name?: string;
   address?: {
     city?: string;
@@ -81,15 +82,6 @@ const defaultCenter = { lat: 36.529242958649505, lng: 136.62814814587682 };
 const mapLibreCssUrl = 'https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css';
 const mapLibreJsUrl = 'https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js';
 const openFreeMapStyleUrl = 'https://tiles.openfreemap.org/styles/positron';
-const allowedSearchMunicipalities = [
-  '金沢市',
-  '野々市市',
-  '白山市',
-  'Kanazawa',
-  'Nonoichi',
-  'Hakusan',
-];
-const allowedSearchViewbox = '136.39,36.74,136.85,36.18';
 
 function loadMapLibre() {
   if (typeof window === 'undefined') return Promise.reject(new Error('ブラウザでのみ利用できます'));
@@ -155,51 +147,27 @@ function buildPlaceFromResult(result: NominatimResult, fallbackName = '') {
   return { name, address };
 }
 
-function isAllowedSearchResult(result: NominatimResult) {
-  const addressParts = result.address
-    ? [
-        result.address.city,
-        result.address.town,
-        result.address.village,
-        result.address.municipality,
-        result.address.county,
-        result.address.state_district,
-      ]
-    : [];
-  const searchableText = [result.display_name, ...addressParts].filter(Boolean).join(' ');
-  return allowedSearchMunicipalities.some((municipality) => searchableText.includes(municipality));
-}
-
 async function searchPlaces(query: string) {
   const params = new URLSearchParams({
+    type: 'search',
     q: query,
-    format: 'jsonv2',
-    addressdetails: '1',
-    limit: '10',
-    countrycodes: 'jp',
-    viewbox: allowedSearchViewbox,
-    bounded: '1',
-    extratags: '1',
-    namedetails: '1',
-    'accept-language': 'ja',
   });
-  const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+  const response = await authenticatedFetch(`/api/geocode?${params.toString()}`);
   if (!response.ok) throw new Error('店舗候補の検索に失敗しました');
-  const results = (await response.json()) as NominatimResult[];
-  return results.filter(isAllowedSearchResult).slice(0, 5);
+  const data = (await response.json()) as { results?: NominatimResult[] };
+  return data.results || [];
 }
 
 async function reverseGeocode(location: LatLngLiteral) {
   const params = new URLSearchParams({
+    type: 'reverse',
     lat: String(location.lat),
-    lon: String(location.lng),
-    format: 'jsonv2',
-    addressdetails: '1',
-    'accept-language': 'ja',
+    lng: String(location.lng),
   });
-  const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`);
+  const response = await authenticatedFetch(`/api/geocode?${params.toString()}`);
   if (!response.ok) throw new Error('地図上の住所取得に失敗しました');
-  return (await response.json()) as NominatimResult;
+  const data = (await response.json()) as { result?: NominatimResult | null };
+  return data.result || { display_name: '' };
 }
 
 export function StorePlacePicker({ onSelectPlace }: StorePlacePickerProps) {

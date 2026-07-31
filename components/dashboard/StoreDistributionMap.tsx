@@ -78,7 +78,6 @@ const defaultCenter = { lat: 36.529242958649505, lng: 136.62814814587682 };
 const mapLibreCssUrl = 'https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css';
 const mapLibreJsUrl = 'https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js';
 const openFreeMapStyleUrl = 'https://tiles.openfreemap.org/styles/positron';
-const geocodeCache = new Map<string, LatLngLiteral | null>();
 
 function loadMapLibre() {
   if (typeof window === 'undefined') return Promise.reject(new Error('ブラウザでのみ利用できます'));
@@ -169,25 +168,15 @@ function hasStoredLocation(store: Store) {
 async function geocodeAddress(address: string) {
   const key = address.trim();
   if (!key) return null;
-  if (geocodeCache.has(key)) return geocodeCache.get(key) || null;
 
   const params = new URLSearchParams({
-    q: key,
-    format: 'jsonv2',
-    limit: '1',
-    countrycodes: 'jp',
-    'accept-language': 'ja',
+    type: 'address',
+    address: key,
   });
-  const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
-  if (!response.ok) {
-    geocodeCache.set(key, null);
-    return null;
-  }
-  const results = (await response.json()) as Array<{ lat: string; lon: string }>;
-  const first = results[0];
-  const location = first ? { lat: Number(first.lat), lng: Number(first.lon) } : null;
-  geocodeCache.set(key, location);
-  return location;
+  const response = await authenticatedFetch(`/api/geocode?${params.toString()}`);
+  if (!response.ok) return null;
+  const data = (await response.json()) as { location?: LatLngLiteral | null };
+  return data.location || null;
 }
 
 async function persistStoreLocation(storeId: string, location: LatLngLiteral) {
@@ -213,15 +202,14 @@ function buildPlaceFromReverseGeocode(result: NominatimResult, location: LatLngL
 
 async function reverseGeocode(location: LatLngLiteral) {
   const params = new URLSearchParams({
+    type: 'reverse',
     lat: String(location.lat),
-    lon: String(location.lng),
-    format: 'jsonv2',
-    addressdetails: '1',
-    'accept-language': 'ja',
+    lng: String(location.lng),
   });
-  const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`);
+  const response = await authenticatedFetch(`/api/geocode?${params.toString()}`);
   if (!response.ok) throw new Error('地図上の住所取得に失敗しました');
-  return (await response.json()) as NominatimResult;
+  const data = (await response.json()) as { result?: NominatimResult | null };
+  return data.result || {};
 }
 
 function sleep(ms: number) {
