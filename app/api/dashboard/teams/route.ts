@@ -40,9 +40,10 @@ export async function GET(request: NextRequest) {
         const areaId = String(data.areaId || '');
         const assignedArea = String(data.assignedArea || '');
         const adjacentAreas = Array.isArray(data.adjacentAreas)
-          ? data.adjacentAreas.filter(
-              (area): area is string => typeof area === 'string' && area.trim().length > 0,
-            )
+          ? data.adjacentAreas
+              .filter((area): area is string => typeof area === 'string')
+              .map((area) => area.trim())
+              .filter(Boolean)
           : [];
         const area =
           areaMap.byId.get(areaId) ||
