@@ -377,13 +377,18 @@ export default function DashboardContent({
     const menuWidth = Math.min(128, window.innerWidth - viewportPadding * 2);
     const menuHeight = 112;
     const opensUpward = rect.bottom + menuHeight > window.innerHeight - viewportPadding;
-    const top = opensUpward
-      ? Math.max(viewportPadding, rect.top - menuHeight - viewportPadding)
-      : Math.min(rect.bottom + viewportPadding, window.innerHeight - menuHeight - viewportPadding);
-    const left = Math.min(
-      Math.max(viewportPadding, rect.right - menuWidth),
-      window.innerWidth - menuWidth - viewportPadding,
-    );
+    const top =
+      (opensUpward
+        ? Math.max(viewportPadding, rect.top - menuHeight - viewportPadding)
+        : Math.min(
+            rect.bottom + viewportPadding,
+            window.innerHeight - menuHeight - viewportPadding,
+          )) + window.scrollY;
+    const left =
+      Math.min(
+        Math.max(viewportPadding, rect.right - menuWidth),
+        window.innerWidth - menuWidth - viewportPadding,
+      ) + window.scrollX;
 
     setMenuPosition({ top, left, width: menuWidth });
     setMenuStoreId(storeId);
@@ -673,7 +678,7 @@ export default function DashboardContent({
                             typeof document !== 'undefined' &&
                             createPortal(
                               <div
-                                className="fixed z-[100] max-h-[calc(100dvh-1rem)] overflow-y-auto overflow-x-hidden rounded-md border border-gray-200 bg-white py-1 text-gray-800 shadow-lg ring-1 ring-black/5"
+                                className="absolute z-[100] max-h-[calc(100dvh-1rem)] overflow-y-auto overflow-x-hidden rounded-md border border-gray-200 bg-white py-1 text-gray-800 shadow-lg ring-1 ring-black/5"
                                 data-menu-root
                                 style={{
                                   top: menuPosition.top,
