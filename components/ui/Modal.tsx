@@ -52,10 +52,10 @@ export function Modal({
   if (!open) return null;
 
   const overlayBase = centered
-    ? 'fixed inset-0 z-50 flex items-center justify-center p-4'
+    ? 'fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4'
     : 'fixed inset-0 z-50 overflow-y-auto p-4';
   const panelBase = centered
-    ? 'w-full overflow-hidden rounded-2xl bg-white shadow-2xl'
+    ? 'max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-2xl bg-white shadow-2xl'
     : 'mx-auto my-8 w-full overflow-hidden rounded-2xl bg-white shadow-2xl';
 
   return (

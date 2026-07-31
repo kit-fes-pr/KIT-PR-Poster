@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { Modal } from '@/components/ui/Modal';
+import { StorePlacePicker } from '@/components/dashboard/StorePlacePicker';
 import { Store, StoreFormData } from '@/types';
 import { useForm } from 'react-hook-form';
 import {
@@ -70,6 +71,7 @@ export default function DashboardContent({
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<StoreFormData>({
     defaultValues: { distributionStatus: 'pending', distributedCount: 0 },
@@ -174,6 +176,14 @@ export default function DashboardContent({
         : undefined;
   const isViewingOtherTeam =
     mode === 'teams' && !!currentTeam && !!ownTeam && currentTeam.teamId !== ownTeam.teamId;
+
+  const applySelectedPlace = useCallback(
+    (place: { name: string; address: string }) => {
+      setValue('storeName', place.name, { shouldDirty: true, shouldValidate: true });
+      setValue('address', place.address, { shouldDirty: true, shouldValidate: true });
+    },
+    [setValue],
+  );
 
   const onSubmitStore = async (data: StoreFormData) => {
     try {
@@ -312,7 +322,7 @@ export default function DashboardContent({
       case 'failed':
         return '配布不可';
       case 'revisit':
-        return '要再訪問';
+        return '工大祭後にポスター回収';
       default:
         return '未配布';
     }
@@ -405,7 +415,7 @@ export default function DashboardContent({
                     <option value="pending">未配布</option>
                     <option value="completed">配布済み</option>
                     <option value="failed">配布不可</option>
-                    <option value="revisit">要再訪問</option>
+                    <option value="revisit">工大祭後にポスター回収</option>
                   </select>
                 </div>
                 <div>
@@ -492,7 +502,7 @@ export default function DashboardContent({
                               onClick={() => updateStoreStatus(store.storeId, 'revisit')}
                               className="px-3 py-1 bg-yellow-600 text-white rounded text-sm"
                             >
-                              要再訪問
+                              祭後回収
                             </button>
                           </>
                         )}
@@ -539,10 +549,11 @@ export default function DashboardContent({
       </div>
 
       {!readOnly && isAddingStore && (
-        <Modal open onClose={() => setIsAddingStore(false)} panelClassName="max-w-md p-6">
+        <Modal open onClose={() => setIsAddingStore(false)} panelClassName="max-w-3xl p-6">
           <div className="w-full">
             <h2 className="text-lg font-medium mb-4">新規店舗を追加</h2>
             <form className="space-y-4" onSubmit={handleSubmit(onSubmitStore)}>
+              <StorePlacePicker onSelectPlace={applySelectedPlace} />
               <div>
                 <label className="block text-sm font-medium text-gray-700">店名</label>
                 <input
@@ -574,7 +585,7 @@ export default function DashboardContent({
                   <option value="pending">未配布</option>
                   <option value="completed">配布完了</option>
                   <option value="failed">配布不可</option>
-                  <option value="revisit">要再訪問</option>
+                  <option value="revisit">工大祭後にポスター回収</option>
                 </select>
               </div>
               {watchStatus === 'completed' && (
@@ -674,7 +685,7 @@ export default function DashboardContent({
                     <textarea
                       rows={3}
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                      placeholder="例: 夕方なら対応可 / 来週再訪問予定など"
+                      placeholder="例: 工大祭終了後にポスター回収希望 / 夕方なら対応可 など"
                       {...registerEdit('notes')}
                     />
                   </div>
@@ -693,7 +704,7 @@ export default function DashboardContent({
                       <option value="pending">未配布</option>
                       <option value="completed">配布完了</option>
                       <option value="failed">配布不可</option>
-                      <option value="revisit">要再訪問</option>
+                      <option value="revisit">工大祭後にポスター回収</option>
                     </select>
                   </div>
                   {watchEditStatus === 'completed' && (

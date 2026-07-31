@@ -183,7 +183,7 @@ export default function TeamDetailPage() {
     const label: Record<string, string> = {
       completed: '配布済み',
       failed: '配布不可',
-      revisit: '要再訪問',
+      revisit: '工大祭後にポスター回収',
       pending: '未配布',
     };
     const cls = map[status] || map.pending;
@@ -315,7 +315,7 @@ export default function TeamDetailPage() {
                 <p className="text-2xl font-bold text-red-600">{failed.length}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">要再訪問</p>
+                <p className="text-sm text-gray-600">祭後回収</p>
                 <p className="text-2xl font-bold text-yellow-600">{revisit.length}</p>
               </div>
             </div>
@@ -466,7 +466,7 @@ export default function TeamDetailPage() {
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow lg:col-span-1">
-            <h2 className="text-lg font-medium mb-3">要再訪問</h2>
+            <h2 className="text-lg font-medium mb-3">工大祭後にポスター回収</h2>
             <div className="space-y-3 max-h-[60vh] overflow-auto pr-2">
               {revisit.map((s: Store) => (
                 <div key={s.storeId} className="border rounded p-3">
