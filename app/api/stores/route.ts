@@ -10,6 +10,15 @@ import {
 } from '@/lib/server/dashboard-year';
 import { validateTeamForStoreCreate } from '@/lib/utils/stores/store-route';
 
+function parseOptionalCoordinate(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -211,6 +220,8 @@ export async function POST(request: NextRequest) {
       areaCode,
       notes,
     } = await request.json();
+    const parsedLatitude = parseOptionalCoordinate(latitude);
+    const parsedLongitude = parseOptionalCoordinate(longitude);
 
     if (!storeName || !address) {
       return NextResponse.json({ error: '店名と住所は必須です' }, { status: 400 });
@@ -241,8 +252,8 @@ export async function POST(request: NextRequest) {
       storeNameKana: generateKana(storeName),
       address,
       addressKana: generateKana(address),
-      ...(Number.isFinite(Number(latitude)) && { latitude: Number(latitude) }),
-      ...(Number.isFinite(Number(longitude)) && { longitude: Number(longitude) }),
+      ...(parsedLatitude !== undefined && { latitude: parsedLatitude }),
+      ...(parsedLongitude !== undefined && { longitude: parsedLongitude }),
       // areaCode が未指定ならチームの担当区域を使用（なければ teamCode 先頭要素→最後に unknown）
       areaCode:
         areaCode ||

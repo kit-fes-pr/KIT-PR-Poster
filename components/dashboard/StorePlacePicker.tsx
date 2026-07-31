@@ -12,6 +12,7 @@ type MapLibreMap = {
   setZoom: (zoom: number) => MapLibreMap;
   addControl: (control: MapLibreControl) => MapLibreMap;
   on: (eventName: string, handler: (event: MapLibreMouseEvent) => void) => void;
+  resize: () => void;
   remove: () => void;
 };
 
@@ -321,6 +322,7 @@ export function StorePlacePicker({ onSelectPlace }: StorePlacePickerProps) {
 
         mapInstanceRef.current = map;
         setStatus('ready');
+        window.setTimeout(() => map.resize(), 0);
       })
       .catch((error) => {
         console.error(error);
@@ -336,6 +338,15 @@ export function StorePlacePicker({ onSelectPlace }: StorePlacePickerProps) {
       candidateMarkersRef.current = [];
     };
   }, [onSelectPlace]);
+
+  useEffect(() => {
+    if (!mapRef.current || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      mapInstanceRef.current?.resize();
+    });
+    observer.observe(mapRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (status !== 'ready') return;
@@ -505,18 +516,15 @@ export function StorePlacePicker({ onSelectPlace }: StorePlacePickerProps) {
         </div>
       )}
 
-      <div
-        ref={mapRef}
-        className="h-64 w-full overflow-hidden rounded-md border border-gray-200 bg-gray-100"
-        aria-label="OpenFreeMap"
-      >
+      <div className="relative h-64 w-full overflow-hidden rounded-md border border-gray-200 bg-gray-100">
+        <div ref={mapRef} className="h-full w-full" aria-label="OpenFreeMap" />
         {status === 'loading' && (
-          <div className="flex h-full items-center justify-center text-sm text-gray-500">
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-gray-100 text-sm text-gray-500">
             地図を読み込んでいます...
           </div>
         )}
         {status === 'error' && (
-          <div className="flex h-full items-center justify-center px-4 text-sm text-red-600">
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-gray-100 px-4 text-sm text-red-600">
             地図の読み込みに失敗しました。フォーム入力で登録してください。
           </div>
         )}

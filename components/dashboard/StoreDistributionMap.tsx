@@ -13,6 +13,7 @@ type MapLibreMap = {
   setZoom: (zoom: number) => MapLibreMap;
   addControl: (control: MapLibreControl) => MapLibreMap;
   on: (eventName: string, handler: (event: MapLibreMouseEvent) => void) => void;
+  resize: () => void;
   remove: () => void;
 };
 
@@ -60,6 +61,17 @@ type StoreWithLocation = {
 };
 
 type MapStatus = 'all' | 'pending' | 'completed' | 'failed' | 'pickup';
+type SelectedMapPlace = {
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+};
+
+type NominatimResult = {
+  display_name?: string;
+  name?: string;
+};
 
 const defaultCenter = { lat: 36.529242958649505, lng: 136.62814814587682 };
 const mapLibreCssUrl = 'https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css';
@@ -174,6 +186,31 @@ async function geocodeAddress(address: string) {
   return location;
 }
 
+function buildPlaceFromReverseGeocode(result: NominatimResult, location: LatLngLiteral) {
+  const address =
+    typeof result.display_name === 'string' && result.display_name.trim()
+      ? result.display_name.trim()
+      : `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`;
+  const name =
+    typeof result.name === 'string' && result.name.trim()
+      ? result.name.trim()
+      : address.split(',')[0]?.trim() || address;
+  return { name, address };
+}
+
+async function reverseGeocode(location: LatLngLiteral) {
+  const params = new URLSearchParams({
+    lat: String(location.lat),
+    lon: String(location.lng),
+    format: 'jsonv2',
+    addressdetails: '1',
+    'accept-language': 'ja',
+  });
+  const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`);
+  if (!response.ok) throw new Error('地図上の住所取得に失敗しました');
+  return (await response.json()) as NominatimResult;
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -183,21 +220,28 @@ export function StoreDistributionMap({
   title = '配布店舗マップ',
   showList = true,
   initialStatus = 'all',
+  addMode = false,
+  onSelectCreateLocation,
 }: {
   stores: Store[];
   title?: string;
   showList?: boolean;
   initialStatus?: MapStatus;
+  addMode?: boolean;
+  onSelectCreateLocation?: (place: SelectedMapPlace) => void;
 }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<MapLibreMarker[]>([]);
+  const addModeRef = useRef(addMode);
+  const onSelectCreateLocationRef = useRef(onSelectCreateLocation);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [filterStatus, setFilterStatus] = useState<MapStatus>(initialStatus);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [locatedStores, setLocatedStores] = useState<StoreWithLocation[]>([]);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
   const [isResolving, setIsResolving] = useState(false);
+  const [mapMessage, setMapMessage] = useState('');
 
   const visibleStores = useMemo(() => {
     return locatedStores.filter(({ store }) => {
@@ -206,6 +250,11 @@ export function StoreDistributionMap({
       return getDisplayStatus(store) === filterStatus;
     });
   }, [locatedStores, filterStatus]);
+
+  useEffect(() => {
+    addModeRef.current = addMode;
+    onSelectCreateLocationRef.current = onSelectCreateLocation;
+  }, [addMode, onSelectCreateLocation]);
 
   useEffect(() => {
     let cancelled = false;
@@ -220,8 +269,34 @@ export function StoreDistributionMap({
           attributionControl: false,
         });
         map.addControl(new window.maplibregl.AttributionControl({ compact: true }));
+        map.on('click', async (event) => {
+          if (!addModeRef.current || !onSelectCreateLocationRef.current) return;
+          const location = { lat: event.lngLat.lat, lng: event.lngLat.lng };
+          try {
+            setMapMessage('押下した地点の住所を取得しています...');
+            const result = await reverseGeocode(location);
+            const place = buildPlaceFromReverseGeocode(result, location);
+            onSelectCreateLocationRef.current({
+              ...place,
+              latitude: location.lat,
+              longitude: location.lng,
+            });
+            setMapMessage('');
+          } catch (error) {
+            console.error(error);
+            const fallbackAddress = `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`;
+            onSelectCreateLocationRef.current({
+              name: '',
+              address: fallbackAddress,
+              latitude: location.lat,
+              longitude: location.lng,
+            });
+            setMapMessage('住所を取得できませんでした。店名と住所を確認して保存してください。');
+          }
+        });
         mapInstanceRef.current = map;
         setStatus('ready');
+        window.setTimeout(() => map.resize(), 0);
       })
       .catch((error) => {
         console.error(error);
@@ -235,6 +310,15 @@ export function StoreDistributionMap({
       mapInstanceRef.current?.remove();
       mapInstanceRef.current = null;
     };
+  }, []);
+
+  useEffect(() => {
+    if (!mapRef.current || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      mapInstanceRef.current?.resize();
+    });
+    observer.observe(mapRef.current);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -322,18 +406,19 @@ export function StoreDistributionMap({
   return (
     <div className="rounded-lg bg-white shadow">
       <div className="border-b border-gray-200 px-4 py-4 sm:px-6">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
             <h2 className="text-base font-semibold text-gray-900">{title}</h2>
             <p className="text-sm text-gray-500">
               表示中: {visibleStores.length}件 / 座標未解決: {unresolvedCount}件
               {isResolving ? ' / 住所を確認中...' : ''}
             </p>
+            {mapMessage && <p className="mt-1 text-xs text-gray-600">{mapMessage}</p>}
           </div>
           <select
             value={filterStatus}
             onChange={(event) => setFilterStatus(event.target.value as MapStatus)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm md:w-44"
           >
             <option value="all">すべて</option>
             <option value="pending">未配布</option>
@@ -342,21 +427,27 @@ export function StoreDistributionMap({
             <option value="pickup">回収対象</option>
           </select>
         </div>
+        {addMode && (
+          <div className="mt-3 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-800">
+            地図上の追加したい場所を押してください。
+          </div>
+        )}
       </div>
 
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div
-          ref={mapRef}
-          className="h-[70vh] min-h-[28rem] w-full bg-gray-100"
-          aria-label="配布店舗マップ"
-        >
+        <div className="relative h-[70vh] min-h-[28rem] w-full overflow-hidden bg-gray-100">
+          <div
+            ref={mapRef}
+            className={`h-full w-full ${addMode ? 'cursor-crosshair' : ''}`}
+            aria-label="配布店舗マップ"
+          />
           {status === 'loading' && (
-            <div className="flex h-full items-center justify-center text-sm text-gray-500">
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-gray-100 text-sm text-gray-500">
               地図を読み込んでいます...
             </div>
           )}
           {status === 'error' && (
-            <div className="flex h-full items-center justify-center px-4 text-sm text-red-600">
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-gray-100 px-4 text-sm text-red-600">
               地図の読み込みに失敗しました。
             </div>
           )}
@@ -398,7 +489,7 @@ export function StoreDistributionMap({
                     )}
                     {resolvedByGeocode && (
                       <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
-                        住所解決
+                        住所から表示
                       </span>
                     )}
                   </span>
