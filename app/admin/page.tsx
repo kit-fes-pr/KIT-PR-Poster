@@ -31,6 +31,11 @@ const quickLinks: QuickLink[] = [
     description: '管理者の表示名など、自分の情報を設定します。',
     href: '/admin/settings',
   },
+  {
+    title: '店舗CSV一括取込',
+    description: '複数年度の店舗情報を区域と住所を確認しながら登録します。',
+    href: '/admin/store-import',
+  },
 ];
 
 export default function AdminHome() {
