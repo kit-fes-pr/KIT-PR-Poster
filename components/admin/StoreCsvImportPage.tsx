@@ -367,7 +367,7 @@ export function StoreCsvImportPage({ targetYear }: { targetYear?: number }) {
           {targetYear ? `${targetYear}年度 店舗CSVインポート` : '店舗CSV一括インポート'}
         </h1>
         <p className="mt-2 text-sm text-gray-600">
-          CSV形式は「店舗名,住所,配布年度,配布可否,配布枚数,備考,配布地域」です。配布枚数が空欄の旧形式は、可を1枚、否を0枚として登録します。
+          CSV形式は「店舗名,住所,配布年度,配布可否,配布枚数,備考,配布地域」です。配布枚数が空欄の旧形式は、可を1枚、否を0枚として登録します。配布可否が「否」の場合、配布枚数は0枚として登録されます。
         </p>
       </div>
 
@@ -589,13 +589,14 @@ export function StoreCsvImportPage({ targetYear }: { targetYear?: number }) {
                               onChange={(e) =>
                                 updateRowEdit(row, {
                                   status: e.target.value as RowEdit['status'],
+                                  ...(e.target.value === 'failed' && { distributedCount: 0 }),
                                 })
                               }
                               aria-label={`${row.rowNumber}行目の配布可否`}
                               className="rounded-md border border-gray-300 px-2 py-2 text-sm"
                             >
                               <option value="completed">可</option>
-                              <option value="failed">否</option>
+                              <option value="failed">否（配布不可・0枚）</option>
                             </select>
                             <label className="mt-2 block text-xs text-gray-600">
                               配布枚数
@@ -603,7 +604,8 @@ export function StoreCsvImportPage({ targetYear }: { targetYear?: number }) {
                                 type="number"
                                 min="0"
                                 step="1"
-                                value={edit.distributedCount}
+                                value={edit.status === 'failed' ? 0 : edit.distributedCount}
+                                disabled={edit.status === 'failed'}
                                 onChange={(e) =>
                                   updateRowEdit(row, {
                                     distributedCount: Number(e.target.value),
@@ -612,6 +614,11 @@ export function StoreCsvImportPage({ targetYear }: { targetYear?: number }) {
                                 aria-label={`${row.rowNumber}行目の配布枚数`}
                                 className="mt-1 w-24 rounded-md border border-gray-300 px-2 py-2 text-sm text-gray-900"
                               />
+                              {edit.status === 'failed' && (
+                                <span className="mt-1 block max-w-48 text-xs text-gray-500">
+                                  配布不可のため、登録時は0枚になります。
+                                </span>
+                              )}
                             </label>
                           </td>
                           <td className="px-3 py-3">
