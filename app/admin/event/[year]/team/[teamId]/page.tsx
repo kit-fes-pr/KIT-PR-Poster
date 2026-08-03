@@ -313,7 +313,7 @@ export default function TeamDetailPage() {
             <p className="text-sm text-gray-600 mt-1">担当区域: {getTeamAreaName(team)}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
               <div>
-                <p className="text-sm text-gray-600">総件数</p>
+                <p className="text-sm text-gray-600">総配布枚数</p>
                 <p className="text-2xl font-bold">{totalDistributedCount}</p>
               </div>
               <div>
