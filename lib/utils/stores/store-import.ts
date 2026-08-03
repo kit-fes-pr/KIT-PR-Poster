@@ -1,4 +1,4 @@
-export type StoreImportStatus = 'pending' | 'failed';
+export type StoreImportStatus = 'completed' | 'failed';
 
 export type ParsedStoreImportRow = {
   rowIndex: number;
@@ -8,6 +8,7 @@ export type ParsedStoreImportRow = {
   status: StoreImportStatus;
   notes: string;
   csvArea: string;
+  address: string;
 };
 
 function normalizeCsvValue(value: string) {
@@ -63,14 +64,18 @@ export function parseStoreImportCsv(
   if (records.length === 0) return { rows: [], errors: ['CSVにデータがありません'] };
 
   const headers = records[0].map(normalizeCsvValue);
-  const expectedHeaders = ['店舗名', '配布年度', '配布可否', '備考', '配布地域'];
-  if (
-    headers.length !== expectedHeaders.length ||
-    headers.some((v, i) => v !== expectedHeaders[i])
-  ) {
+  const legacyHeaders = ['店舗名', '配布年度', '配布可否', '備考', '配布地域'];
+  const headersWithAddress = ['店舗名', '住所', '配布年度', '配布可否', '備考', '配布地域'];
+  const isLegacyFormat =
+    headers.length === legacyHeaders.length &&
+    headers.every((value, index) => value === legacyHeaders[index]);
+  const isAddressFormat =
+    headers.length === headersWithAddress.length &&
+    headers.every((value, index) => value === headersWithAddress[index]);
+  if (!isLegacyFormat && !isAddressFormat) {
     return {
       rows: [],
-      errors: [`ヘッダーは「${expectedHeaders.join(',')}」の順で指定してください`],
+      errors: [`ヘッダーは「${headersWithAddress.join(',')}」の順で指定してください`],
     };
   }
 
@@ -78,8 +83,12 @@ export function parseStoreImportCsv(
   const errors: string[] = [];
   records.slice(1).forEach((record, index) => {
     const rowNumber = index + 2;
-    const values = [...record, '', '', '', '', ''].slice(0, 5).map(normalizeCsvValue);
-    const [storeName, yearValue, availability, notes, csvArea] = values;
+    const values = [...record, '', '', '', '', '', '']
+      .slice(0, headers.length)
+      .map(normalizeCsvValue);
+    const [storeName, address = '', yearValue, availability, notes, csvArea] = isAddressFormat
+      ? values
+      : [values[0], '', values[1], values[2], values[3], values[4]];
     const year = Number(yearValue);
     const rowErrors: string[] = [];
 
@@ -102,9 +111,10 @@ export function parseStoreImportCsv(
       rowNumber,
       storeName,
       year,
-      status: availability === '可' ? 'pending' : 'failed',
+      status: availability === '可' ? 'completed' : 'failed',
       notes,
       csvArea,
+      address,
     });
   });
 
