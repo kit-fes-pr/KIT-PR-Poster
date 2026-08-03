@@ -603,6 +603,7 @@ export function StoreCsvImportPage({ targetYear }: { targetYear?: number }) {
                               <input
                                 type="number"
                                 min="0"
+                                max="99"
                                 step="1"
                                 value={edit.status === 'failed' ? 0 : edit.distributedCount}
                                 disabled={edit.status === 'failed'}

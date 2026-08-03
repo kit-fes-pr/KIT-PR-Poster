@@ -15,7 +15,11 @@ import {
 import { buildTeamCreateData, resolveTeamAreaSelection } from '@/lib/utils/team/team-api';
 import { normalizeTeamTimeSlot } from '@/lib/utils/team/team';
 import { generateAndReserveNextTeamCodeInTransaction } from '@/lib/server/team-code';
-import { parseStoreImportCsv, type ParsedStoreImportRow } from '@/lib/utils/stores/store-import';
+import {
+  MAX_DISTRIBUTED_COUNT,
+  parseStoreImportCsv,
+  type ParsedStoreImportRow,
+} from '@/lib/utils/stores/store-import';
 
 type AddressSelection = {
   address?: unknown;
@@ -441,8 +445,14 @@ export async function POST(request: NextRequest) {
         invalidRows.push(`${row.csvArea}: システム配布区域を選択してください`);
       }
       if (!storeName) invalidRows.push(`${row.rowNumber}行目: 店舗名を入力してください`);
-      if (distributedCount < 0) {
-        invalidRows.push(`${row.rowNumber}行目: 配布枚数は0以上の整数で指定してください`);
+      if (
+        distributedCount < 0 ||
+        distributedCount > MAX_DISTRIBUTED_COUNT ||
+        !Number.isInteger(distributedCount)
+      ) {
+        invalidRows.push(
+          `${row.rowNumber}行目: 配布枚数は0以上${MAX_DISTRIBUTED_COUNT}以下の整数で指定してください`,
+        );
       }
       if (!address) {
         invalidRows.push(

@@ -1,4 +1,5 @@
 export type StoreImportStatus = 'completed' | 'failed';
+export const MAX_DISTRIBUTED_COUNT = 99;
 
 export type ParsedStoreImportRow = {
   rowIndex: number;
@@ -126,8 +127,12 @@ export function parseStoreImportCsv(
     if (availability !== '可' && availability !== '否') {
       rowErrors.push('配布可否は「可」または「否」で指定してください');
     }
-    if (!Number.isInteger(distributedCount) || distributedCount < 0) {
-      rowErrors.push('配布枚数は0以上の整数で指定してください');
+    if (
+      !Number.isInteger(distributedCount) ||
+      distributedCount < 0 ||
+      distributedCount > MAX_DISTRIBUTED_COUNT
+    ) {
+      rowErrors.push(`配布枚数は0以上${MAX_DISTRIBUTED_COUNT}以下の整数で指定してください`);
     }
     if (!csvArea) rowErrors.push('配布地域が空です');
 

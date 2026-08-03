@@ -49,3 +49,12 @@ test('parseStoreImportCsv rejects an invalid header and availability value', () 
   );
   assert.match(invalidAvailability.errors[0], /可/);
 });
+
+test('parseStoreImportCsv rejects distribution counts above 99', () => {
+  const result = parseStoreImportCsv(
+    '店舗名,住所,配布年度,配布可否,配布枚数,備考,配布地域\n店舗,,2026,可,100,,A-01',
+  );
+
+  assert.equal(result.rows.length, 0);
+  assert.match(result.errors[0], /0以上99以下/);
+});
