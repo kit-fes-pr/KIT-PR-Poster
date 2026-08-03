@@ -39,6 +39,7 @@ type SavedStoreInfo = {
 type StoreImportRowOverride = {
   storeName?: unknown;
   status?: unknown;
+  distributedCount?: unknown;
   notes?: unknown;
 };
 
@@ -404,6 +405,17 @@ export async function POST(request: NextRequest) {
         override.status === 'failed' || override.status === 'completed'
           ? override.status
           : row.status;
+      const rawDistributedCount =
+        override.distributedCount === undefined
+          ? row.distributedCount
+          : typeof override.distributedCount === 'number' ||
+              typeof override.distributedCount === 'string'
+            ? Number(override.distributedCount)
+            : NaN;
+      const distributedCount =
+        Number.isInteger(rawDistributedCount) && rawDistributedCount >= 0
+          ? rawDistributedCount
+          : -1;
       const areaCode = String(
         areaAssignments[row.csvArea.trim()] || fallbackAreaCodes.get(row.csvArea.trim()) || '',
       ).trim();
@@ -429,6 +441,9 @@ export async function POST(request: NextRequest) {
         invalidRows.push(`${row.csvArea}: システム配布区域を選択してください`);
       }
       if (!storeName) invalidRows.push(`${row.rowNumber}行目: 店舗名を入力してください`);
+      if (distributedCount < 0) {
+        invalidRows.push(`${row.rowNumber}行目: 配布枚数は0以上の整数で指定してください`);
+      }
       if (!address) {
         invalidRows.push(
           `${row.rowNumber}行目: 店舗の住所候補を選択してください（${addressFailureReasons.get(row.rowIndex) || 'インポート時の送信データに住所がありません'}）`,
@@ -442,6 +457,7 @@ export async function POST(request: NextRequest) {
         storeName,
         notes,
         status,
+        distributedCount,
         areaCode,
         address,
         latitude,
@@ -593,7 +609,7 @@ export async function POST(request: NextRequest) {
           distributedBy: teamCodesByGroup.get(`${payload.row.year}:${payload.areaCode}`) || '',
           distributionStatus: payload.status,
           ...(payload.status === 'failed' && { failureReason: 'other' as const }),
-          distributedCount: payload.status === 'completed' ? 1 : 0,
+          distributedCount: payload.status === 'completed' ? payload.distributedCount : 0,
           ...(payload.status === 'completed' && { distributedAt: now }),
           createdByTeamCode: teamCodesByGroup.get(`${payload.row.year}:${payload.areaCode}`) || '',
           notes: payload.notes || '',

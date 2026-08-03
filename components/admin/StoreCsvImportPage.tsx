@@ -21,6 +21,7 @@ type PreviewRow = {
   storeName: string;
   year: number;
   status: 'completed' | 'failed';
+  distributedCount: number;
   notes: string;
   csvArea: string;
   address: string;
@@ -56,7 +57,7 @@ type TeamAssignment = {
   timeSlot?: string;
 };
 
-type RowEdit = Pick<PreviewRow, 'storeName' | 'status' | 'notes'>;
+type RowEdit = Pick<PreviewRow, 'storeName' | 'status' | 'distributedCount' | 'notes'>;
 
 function dateInputValue(value: string | null) {
   return value ? value.slice(0, 10) : '';
@@ -148,6 +149,7 @@ export function StoreCsvImportPage({ targetYear }: { targetYear?: number }) {
       [String(row.rowIndex)]: {
         storeName: current[String(row.rowIndex)]?.storeName ?? row.storeName,
         status: current[String(row.rowIndex)]?.status ?? row.status,
+        distributedCount: current[String(row.rowIndex)]?.distributedCount ?? row.distributedCount,
         notes: current[String(row.rowIndex)]?.notes ?? row.notes,
         ...update,
       },
@@ -222,7 +224,12 @@ export function StoreCsvImportPage({ targetYear }: { targetYear?: number }) {
         Object.fromEntries(
           nextRows.map((row) => [
             String(row.rowIndex),
-            { storeName: row.storeName, status: row.status, notes: row.notes },
+            {
+              storeName: row.storeName,
+              status: row.status,
+              distributedCount: row.distributedCount,
+              notes: row.notes,
+            },
           ]),
         ),
       );
@@ -343,7 +350,7 @@ export function StoreCsvImportPage({ targetYear }: { targetYear?: number }) {
   };
 
   const downloadTemplate = () => {
-    const headers = [['店舗名', '住所', '配布年度', '配布可否', '備考', '配布地域']];
+    const headers = [['店舗名', '住所', '配布年度', '配布可否', '配布枚数', '備考', '配布地域']];
     const suffix = targetYear ? `_${targetYear}` : '';
     downloadCsvFile(`店舗インポートテンプレート${suffix}.csv`, buildCsvContent(headers));
   };
@@ -360,7 +367,7 @@ export function StoreCsvImportPage({ targetYear }: { targetYear?: number }) {
           {targetYear ? `${targetYear}年度 店舗CSVインポート` : '店舗CSV一括インポート'}
         </h1>
         <p className="mt-2 text-sm text-gray-600">
-          配布可否の「可」は配布済み、「否」は配布不可として登録します。
+          CSV形式は「店舗名,住所,配布年度,配布可否,配布枚数,備考,配布地域」です。配布枚数が空欄の旧形式は、可を1枚、否を0枚として登録します。
         </p>
       </div>
 
@@ -544,6 +551,7 @@ export function StoreCsvImportPage({ targetYear }: { targetYear?: number }) {
                       const edit = rowEdits[String(row.rowIndex)] || {
                         storeName: row.storeName,
                         status: row.status,
+                        distributedCount: row.distributedCount,
                         notes: row.notes,
                       };
                       return (
@@ -589,6 +597,22 @@ export function StoreCsvImportPage({ targetYear }: { targetYear?: number }) {
                               <option value="completed">可</option>
                               <option value="failed">否</option>
                             </select>
+                            <label className="mt-2 block text-xs text-gray-600">
+                              配布枚数
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={edit.distributedCount}
+                                onChange={(e) =>
+                                  updateRowEdit(row, {
+                                    distributedCount: Number(e.target.value),
+                                  })
+                                }
+                                aria-label={`${row.rowNumber}行目の配布枚数`}
+                                className="mt-1 w-24 rounded-md border border-gray-300 px-2 py-2 text-sm text-gray-900"
+                              />
+                            </label>
                           </td>
                           <td className="px-3 py-3">
                             <button

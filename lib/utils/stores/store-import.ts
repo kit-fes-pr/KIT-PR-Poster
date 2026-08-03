@@ -6,6 +6,7 @@ export type ParsedStoreImportRow = {
   storeName: string;
   year: number;
   status: StoreImportStatus;
+  distributedCount: number;
   notes: string;
   csvArea: string;
   address: string;
@@ -66,16 +67,28 @@ export function parseStoreImportCsv(
   const headers = records[0].map(normalizeCsvValue);
   const legacyHeaders = ['店舗名', '配布年度', '配布可否', '備考', '配布地域'];
   const headersWithAddress = ['店舗名', '住所', '配布年度', '配布可否', '備考', '配布地域'];
+  const headersWithCount = [
+    '店舗名',
+    '住所',
+    '配布年度',
+    '配布可否',
+    '配布枚数',
+    '備考',
+    '配布地域',
+  ];
   const isLegacyFormat =
     headers.length === legacyHeaders.length &&
     headers.every((value, index) => value === legacyHeaders[index]);
   const isAddressFormat =
     headers.length === headersWithAddress.length &&
     headers.every((value, index) => value === headersWithAddress[index]);
-  if (!isLegacyFormat && !isAddressFormat) {
+  const isCountFormat =
+    headers.length === headersWithCount.length &&
+    headers.every((value, index) => value === headersWithCount[index]);
+  if (!isLegacyFormat && !isAddressFormat && !isCountFormat) {
     return {
       rows: [],
-      errors: [`ヘッダーは「${headersWithAddress.join(',')}」の順で指定してください`],
+      errors: [`ヘッダーは「${headersWithCount.join(',')}」の順で指定してください`],
     };
   }
 
@@ -86,10 +99,24 @@ export function parseStoreImportCsv(
     const values = [...record, '', '', '', '', '', '']
       .slice(0, headers.length)
       .map(normalizeCsvValue);
-    const [storeName, address = '', yearValue, availability, notes, csvArea] = isAddressFormat
+    const [
+      storeName,
+      address = '',
+      yearValue,
+      availability,
+      distributedCountValue,
+      notes,
+      csvArea,
+    ] = isCountFormat
       ? values
-      : [values[0], '', values[1], values[2], values[3], values[4]];
+      : isAddressFormat
+        ? [values[0], values[1], values[2], values[3], '', values[4], values[5]]
+        : [values[0], '', values[1], values[2], '', values[3], values[4]];
     const year = Number(yearValue);
+    const defaultDistributedCount = availability === '可' ? 1 : 0;
+    const distributedCount = distributedCountValue
+      ? Number(distributedCountValue)
+      : defaultDistributedCount;
     const rowErrors: string[] = [];
 
     if (!storeName) rowErrors.push('店舗名が空です');
@@ -98,6 +125,9 @@ export function parseStoreImportCsv(
     }
     if (availability !== '可' && availability !== '否') {
       rowErrors.push('配布可否は「可」または「否」で指定してください');
+    }
+    if (!Number.isInteger(distributedCount) || distributedCount < 0) {
+      rowErrors.push('配布枚数は0以上の整数で指定してください');
     }
     if (!csvArea) rowErrors.push('配布地域が空です');
 
@@ -112,6 +142,7 @@ export function parseStoreImportCsv(
       storeName,
       year,
       status: availability === '可' ? 'completed' : 'failed',
+      distributedCount,
       notes,
       csvArea,
       address,

@@ -10,9 +10,11 @@ test('parseStoreImportCsv parses the legacy store header and availability values
   assert.deepEqual(result.errors, []);
   assert.equal(result.rows.length, 2);
   assert.equal(result.rows[0].status, 'completed');
+  assert.equal(result.rows[0].distributedCount, 1);
   assert.equal(result.rows[0].notes, '駅前,担当者確認');
   assert.equal(result.rows[0].address, '');
   assert.equal(result.rows[1].status, 'failed');
+  assert.equal(result.rows[1].distributedCount, 0);
 });
 
 test('parseStoreImportCsv accepts an optional address column', () => {
@@ -22,6 +24,18 @@ test('parseStoreImportCsv accepts an optional address column', () => {
 
   assert.deepEqual(result.errors, []);
   assert.equal(result.rows[0].address, '金沢市〇〇1-2-3');
+  assert.equal(result.rows[0].distributedCount, 1);
+});
+
+test('parseStoreImportCsv parses the distribution count column', () => {
+  const result = parseStoreImportCsv(
+    '店舗名,住所,配布年度,配布可否,配布枚数,備考,配布地域\n店舗,金沢市〇〇1-2-3,2026,可,3,駅前,A-01\n別店舗,,2026,否,0,,A-01',
+  );
+
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.rows[0].distributedCount, 3);
+  assert.equal(result.rows[0].notes, '駅前');
+  assert.equal(result.rows[1].distributedCount, 0);
 });
 
 test('parseStoreImportCsv rejects an invalid header and availability value', () => {
