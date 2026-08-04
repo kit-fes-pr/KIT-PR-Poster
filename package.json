@@ -42,7 +42,7 @@
     "lint-staged": "^17.3.0",
     "prettier": "^3.9.5",
     "tailwindcss": "^4",
-    "typescript": "^6"
+    "typescript": "^7"
   },
   "allowScripts": {
     "@tailwindcss/oxide@4.1.13": true,
