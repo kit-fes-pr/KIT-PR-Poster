@@ -97,8 +97,7 @@ export function StoreCsvImportPage({ targetYear }: { targetYear?: number }) {
 
   const hasRowError = (rowNumber: number) =>
     errors.some((error) => error.startsWith(`${rowNumber}行目:`));
-  const hasAreaError = (csvArea: string) =>
-    errors.some((error) => error.startsWith(`${csvArea}:`));
+  const hasAreaError = (csvArea: string) => errors.some((error) => error.startsWith(`${csvArea}:`));
 
   const teamGroups = useMemo(() => {
     const groups = new Map<
