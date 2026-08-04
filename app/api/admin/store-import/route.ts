@@ -626,34 +626,33 @@ export async function POST(request: NextRequest) {
 
     for (let start = 0; start < storePayloads.length; start += 400) {
       const chunk = storePayloads.slice(start, start + 400);
-      await adminDb.runTransaction(async (transaction) => {
-        chunk.forEach((payload) => {
-          const storeRef = adminDb.collection('stores').doc();
-          const storeData = {
-            storeId: storeRef.id,
-            storeName: payload.storeName,
-            storeNameKana: generateKana(payload.storeName),
-            address: payload.address,
-            addressKana: generateKana(payload.address),
-            ...(payload.latitude !== undefined && { latitude: payload.latitude }),
-            ...(payload.longitude !== undefined && { longitude: payload.longitude }),
-            areaCode: payload.areaCode,
-            distributedBy: teamCodesByGroup.get(`${payload.row.year}:${payload.areaCode}`) || '',
-            distributionStatus: payload.status,
-            ...(payload.status === 'failed' && { failureReason: 'other' as const }),
-            distributedCount: payload.status === 'completed' ? payload.distributedCount : 0,
-            ...(payload.status === 'completed' && { distributedAt: now }),
-            createdByTeamCode:
-              teamCodesByGroup.get(`${payload.row.year}:${payload.areaCode}`) || '',
-            notes: payload.notes || '',
-            registrationMethod: 'manual' as const,
-            eventId: payload.eventId,
-            createdAt: now,
-            updatedAt: now,
-          };
-          transaction.create(storeRef, storeData);
-        });
+      const batch = adminDb.batch();
+      chunk.forEach((payload) => {
+        const storeRef = adminDb.collection('stores').doc();
+        const storeData = {
+          storeId: storeRef.id,
+          storeName: payload.storeName,
+          storeNameKana: generateKana(payload.storeName),
+          address: payload.address,
+          addressKana: generateKana(payload.address),
+          ...(payload.latitude !== undefined && { latitude: payload.latitude }),
+          ...(payload.longitude !== undefined && { longitude: payload.longitude }),
+          areaCode: payload.areaCode,
+          distributedBy: teamCodesByGroup.get(`${payload.row.year}:${payload.areaCode}`) || '',
+          distributionStatus: payload.status,
+          ...(payload.status === 'failed' && { failureReason: 'other' as const }),
+          distributedCount: payload.status === 'completed' ? payload.distributedCount : 0,
+          ...(payload.status === 'completed' && { distributedAt: now }),
+          createdByTeamCode: teamCodesByGroup.get(`${payload.row.year}:${payload.areaCode}`) || '',
+          notes: payload.notes || '',
+          registrationMethod: 'manual' as const,
+          eventId: payload.eventId,
+          createdAt: now,
+          updatedAt: now,
+        };
+        batch.create(storeRef, storeData);
       });
+      await batch.commit();
     }
 
     return NextResponse.json({ success: true, imported: storePayloads.length });
