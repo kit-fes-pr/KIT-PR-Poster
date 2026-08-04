@@ -8,10 +8,7 @@ import {
   buildAvailabilitySlotChoices,
   normalizeAvailabilitySlots,
 } from '@/lib/utils/availability/availability';
-import {
-  buildDistributionEventCreateDefaults,
-  normalizeDistributionYear,
-} from '@/lib/utils/events/events';
+import { buildDistributionEventCreateDefaults } from '@/lib/utils/events/events';
 import { buildTeamCreateData, resolveTeamAreaSelection } from '@/lib/utils/team/team-api';
 import { normalizeTeamTimeSlot } from '@/lib/utils/team/team';
 import { generateAndReserveNextTeamCodeInTransaction } from '@/lib/server/team-code';
@@ -20,6 +17,12 @@ import {
   parseStoreImportCsv,
   type ParsedStoreImportRow,
 } from '@/lib/utils/stores/store-import';
+import {
+  parseStoreImportTargetYear,
+  resolveStoreImportAddress,
+  resolveStoreImportAreaCode,
+  validateStoreImportScope,
+} from '@/lib/utils/stores/store-import-route';
 
 type AddressSelection = {
   address?: unknown;
@@ -73,12 +76,6 @@ async function verifyAdmin(request: NextRequest) {
   } catch {
     return null;
   }
-}
-
-function parseTargetYear(value: unknown) {
-  return value === undefined || value === null || value === ''
-    ? null
-    : normalizeDistributionYear(value);
 }
 
 function parseCoordinate(value: unknown, min: number, max: number) {
@@ -271,7 +268,7 @@ async function parseRequest(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as ImportRequest | null;
   const csv = typeof body?.csv === 'string' ? body.csv : '';
   const parsed = parseStoreImportCsv(csv);
-  const targetYear = parseTargetYear(body?.targetYear);
+  const targetYear = parseStoreImportTargetYear(body?.targetYear);
   return { body, parsed, targetYear };
 }
 
@@ -289,14 +286,9 @@ export async function POST(request: NextRequest) {
     if (parsed.errors.length > 0 && parsed.rows.length === 0) {
       return NextResponse.json({ errors: parsed.errors }, { status: 400 });
     }
-    if (parsed.rows.length > 1000) {
-      return NextResponse.json({ error: '一度に取り込める店舗は1000件までです' }, { status: 400 });
-    }
-    if (targetYear !== null && parsed.rows.some((row) => row.year !== targetYear)) {
-      return NextResponse.json(
-        { error: `${targetYear}年度以外の行が含まれています` },
-        { status: 400 },
-      );
+    const scopeErrors = validateStoreImportScope(parsed.rows, targetYear);
+    if (scopeErrors.length > 0) {
+      return NextResponse.json({ error: scopeErrors[0], errors: scopeErrors }, { status: 400 });
     }
 
     if (body?.action !== 'import') {
@@ -440,16 +432,15 @@ export async function POST(request: NextRequest) {
         Number.isInteger(rawDistributedCount) && rawDistributedCount >= 0
           ? rawDistributedCount
           : -1;
-      const areaCode = String(
-        areaAssignments[row.csvArea.trim()] || fallbackAreaCodes.get(row.csvArea.trim()) || '',
-      ).trim();
+      const areaCode = resolveStoreImportAreaCode(row.csvArea, areaAssignments, fallbackAreaCodes);
       const area = validAreas.get(areaCode);
       const addressSelection =
         addressSelections[String(row.rowIndex)] || addressSelections[String(row.rowNumber)] || {};
-      const address =
-        typeof addressSelection.address === 'string' && addressSelection.address.trim()
-          ? addressSelection.address.trim()
-          : row.address || fallbackAddresses.get(row.rowIndex)?.address || '';
+      const address = resolveStoreImportAddress(
+        addressSelection,
+        row.address,
+        fallbackAddresses.get(row.rowIndex)?.address,
+      );
       const latitude = parseCoordinate(
         addressSelection.latitude ?? fallbackAddresses.get(row.rowIndex)?.latitude,
         -90,
