@@ -87,6 +87,26 @@ function parseCoordinate(value: unknown, min: number, max: number) {
   return Number.isFinite(number) && number >= min && number <= max ? number : undefined;
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  callback: (item: T) => Promise<R>,
+) {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await callback(items[index]);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
+}
+
 async function findSavedStoreInfo(storeName: string): Promise<SavedStoreInfo> {
   const snapshot = await adminDb
     .collection('stores')
@@ -130,29 +150,23 @@ async function buildPreview(rows: ParsedStoreImportRow[], targetYear: number | n
   });
   const addressResults = new Map<string, AddressCandidate[]>();
   const savedAreaCodes = new Map<string, string[]>();
-
-  for (const row of rows) {
-    if (addressResults.has(row.storeName)) continue;
-    const savedStoreInfo = await findSavedStoreInfo(row.storeName);
-    savedAreaCodes.set(row.storeName, savedStoreInfo.areaCodes);
+  const firstRowByStoreName = new Map<string, ParsedStoreImportRow>();
+  rows.forEach((row) => {
+    if (!firstRowByStoreName.has(row.storeName)) firstRowByStoreName.set(row.storeName, row);
+  });
+  const storeNames = [...firstRowByStoreName.keys()];
+  const addressLookups = await mapWithConcurrency(storeNames, 8, async (storeName) => {
+    const row = firstRowByStoreName.get(storeName);
+    if (!row) return null;
+    const savedStoreInfo = await findSavedStoreInfo(storeName);
+    let candidates: AddressCandidate[];
     if (row.address) {
-      addressResults.set(row.storeName, [
-        {
-          label: row.address,
-          address: row.address,
-          source: 'csv',
-        },
-      ]);
-      continue;
-    }
-    if (savedStoreInfo.addressCandidates.length > 0) {
-      addressResults.set(row.storeName, savedStoreInfo.addressCandidates);
-      continue;
-    }
-    const geocodedCandidates = await searchGeocodePlaces(row.storeName);
-    addressResults.set(
-      row.storeName,
-      geocodedCandidates
+      candidates = [{ label: row.address, address: row.address, source: 'csv' }];
+    } else if (savedStoreInfo.addressCandidates.length > 0) {
+      candidates = savedStoreInfo.addressCandidates;
+    } else {
+      const geocodedCandidates = await searchGeocodePlaces(storeName);
+      candidates = geocodedCandidates
         .map((result) => ({
           label: result.display_name,
           address: result.display_name,
@@ -163,9 +177,15 @@ async function buildPreview(rows: ParsedStoreImportRow[], targetYear: number | n
         .filter(
           (candidate) =>
             Number.isFinite(candidate.latitude) && Number.isFinite(candidate.longitude),
-        ),
-    );
-  }
+        );
+    }
+    return { storeName, areaCodes: savedStoreInfo.areaCodes, candidates };
+  });
+  addressLookups.forEach((lookup) => {
+    if (!lookup) return;
+    savedAreaCodes.set(lookup.storeName, lookup.areaCodes);
+    addressResults.set(lookup.storeName, lookup.candidates);
+  });
 
   const eventYears = [...new Set(rows.map((row) => row.year))].sort();
   const events = await Promise.all(
