@@ -1,4 +1,5 @@
 import { serializeDateTimeValue } from '../dateUtils';
+import { serializeDateOnlyValue } from '../events/events';
 
 export type DashboardMemberRecord = {
   name: string;
@@ -33,8 +34,8 @@ export function buildDashboardEventData(input: {
   return {
     ...input,
     createdAt: serializeDateTimeValue(input.createdAt),
-    distributionStartDate: serializeDateTimeValue(input.distributionStartDate),
-    distributionEndDate: serializeDateTimeValue(input.distributionEndDate),
+    distributionStartDate: serializeDateOnlyValue(input.distributionStartDate),
+    distributionEndDate: serializeDateOnlyValue(input.distributionEndDate),
   };
 }
 

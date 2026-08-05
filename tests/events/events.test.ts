@@ -117,6 +117,7 @@ describe('events utils', () => {
     assert.equal(serializeDateOnlyValue(date), '2026-06-22');
     assert.equal(serializeDateOnlyValue(1), '1970-01-01');
     assert.equal(serializeDateOnlyValue('2026-06-21'), '2026-06-21');
+    assert.equal(serializeDateOnlyValue('2026-06-21T15:00:00.000Z'), '2026-06-22');
   });
 
   test('serializeDateTimeValue and serializeEventDoc preserve event payload shape', () => {

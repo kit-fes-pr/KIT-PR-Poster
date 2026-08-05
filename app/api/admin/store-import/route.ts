@@ -8,7 +8,10 @@ import {
   buildAvailabilitySlotChoices,
   normalizeAvailabilitySlots,
 } from '@/lib/utils/availability/availability';
-import { buildDistributionEventCreateDefaults } from '@/lib/utils/events/events';
+import {
+  buildDistributionEventCreateDefaults,
+  serializeDateOnlyValue,
+} from '@/lib/utils/events/events';
 import { buildTeamCreateData, resolveTeamAreaSelection } from '@/lib/utils/team/team-api';
 import { normalizeTeamTimeSlot } from '@/lib/utils/team/team';
 import { generateAndReserveNextTeamCodeInTransaction } from '@/lib/server/team-code';
@@ -198,14 +201,14 @@ async function buildPreview(rows: ParsedStoreImportRow[], targetYear: number | n
         eventId: snapshot.empty ? `kodai${year}` : snapshot.docs[0].id,
         exists: Boolean(data),
         eventName: data ? String(data.eventName || `工大祭${year}`) : `工大祭${year}`,
-        distributionStartDate: data?.distributionStartDate || null,
-        distributionEndDate: data?.distributionEndDate || null,
+        distributionStartDate: serializeDateOnlyValue(data?.distributionStartDate) || null,
+        distributionEndDate: serializeDateOnlyValue(data?.distributionEndDate) || null,
         availabilitySlots: data
           ? normalizeAvailabilitySlots(data.distributionAvailabilitySlots).length > 0
             ? normalizeAvailabilitySlots(data.distributionAvailabilitySlots)
             : buildAvailabilitySlotChoices(
-                data.distributionStartDate,
-                data.distributionEndDate,
+                serializeDateOnlyValue(data.distributionStartDate),
+                serializeDateOnlyValue(data.distributionEndDate),
               ).map((choice) => choice.key)
           : [],
       };
@@ -561,8 +564,8 @@ export async function POST(request: NextRequest) {
         ? normalizeAvailabilitySlots(eventData.distributionAvailabilitySlots).length > 0
           ? normalizeAvailabilitySlots(eventData.distributionAvailabilitySlots)
           : buildAvailabilitySlotChoices(
-              eventData.distributionStartDate,
-              eventData.distributionEndDate,
+              serializeDateOnlyValue(eventData.distributionStartDate),
+              serializeDateOnlyValue(eventData.distributionEndDate),
             ).map((choice) => choice.key)
         : [];
       const timeSlot = normalizeTeamTimeSlot(assignment.timeSlot || availabilitySlots[0]);

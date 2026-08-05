@@ -3,6 +3,7 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { loadAreaMap } from '@/lib/server/team-area';
 import { buildMissingTeamAccessWindowPatch } from '@/lib/utils/team/team-access';
+import { serializeDateOnlyValue } from '@/lib/utils/events/events';
 
 function serializeDateValue(value: unknown): string | unknown {
   if (!value) return value;
@@ -90,8 +91,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
               id: doc.id,
               ...raw,
               createdAt: serializeDateValue(raw.createdAt),
-              distributionStartDate: serializeDateValue(raw.distributionStartDate),
-              distributionEndDate: serializeDateValue(raw.distributionEndDate),
+              distributionStartDate: serializeDateOnlyValue(raw.distributionStartDate),
+              distributionEndDate: serializeDateOnlyValue(raw.distributionEndDate),
             };
           }
 
