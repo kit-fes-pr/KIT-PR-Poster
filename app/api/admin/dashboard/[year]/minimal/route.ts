@@ -2,12 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { FirestoreCache, ServerCache } from '@/lib/utils/server-cache';
-import {
-  countResponsesWithAvailability,
-  serializeDateLikeValue,
-} from '@/lib/utils/availability/availability-api';
+import { countResponsesWithAvailability } from '@/lib/utils/availability/availability-api';
 import { buildMinimalDashboardResponseData } from '@/lib/utils/availability/availability-route';
 import { logInfo, logPerformance } from '@/lib/utils/logger';
+import { serializeDateOnlyValue } from '@/lib/utils/events/events';
 
 export async function GET(request: NextRequest, context: { params: Promise<{ year: string }> }) {
   const startTime = Date.now();
@@ -76,8 +74,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
           id: doc.id,
           eventName: doc.data().eventName,
           year: doc.data().year,
-          distributionStartDate: serializeDateLikeValue(doc.data().distributionStartDate),
-          distributionEndDate: serializeDateLikeValue(doc.data().distributionEndDate),
+          distributionStartDate: serializeDateOnlyValue(doc.data().distributionStartDate),
+          distributionEndDate: serializeDateOnlyValue(doc.data().distributionEndDate),
         };
       }
 

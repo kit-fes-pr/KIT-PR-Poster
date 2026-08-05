@@ -20,9 +20,14 @@ function formatDateOnlyInTimeZone(value: Date, timeZone = DEFAULT_TIME_ZONE): st
 export function serializeDateOnlyValue(
   value: unknown,
   timeZone = DEFAULT_TIME_ZONE,
-): string | unknown {
-  if (!value) return value;
-  if (typeof value === 'string') return value;
+): string | undefined {
+  if (!value) return undefined;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? undefined : formatDateOnlyInTimeZone(parsed, timeZone);
+  }
   if (value instanceof Date) return formatDateOnlyInTimeZone(value, timeZone);
   if (typeof value === 'number') return formatDateOnlyInTimeZone(new Date(value), timeZone);
   if (
@@ -33,7 +38,7 @@ export function serializeDateOnlyValue(
   ) {
     return formatDateOnlyInTimeZone((value as { toDate: () => Date }).toDate(), timeZone);
   }
-  return value;
+  return undefined;
 }
 
 export function normalizeDistributionDateRange(

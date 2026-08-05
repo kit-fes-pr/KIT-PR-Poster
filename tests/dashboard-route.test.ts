@@ -20,7 +20,7 @@ describe('dashboard route utils', () => {
     });
 
     assert.equal(event.createdAt, '2026-01-01T00:00:00.000Z');
-    assert.equal(event.distributionStartDate, '2026-06-01T00:00:00.000Z');
+    assert.equal(event.distributionStartDate, '2026-06-01');
     assert.equal(event.distributionEndDate, '2026-06-02');
   });
 
