@@ -38,8 +38,27 @@ describe('assignment route utils', () => {
         year: 2026,
         formId: 'form-1',
         responseId: 'response-1',
-        teamId: 'team-1',
-        timeSlot: '2026-06-01_am',
+        targets: [{ teamId: 'team-1', timeSlot: '2026-06-01_am' }],
+      },
+    );
+    assert.deepEqual(
+      parseAssignmentMutationPayload({
+        year: '2026',
+        formId: ' form-1 ',
+        responseId: ' response-1 ',
+        assignments: [
+          { teamId: ' team-1 ', timeSlot: '2026-06-01_am' },
+          { teamId: ' team-2 ', timeSlot: '2026-06-01_pm' },
+        ],
+      }),
+      {
+        year: 2026,
+        formId: 'form-1',
+        responseId: 'response-1',
+        targets: [
+          { teamId: 'team-1', timeSlot: '2026-06-01_am' },
+          { teamId: 'team-2', timeSlot: '2026-06-01_pm' },
+        ],
       },
     );
     const invalidYear = parseAssignmentMutationPayload({

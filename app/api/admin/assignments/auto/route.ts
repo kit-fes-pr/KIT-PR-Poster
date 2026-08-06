@@ -111,11 +111,18 @@ export async function POST(request: NextRequest) {
       );
       return normalizedSlots.length > 0;
     });
-    const existingManualAssignmentCount = manualAssignments.reduce(
-      (count, assignment) => count + (participantIds.has(assignment.responseId) ? 1 : 0),
-      0,
+    const manuallyAssignedParticipantIds = new Set(
+      manualAssignments
+        .map((assignment) => assignment.responseId)
+        .filter((responseId) => participantIds.has(responseId)),
     );
-    const totalAssignedCount = existingManualAssignmentCount + assignmentResult.assignments.length;
+    const autoAssignedParticipantIds = new Set(
+      assignmentResult.assignments.map((assignment) => assignment.responseId),
+    );
+    const totalAssignedCount = new Set([
+      ...manuallyAssignedParticipantIds,
+      ...autoAssignedParticipantIds,
+    ]).size;
 
     return NextResponse.json({
       message: '自動割り当てが完了しました',

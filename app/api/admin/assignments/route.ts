@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import {
-  buildManualAssignmentRecord,
+  buildManualAssignmentRecords,
   normalizeAssignmentYear,
+  preserveExistingAssignmentLabels,
 } from '@/lib/utils/assignment/assignment-api';
 import {
   normalizeAssignmentAuthHeader,
@@ -70,44 +71,60 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: parsedPayload.error }, { status: 400 });
     }
 
-    const manualAssignment = buildManualAssignmentRecord({
+    const manualAssignments = buildManualAssignmentRecords({
       year: parsedPayload.year,
       formId: parsedPayload.formId,
       responseId: parsedPayload.responseId,
-      teamId: parsedPayload.teamId,
-      timeSlot: parsedPayload.timeSlot,
+      targets: parsedPayload.targets,
       assignedAt: new Date(),
     });
-    if (!manualAssignment) {
+    if (!manualAssignments) {
       return NextResponse.json(
         { error: 'year, formId, responseId, teamId, timeSlot が必要です' },
         { status: 400 },
       );
     }
 
-    // 既存の同一参加者の割り当てを削除（同一年度・フォーム内で一意に）
+    const { year, formId, responseId } = manualAssignments[0];
+
+    // 手動保存では同一参加者の割り当て先一覧を置き換える
     const query = await adminDb
       .collection('assignments')
-      .where('year', '==', manualAssignment.year)
-      .where('formId', '==', manualAssignment.formId)
-      .where('responseId', '==', manualAssignment.responseId)
+      .where('year', '==', year)
+      .where('formId', '==', formId)
+      .where('responseId', '==', responseId)
       .get();
     const batch = adminDb.batch();
     query.docs.forEach((doc) => batch.delete(doc.ref));
 
-    // 新しい割り当てを追加
-    const docRef = adminDb.collection('assignments').doc();
-    batch.set(docRef, {
-      ...manualAssignment,
+    const assignmentIds: string[] = [];
+    const assignmentsToSave = preserveExistingAssignmentLabels(
+      manualAssignments,
+      query.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          teamId: data.teamId,
+          assignedAt: data.assignedAt,
+          assignedBy: data.assignedBy,
+        };
+      }),
+    );
+
+    assignmentsToSave.forEach((assignment) => {
+      const docRef = adminDb.collection('assignments').doc();
+      assignmentIds.push(docRef.id);
+      batch.set(docRef, {
+        ...assignment,
+      });
     });
 
     await batch.commit();
 
-    if (manualAssignment.year) {
-      FirestoreCache.invalidateYear(Number(manualAssignment.year));
+    if (year) {
+      FirestoreCache.invalidateYear(Number(year));
     }
 
-    return NextResponse.json({ success: true, assignmentId: docRef.id });
+    return NextResponse.json({ success: true, assignmentIds, assignmentId: assignmentIds[0] });
   } catch (error) {
     console.error('割り当て作成エラー:', error);
     return NextResponse.json({ error: '割り当ての作成に失敗しました' }, { status: 500 });
