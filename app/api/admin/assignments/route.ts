@@ -71,13 +71,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: parsedPayload.error }, { status: 400 });
     }
 
-    const manualAssignments = buildManualAssignmentRecords({
-      year: parsedPayload.year,
-      formId: parsedPayload.formId,
-      responseId: parsedPayload.responseId,
-      targets: parsedPayload.targets,
-      assignedAt: new Date(),
-    });
+    const manualAssignments =
+      parsedPayload.targets.length > 0
+        ? buildManualAssignmentRecords({
+            year: parsedPayload.year,
+            formId: parsedPayload.formId,
+            responseId: parsedPayload.responseId,
+            targets: parsedPayload.targets,
+            assignedAt: new Date(),
+          })
+        : [];
     if (!manualAssignments) {
       return NextResponse.json(
         { error: 'year, formId, responseId, teamId, timeSlot が必要です' },
@@ -85,7 +88,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { year, formId, responseId } = manualAssignments[0];
+    const { year, formId, responseId } = parsedPayload;
 
     // 手動保存では同一参加者の割り当て先一覧を置き換える
     const query = await adminDb

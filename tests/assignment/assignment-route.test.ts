@@ -61,6 +61,20 @@ describe('assignment route utils', () => {
         ],
       },
     );
+    assert.deepEqual(
+      parseAssignmentMutationPayload({
+        year: '2026',
+        formId: ' form-1 ',
+        responseId: ' response-1 ',
+        assignments: [],
+      }),
+      {
+        year: 2026,
+        formId: 'form-1',
+        responseId: 'response-1',
+        targets: [],
+      },
+    );
     const invalidYear = parseAssignmentMutationPayload({
       year: '2026.5',
       formId: 'form-1',
@@ -76,6 +90,16 @@ describe('assignment route utils', () => {
     });
     assert.equal(
       'error' in missingField ? missingField.error : null,
+      'year, formId, responseId, teamId は必須です',
+    );
+    const invalidAssignmentList = parseAssignmentMutationPayload({
+      year: '2026',
+      formId: 'form-1',
+      responseId: 'response-1',
+      assignments: [{ teamId: ' ' }],
+    });
+    assert.equal(
+      'error' in invalidAssignmentList ? invalidAssignmentList.error : null,
       'year, formId, responseId, teamId は必須です',
     );
 

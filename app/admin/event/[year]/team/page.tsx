@@ -1688,13 +1688,9 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                     キャンセル
                   </button>
                   <button
-                    disabled={
-                      manualAssignLoading ||
-                      manualAssignTeamIds.length === 0 ||
-                      !selectedParticipant
-                    }
+                    disabled={manualAssignLoading || !selectedParticipant}
                     onClick={async () => {
-                      if (!selectedParticipant || manualAssignTeamIds.length === 0) return;
+                      if (!selectedParticipant) return;
                       try {
                         setManualAssignLoading(true);
                         const token = await user!.getIdToken();

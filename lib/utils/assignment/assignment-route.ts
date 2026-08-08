@@ -45,14 +45,18 @@ export function parseAssignmentMutationPayload(input: unknown):
 
   const formId = typeof payload.formId === 'string' ? payload.formId.trim() : '';
   const responseId = typeof payload.responseId === 'string' ? payload.responseId.trim() : '';
-  const targets: Array<{ teamId: string; timeSlot?: unknown }> = Array.isArray(payload.assignments)
-    ? payload.assignments.reduce<Array<{ teamId: string; timeSlot?: unknown }>>((items, item) => {
-        if (typeof item !== 'object' || item === null) return items;
-        const target = item as Record<string, unknown>;
-        const teamId = typeof target.teamId === 'string' ? target.teamId.trim() : '';
-        if (teamId) items.push({ teamId, timeSlot: target.timeSlot });
-        return items;
-      }, [])
+  const hasAssignmentList = Array.isArray(payload.assignments);
+  const targets: Array<{ teamId: string; timeSlot?: unknown }> = hasAssignmentList
+    ? (payload.assignments as unknown[]).reduce<Array<{ teamId: string; timeSlot?: unknown }>>(
+        (items, item) => {
+          if (typeof item !== 'object' || item === null) return items;
+          const target = item as Record<string, unknown>;
+          const teamId = typeof target.teamId === 'string' ? target.teamId.trim() : '';
+          if (teamId) items.push({ teamId, timeSlot: target.timeSlot });
+          return items;
+        },
+        [],
+      )
     : typeof payload.teamId === 'string' && payload.teamId.trim()
       ? [{ teamId: payload.teamId.trim(), timeSlot: payload.timeSlot }]
       : [];
@@ -61,7 +65,11 @@ export function parseAssignmentMutationPayload(input: unknown):
     return { error: '年度が必要です' };
   }
 
-  if (!formId || !responseId || targets.length === 0) {
+  if (!formId || !responseId || (!hasAssignmentList && targets.length === 0)) {
+    return { error: 'year, formId, responseId, teamId は必須です' };
+  }
+
+  if (hasAssignmentList && (payload.assignments as unknown[]).length > 0 && targets.length === 0) {
     return { error: 'year, formId, responseId, teamId は必須です' };
   }
 
