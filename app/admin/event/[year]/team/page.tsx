@@ -1640,9 +1640,19 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      割り当て先チーム
-                    </label>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        割り当て先チーム
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setManualAssignTeamIds([])}
+                        disabled={manualAssignLoading || manualAssignTeamIds.length === 0}
+                        className="text-sm font-medium text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:text-gray-400"
+                      >
+                        一括解除
+                      </button>
+                    </div>
                     <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border border-gray-200 p-3">
                       {teams.map((team) => (
                         <label
