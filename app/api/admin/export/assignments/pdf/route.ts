@@ -1,9 +1,6 @@
-import { readFile } from 'fs/promises';
-import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
-import fontkit from '@pdf-lib/fontkit';
-import { PDFDocument, PDFPage, PDFFont, rgb } from 'pdf-lib';
 import { adminAuth } from '@/lib/firebase-admin';
+import { buildSectionedTableReportPdf } from '@/lib/server/pdf/sectioned-table-report';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { formatDate } from '@/lib/utils/dateUtils';
 
@@ -20,27 +17,7 @@ type AssignmentExportRow = {
   name: string;
 };
 
-type FontEntry = {
-  bytes: Uint8Array;
-};
-
-const PAGE_WIDTH = 595.28;
-const PAGE_HEIGHT = 841.89;
-const MARGIN_X = 34;
-const HEADER_Y = PAGE_HEIGHT - 28;
-const FOOTER_Y = 24;
-const CONTENT_TOP = PAGE_HEIGHT - 55;
-const CONTENT_BOTTOM = 48;
-const FONT_SIZE = 10;
-const HEADER_FONT_SIZE = 10;
-const TITLE_FONT_SIZE = 18;
-const LINE_HEIGHT = 13;
-const TABLE_HEADER_HEIGHT = 22;
-const TABLE_ROW_HEIGHT = 26;
-const SECTION_TITLE_HEIGHT = 20;
 const COL_WIDTHS = [80, 447];
-
-let fontEntryCache: Promise<FontEntry> | null = null;
 
 function normalizeString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -55,179 +32,6 @@ function normalizeRows(value: unknown): AssignmentExportRow[] {
       grade: Number.isFinite(Number(source.grade)) ? Number(source.grade) : 0,
       name: normalizeString(source.name),
     };
-  });
-}
-
-async function loadFontEntry(): Promise<FontEntry> {
-  if (!fontEntryCache) {
-    fontEntryCache = (async () => {
-      try {
-        const fontPath = path.join(
-          process.cwd(),
-          'node_modules',
-          '@expo-google-fonts',
-          'noto-sans-jp',
-          '400Regular',
-          'NotoSansJP_400Regular.ttf',
-        );
-        return {
-          bytes: await readFile(fontPath),
-        };
-      } catch (error) {
-        fontEntryCache = null;
-        throw error;
-      }
-    })();
-  }
-
-  return fontEntryCache;
-}
-
-function splitTextToLines(input: {
-  font: PDFFont;
-  text: string;
-  maxWidth: number;
-  size: number;
-  maxLines: number;
-}): string[] {
-  const lines: string[] = [];
-  let current = '';
-  let currentWidth = 0;
-  const chars = Array.from(input.text || '-');
-
-  for (const char of chars) {
-    const width = input.font.widthOfTextAtSize(char, input.size);
-    if (current && currentWidth + width > input.maxWidth) {
-      lines.push(current);
-      current = char;
-      currentWidth = width;
-      if (lines.length >= input.maxLines) break;
-    } else {
-      current += char;
-      currentWidth += width;
-    }
-  }
-
-  if (lines.length < input.maxLines && current) {
-    lines.push(current);
-  }
-
-  if (lines.length > 0 && chars.join('').length > lines.join('').length) {
-    lines[lines.length - 1] = `${lines[lines.length - 1].slice(0, -1)}…`;
-  }
-
-  return lines.length > 0 ? lines : ['-'];
-}
-
-function drawText(input: {
-  page: PDFPage;
-  font: PDFFont;
-  text: string;
-  x: number;
-  y: number;
-  size: number;
-  color?: ReturnType<typeof rgb>;
-}) {
-  input.page.drawText(input.text, {
-    x: input.x,
-    y: input.y,
-    size: input.size,
-    font: input.font,
-    color: input.color || rgb(0.07, 0.09, 0.15),
-  });
-}
-
-function drawRect(
-  page: PDFPage,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  fill: boolean,
-) {
-  page.drawRectangle({
-    x,
-    y,
-    width,
-    height,
-    borderWidth: 0.5,
-    borderColor: rgb(0.82, 0.84, 0.88),
-    color: fill ? rgb(0.95, 0.96, 0.98) : undefined,
-  });
-}
-
-function drawWrappedCell(input: {
-  page: PDFPage;
-  font: PDFFont;
-  text: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  size?: number;
-  maxLines?: number;
-  fill?: boolean;
-}) {
-  drawRect(input.page, input.x, input.y, input.width, input.height, Boolean(input.fill));
-  const size = input.size || FONT_SIZE;
-  const lines = splitTextToLines({
-    font: input.font,
-    text: input.text,
-    maxWidth: input.width - 10,
-    size,
-    maxLines: input.maxLines || 2,
-  });
-  const totalTextHeight = lines.length * LINE_HEIGHT;
-  let textY = input.y + (input.height - totalTextHeight) / 2 + (LINE_HEIGHT - size) / 2;
-  textY += (lines.length - 1) * LINE_HEIGHT;
-
-  for (const line of lines) {
-    drawText({
-      page: input.page,
-      font: input.font,
-      text: line,
-      x: input.x + 5,
-      y: textY,
-      size,
-    });
-    textY -= LINE_HEIGHT;
-  }
-}
-
-function drawHeaderFooter(input: {
-  page: PDFPage;
-  font: PDFFont;
-  header: string;
-  pageNumber: number;
-  pageCount: number;
-}) {
-  drawText({
-    page: input.page,
-    font: input.font,
-    text: input.header,
-    x: MARGIN_X,
-    y: HEADER_Y,
-    size: HEADER_FONT_SIZE,
-    color: rgb(0.22, 0.26, 0.32),
-  });
-  drawText({
-    page: input.page,
-    font: input.font,
-    text: 'PR系',
-    x: MARGIN_X,
-    y: FOOTER_Y,
-    size: HEADER_FONT_SIZE,
-    color: rgb(0.22, 0.26, 0.32),
-  });
-  const pageNumberText = `[${input.pageNumber}/${input.pageCount}]`;
-  drawText({
-    page: input.page,
-    font: input.font,
-    text: pageNumberText,
-    x: PAGE_WIDTH - MARGIN_X - input.font.widthOfTextAtSize(pageNumberText, HEADER_FONT_SIZE),
-    y: FOOTER_Y,
-    size: HEADER_FONT_SIZE,
-    color: rgb(0.22, 0.26, 0.32),
   });
 }
 
@@ -258,150 +62,32 @@ function groupRowsByTeam(
 }
 
 async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
-  const pdfDoc = await PDFDocument.create();
-  pdfDoc.registerFontkit(fontkit);
-  const fontEntry = await loadFontEntry();
-  const font = await pdfDoc.embedFont(fontEntry.bytes, { subset: false });
   const groups = groupRowsByTeam(sortRows(input.rows));
-  const header = `工大祭実行委員会-学外配布${input.year}`;
-  const pageChunks: Array<
-    Array<
-      { type: 'section'; team: string; count: number } | { type: 'row'; row: AssignmentExportRow }
-    >
-  > = [];
-  let current: Array<
-    { type: 'section'; team: string; count: number } | { type: 'row'; row: AssignmentExportRow }
-  > = [];
-  let usedHeight = 86;
-  const usableHeight = CONTENT_TOP - CONTENT_BOTTOM;
-
-  const pushPage = () => {
-    pageChunks.push(current);
-    current = [];
-    usedHeight = 0;
-  };
-
-  for (const group of groups) {
-    const sectionHeight = SECTION_TITLE_HEIGHT + TABLE_HEADER_HEIGHT;
-    if (current.length > 0 && usedHeight + sectionHeight + TABLE_ROW_HEIGHT > usableHeight) {
-      pushPage();
-    }
-
-    current.push({ type: 'section', team: group.team, count: group.rows.length });
-    usedHeight += sectionHeight;
-
-    for (const row of group.rows) {
-      if (usedHeight + TABLE_ROW_HEIGHT > usableHeight) {
-        pushPage();
-        current.push({
-          type: 'section',
-          team: `${group.team}（続き）`,
-          count: group.rows.length,
-        });
-        usedHeight += sectionHeight;
-      }
-
-      current.push({ type: 'row', row });
-      usedHeight += TABLE_ROW_HEIGHT;
-    }
-  }
-
-  if (current.length === 0) {
-    current.push({ type: 'section', team: '割り当てなし', count: 0 });
-  }
-  pageChunks.push(current);
-
-  for (const [pageIndex, items] of pageChunks.entries()) {
-    const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    drawHeaderFooter({
-      page,
-      font,
-      header,
-      pageNumber: pageIndex + 1,
-      pageCount: pageChunks.length,
-    });
-
-    let y = CONTENT_TOP;
-    if (pageIndex === 0) {
-      drawText({
-        page,
-        font,
-        text: 'チーム割り当て一覧',
-        x: MARGIN_X,
-        y,
-        size: TITLE_FONT_SIZE,
-      });
-      y -= 28;
-      drawText({
-        page,
-        font,
-        text: `年度: ${input.year}　割り当て数: ${input.rows.length}名　出力日時: ${formatDate(new Date())}`,
-        x: MARGIN_X,
-        y,
-        size: HEADER_FONT_SIZE,
-        color: rgb(0.29, 0.33, 0.39),
-      });
-      page.drawLine({
-        start: { x: MARGIN_X, y: y - 14 },
-        end: { x: PAGE_WIDTH - MARGIN_X, y: y - 14 },
-        thickness: 0.5,
-        color: rgb(0.82, 0.84, 0.88),
-      });
-      y -= 40;
-    }
-
-    for (const row of items) {
-      if (row.type === 'section') {
-        drawText({
-          page,
-          font,
-          text: `${row.team} ${row.count}名`,
-          x: MARGIN_X,
-          y: y - 14,
-          size: 12,
-        });
-        y -= SECTION_TITLE_HEIGHT;
-
-        let headerX = MARGIN_X;
-        for (const [index, title] of ['学年', '氏名'].entries()) {
-          drawWrappedCell({
-            page,
-            font,
-            text: title,
-            x: headerX,
-            y: y - TABLE_HEADER_HEIGHT,
-            width: COL_WIDTHS[index],
-            height: TABLE_HEADER_HEIGHT,
-            size: FONT_SIZE,
-            maxLines: 1,
-            fill: true,
-          });
-          headerX += COL_WIDTHS[index];
-        }
-        y -= TABLE_HEADER_HEIGHT;
-        continue;
-      }
-
-      const values = [row.row.grade > 0 ? `${row.row.grade}年` : '-', row.row.name || '-'];
-      let x = MARGIN_X;
-      for (const [index, value] of values.entries()) {
-        drawWrappedCell({
-          page,
-          font,
-          text: value,
-          x,
-          y: y - TABLE_ROW_HEIGHT,
-          width: COL_WIDTHS[index],
-          height: TABLE_ROW_HEIGHT,
-          maxLines: index === 1 ? 2 : 1,
-        });
-        x += COL_WIDTHS[index];
-      }
-      y -= TABLE_ROW_HEIGHT;
-    }
-  }
-
-  return pdfDoc.save();
+  return buildSectionedTableReportPdf({
+    title: 'チーム割り当て一覧',
+    metaText: `年度: ${input.year}　割り当て数: ${input.rows.length}名　出力日時: ${formatDate(new Date())}`,
+    header: `工大祭実行委員会-学外配布${input.year}`,
+    sections: groups.map((group) => ({
+      label: group.team,
+      count: group.rows.length,
+      rows: group.rows,
+    })),
+    emptySectionLabel: '割り当てなし',
+    columns: [
+      {
+        title: '学年',
+        width: COL_WIDTHS[0],
+        getText: (row) => (row.grade > 0 ? `${row.grade}年` : '-'),
+        maxLines: 1,
+      },
+      {
+        title: '氏名',
+        width: COL_WIDTHS[1],
+        getText: (row) => row.name || '-',
+        maxLines: 2,
+      },
+    ],
+  });
 }
 
 export async function POST(request: NextRequest) {
