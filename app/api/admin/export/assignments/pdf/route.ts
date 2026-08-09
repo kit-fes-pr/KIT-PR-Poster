@@ -52,7 +52,12 @@ function groupRowsByTeam(
 
   for (const row of rows) {
     const team = row.team || '班未設定';
-    groups.set(team, [...(groups.get(team) || []), row]);
+    const groupRows = groups.get(team);
+    if (groupRows) {
+      groupRows.push(row);
+    } else {
+      groups.set(team, [row]);
+    }
   }
 
   return Array.from(groups.entries()).map(([team, groupRows]) => ({
