@@ -896,6 +896,9 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     const year = resolvedParams?.year;
     if (!year) return;
     if (!selectedForm || !user) return;
+    if (!confirm('このフォームの割り当てをすべてクリアしますか？手動割り当ても削除されます。')) {
+      return;
+    }
 
     try {
       const token = await user.getIdToken();
@@ -930,6 +933,9 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     const year = resolvedParams?.year;
     if (!year) return;
     if (!selectedForm || !user) return;
+    if (!confirm('自動割り当て分だけをクリアしますか？手動割り当ては残ります。')) {
+      return;
+    }
 
     try {
       const token = await user.getIdToken();
@@ -1711,7 +1717,16 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                       </label>
                       <button
                         type="button"
-                        onClick={() => setManualAssignTeamIds([])}
+                        onClick={() => {
+                          if (
+                            !confirm(
+                              `${selectedParticipant.name || 'この参加者'} の割り当て選択をすべて外しますか？保存するまで反映されません。`,
+                            )
+                          ) {
+                            return;
+                          }
+                          setManualAssignTeamIds([]);
+                        }}
                         disabled={manualAssignLoading || manualAssignTeamIds.length === 0}
                         className="text-sm font-medium text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:text-gray-400"
                       >
@@ -1766,6 +1781,28 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                     disabled={manualAssignLoading || !selectedParticipant}
                     onClick={async () => {
                       if (!selectedParticipant) return;
+                      if (
+                        manualAssignTeamIds.length === 0 &&
+                        !confirm(
+                          `${selectedParticipant.name || 'この参加者'} の割り当てをすべて解除しますか？`,
+                        )
+                      ) {
+                        return;
+                      }
+                      const currentAssignmentTeamIds = getAssignmentsForParticipant(
+                        selectedParticipant.responseId,
+                      ).map((assignment) => assignment.teamId);
+                      const currentAssignmentKey = [...currentAssignmentTeamIds].sort().join('\n');
+                      const nextAssignmentKey = [...manualAssignTeamIds].sort().join('\n');
+                      if (
+                        manualAssignTeamIds.length > 0 &&
+                        currentAssignmentKey !== nextAssignmentKey &&
+                        !confirm(
+                          `${selectedParticipant.name || 'この参加者'} の割り当て先を変更しますか？`,
+                        )
+                      ) {
+                        return;
+                      }
                       try {
                         setManualAssignLoading(true);
                         const token = await user!.getIdToken();
