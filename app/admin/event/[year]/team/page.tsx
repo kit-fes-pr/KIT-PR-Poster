@@ -35,10 +35,12 @@ import { clearDashboardCache } from '@/lib/utils/dashboard/dashboard-cache';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
 import { buildCsvContent, downloadCsvFile } from '@/lib/utils/export/export';
 import { buildNextTeamCode } from '@/lib/utils/team/team-code';
+import { compareJapaneseText, sortByGradeThenKanaThenName } from '@/lib/utils/sort';
 
 interface Participant {
   responseId: string;
   name: string;
+  nameKana?: string;
   grade: number;
   section: string;
   availableSlots: string[];
@@ -803,6 +805,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
             return {
               responseId: response.responseId,
               name: response.participantData?.name || '',
+              nameKana: response.participantData?.nameKana || '',
               grade: normalizeGrade(response.participantData?.grade),
               section: response.participantData?.section || '',
               availableSlots,
@@ -1049,17 +1052,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   }
 
   const stats = getAssignmentStats();
-  const collator = new Intl.Collator('ja');
-  const sortParticipantsByGradeAndName = (items: Participant[]) =>
-    [...items].sort((a, b) => {
-      const aGrade = normalizeGrade(a.grade);
-      const bGrade = normalizeGrade(b.grade);
-      if (aGrade !== bGrade) return aGrade - bGrade;
-      const nameCompare = collator.compare(a.name || '', b.name || '');
-      if (nameCompare !== 0) return nameCompare;
-      return a.responseId.localeCompare(b.responseId);
-    });
-  const unavailableParticipants = sortParticipantsByGradeAndName(
+  const unavailableParticipants = sortByGradeThenKanaThenName(
     participants.filter((p) => {
       const normalized = normalizeAvailabilitySlots(p.availableSlots);
       return normalized.length === 0 || normalized.includes(UNAVAILABLE_SLOT_KEY);
@@ -1082,7 +1075,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     if (!selectedTeamFilter) return true;
     return getAssignmentsForParticipant(p.responseId).some((a) => a.teamId === selectedTeamFilter);
   });
-  const sortedParticipants = sortParticipantsByGradeAndName(filteredParticipants);
+  const sortedParticipants = sortByGradeThenKanaThenName(filteredParticipants);
   const generatedTeamCodePreview =
     buildNextTeamCode({
       timeSlot: createTeamForm.timeSlot,
@@ -1091,7 +1084,6 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   const hasAutoAssignments = assignments.some((assignment) => assignment.assignedBy !== 'manual');
 
   const buildAssignmentExportRows = (): AssignmentExportRow[] => {
-    const collator = new Intl.Collator('ja');
     const rows = assignments
       .map((assignment) => {
         const participant = participants.find((item) => item.responseId === assignment.responseId);
@@ -1107,10 +1099,10 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       .filter(Boolean) as AssignmentExportRow[];
 
     return rows.sort((a, b) => {
-      const teamCompare = collator.compare(a.team, b.team);
+      const teamCompare = compareJapaneseText(a.team, b.team);
       if (teamCompare !== 0) return teamCompare;
       if (b.grade !== a.grade) return b.grade - a.grade;
-      return collator.compare(a.name, b.name);
+      return compareJapaneseText(a.name, b.name);
     });
   };
 

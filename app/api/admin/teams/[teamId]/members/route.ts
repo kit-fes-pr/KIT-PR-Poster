@@ -7,6 +7,7 @@ import { normalizeGrade } from '@/lib/utils/grade/grade';
 type MemberItem = {
   responseId: string;
   name: string;
+  nameKana: string;
   grade: number;
   section: string;
   timeSlot: string;
@@ -101,6 +102,7 @@ export async function GET(
       members.push({
         responseId: a.responseId,
         name: pd.name || '-',
+        nameKana: pd.nameKana || '',
         grade: normalizeGrade(pd.grade),
         section: pd.section || '-',
         timeSlot: String(a.timeSlot || ''),
