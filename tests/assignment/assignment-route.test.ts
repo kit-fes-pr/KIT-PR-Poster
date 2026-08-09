@@ -40,6 +40,7 @@ describe('assignment route utils', () => {
         formId: 'form-1',
         responseId: 'response-1',
         targets: [{ teamId: 'team-1', timeSlot: '2026-06-01_am' }],
+        previousTeamIds: null,
       },
     );
     assert.deepEqual(
@@ -47,6 +48,7 @@ describe('assignment route utils', () => {
         year: '2026',
         formId: ' form-1 ',
         responseId: ' response-1 ',
+        previousTeamIds: [' team-0 ', '', 123],
         assignments: [
           { teamId: ' team-1 ', timeSlot: '2026-06-01_am' },
           { teamId: ' team-2 ', timeSlot: '2026-06-01_pm' },
@@ -60,6 +62,7 @@ describe('assignment route utils', () => {
           { teamId: 'team-1', timeSlot: '2026-06-01_am' },
           { teamId: 'team-2', timeSlot: '2026-06-01_pm' },
         ],
+        previousTeamIds: ['team-0'],
       },
     );
     assert.deepEqual(
@@ -74,6 +77,7 @@ describe('assignment route utils', () => {
         formId: 'form-1',
         responseId: 'response-1',
         targets: [],
+        previousTeamIds: null,
       },
     );
     const invalidYear = parseAssignmentMutationPayload({

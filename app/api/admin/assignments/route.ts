@@ -3,6 +3,7 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import {
   buildManualAssignmentRecords,
+  hasAssignmentTeamConflict,
   preserveExistingAssignmentLabels,
 } from '@/lib/utils/assignment/assignment-api';
 import {
@@ -12,6 +13,8 @@ import {
   parseAssignmentMutationPayload,
 } from '@/lib/utils/assignment/assignment-route';
 import { FirestoreCache } from '@/lib/utils/server-cache';
+
+class AssignmentConflictError extends Error {}
 
 export async function GET(request: NextRequest) {
   try {
@@ -90,61 +93,82 @@ export async function POST(request: NextRequest) {
 
     const { year, formId, responseId } = parsedPayload;
 
-    // 手動保存では同一参加者の割り当て先一覧を更新する
-    const query = await adminDb
-      .collection('assignments')
-      .where('year', '==', year)
-      .where('formId', '==', formId)
-      .where('responseId', '==', responseId)
-      .get();
-    const batch = adminDb.batch();
-    const assignmentsToSave = preserveExistingAssignmentLabels(
-      manualAssignments,
-      query.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          teamId: data.teamId,
-          assignedAt: data.assignedAt,
-          assignedBy: data.assignedBy,
-        };
-      }),
-    );
-    const assignmentsByTeamId = new Map(
-      assignmentsToSave.map((assignment) => [assignment.teamId, assignment] as const),
-    );
-    const retainedTeamIds = new Set<string>();
-    const assignmentIds: string[] = [];
-    let mutationCount = 0;
+    let assignmentIds: string[] = [];
 
-    query.docs.forEach((doc) => {
-      const data = doc.data();
-      const teamId = typeof data.teamId === 'string' ? data.teamId.trim() : '';
-      const nextAssignment = teamId ? assignmentsByTeamId.get(teamId) : undefined;
+    try {
+      assignmentIds = await adminDb.runTransaction(async (transaction) => {
+        // 手動保存では同一参加者の割り当て先一覧を、競合確認と同じトランザクション内で更新する
+        const query = await transaction.get(
+          adminDb
+            .collection('assignments')
+            .where('year', '==', year)
+            .where('formId', '==', formId)
+            .where('responseId', '==', responseId),
+        );
+        if (
+          parsedPayload.previousTeamIds &&
+          hasAssignmentTeamConflict(
+            query.docs.map((doc) => doc.data().teamId),
+            parsedPayload.previousTeamIds,
+          )
+        ) {
+          throw new AssignmentConflictError();
+        }
 
-      if (!nextAssignment || retainedTeamIds.has(teamId)) {
-        batch.delete(doc.ref);
-        mutationCount++;
-        return;
-      }
+        const assignmentsToSave = preserveExistingAssignmentLabels(
+          manualAssignments,
+          query.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              teamId: data.teamId,
+              assignedAt: data.assignedAt,
+              assignedBy: data.assignedBy,
+            };
+          }),
+        );
+        const assignmentsByTeamId = new Map(
+          assignmentsToSave.map((assignment) => [assignment.teamId, assignment] as const),
+        );
+        const retainedTeamIds = new Set<string>();
+        const nextAssignmentIds: string[] = [];
 
-      retainedTeamIds.add(teamId);
-      assignmentIds.push(doc.id);
-      batch.set(doc.ref, nextAssignment);
-      mutationCount++;
-    });
+        query.docs.forEach((doc) => {
+          const data = doc.data();
+          const teamId = typeof data.teamId === 'string' ? data.teamId.trim() : '';
+          const nextAssignment = teamId ? assignmentsByTeamId.get(teamId) : undefined;
 
-    assignmentsToSave.forEach((assignment) => {
-      if (retainedTeamIds.has(assignment.teamId)) return;
-      const docRef = adminDb.collection('assignments').doc();
-      assignmentIds.push(docRef.id);
-      batch.set(docRef, {
-        ...assignment,
+          if (!nextAssignment || retainedTeamIds.has(teamId)) {
+            transaction.delete(doc.ref);
+            return;
+          }
+
+          retainedTeamIds.add(teamId);
+          nextAssignmentIds.push(doc.id);
+          transaction.set(doc.ref, nextAssignment);
+        });
+
+        assignmentsToSave.forEach((assignment) => {
+          if (retainedTeamIds.has(assignment.teamId)) return;
+          const docRef = adminDb.collection('assignments').doc();
+          nextAssignmentIds.push(docRef.id);
+          transaction.set(docRef, {
+            ...assignment,
+          });
+        });
+
+        return nextAssignmentIds;
       });
-      mutationCount++;
-    });
-
-    if (mutationCount > 0) {
-      await batch.commit();
+    } catch (error) {
+      if (error instanceof AssignmentConflictError) {
+        return NextResponse.json(
+          {
+            error:
+              '割り当てが他の操作で更新されています。最新の割り当てを読み込んでから再度保存してください。',
+          },
+          { status: 409 },
+        );
+      }
+      throw error;
     }
 
     if (year) {

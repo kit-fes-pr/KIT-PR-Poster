@@ -135,3 +135,18 @@ export function preserveExistingAssignmentLabels(
     };
   });
 }
+
+export function hasAssignmentTeamConflict(currentTeamIds: unknown[], previousTeamIds: string[]) {
+  const normalizeTeamIds = (teamIds: unknown[]) =>
+    Array.from(
+      new Set(
+        teamIds
+          .filter((teamId): teamId is string => typeof teamId === 'string' && !!teamId.trim())
+          .map((teamId) => teamId.trim()),
+      ),
+    ).sort();
+
+  return (
+    normalizeTeamIds(currentTeamIds).join('\n') !== normalizeTeamIds(previousTeamIds).join('\n')
+  );
+}

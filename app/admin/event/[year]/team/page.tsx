@@ -148,6 +148,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   const [showManualModal, setShowManualModal] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [manualAssignTeamIds, setManualAssignTeamIds] = useState<string[]>([]);
+  const [manualAssignInitialTeamIds, setManualAssignInitialTeamIds] = useState<string[]>([]);
   const [manualAssignLoading, setManualAssignLoading] = useState<boolean>(false);
   const [showResponseEditModal, setShowResponseEditModal] = useState(false);
   const [selectedResponseId, setSelectedResponseId] = useState<string>('');
@@ -1607,12 +1608,12 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                             </button>
                             <button
                               onClick={() => {
+                                const assignmentTeamIds = getAssignmentsForParticipant(
+                                  participant.responseId,
+                                ).map((assignment) => assignment.teamId);
                                 setSelectedParticipant(participant);
-                                setManualAssignTeamIds(
-                                  getAssignmentsForParticipant(participant.responseId).map(
-                                    (assignment) => assignment.teamId,
-                                  ),
-                                );
+                                setManualAssignTeamIds(assignmentTeamIds);
+                                setManualAssignInitialTeamIds(assignmentTeamIds);
                                 setShowManualModal(true);
                               }}
                               className="text-indigo-600 hover:text-indigo-900"
@@ -1683,12 +1684,12 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                       </button>
                       <button
                         onClick={() => {
+                          const assignmentTeamIds = getAssignmentsForParticipant(
+                            participant.responseId,
+                          ).map((assignment) => assignment.teamId);
                           setSelectedParticipant(participant);
-                          setManualAssignTeamIds(
-                            getAssignmentsForParticipant(participant.responseId).map(
-                              (assignment) => assignment.teamId,
-                            ),
-                          );
+                          setManualAssignTeamIds(assignmentTeamIds);
+                          setManualAssignInitialTeamIds(assignmentTeamIds);
                           setShowManualModal(true);
                         }}
                         className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
@@ -1734,6 +1735,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
               setShowManualModal(false);
               setSelectedParticipant(null);
               setManualAssignTeamIds([]);
+              setManualAssignInitialTeamIds([]);
             }}
             centered={false}
             panelClassName="max-w-lg"
@@ -1748,6 +1750,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                       setShowManualModal(false);
                       setSelectedParticipant(null);
                       setManualAssignTeamIds([]);
+                      setManualAssignInitialTeamIds([]);
                     }}
                     className="text-gray-400 hover:text-gray-600"
                   >
@@ -1835,6 +1838,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                       setShowManualModal(false);
                       setSelectedParticipant(null);
                       setManualAssignTeamIds([]);
+                      setManualAssignInitialTeamIds([]);
                     }}
                     className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                   >
@@ -1893,10 +1897,17 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                             formId: selectedForm,
                             responseId: selectedParticipant.responseId,
                             assignments: assignmentTargets,
+                            previousTeamIds: manualAssignInitialTeamIds,
                           }),
                         });
                         const data = await res.json();
-                        if (!res.ok) throw new Error(data.error || '更新に失敗しました');
+                        if (!res.ok) {
+                          if (res.status === 409) {
+                            await loadAssignments();
+                            await loadTeams();
+                          }
+                          throw new Error(data.error || '更新に失敗しました');
+                        }
                         // 再読込
                         await loadAssignments();
                         await loadTeams();
@@ -1906,6 +1917,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                         setShowManualModal(false);
                         setSelectedParticipant(null);
                         setManualAssignTeamIds([]);
+                        setManualAssignInitialTeamIds([]);
                       } catch (e: unknown) {
                         const msg = e instanceof Error ? e.message : '更新に失敗しました';
                         setError(msg);

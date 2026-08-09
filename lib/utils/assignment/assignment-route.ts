@@ -29,6 +29,7 @@ export function parseAssignmentMutationPayload(input: unknown):
         teamId: string;
         timeSlot?: unknown;
       }>;
+      previousTeamIds: string[] | null;
     }
   | { error: string } {
   if (typeof input !== 'object' || input === null) {
@@ -45,6 +46,12 @@ export function parseAssignmentMutationPayload(input: unknown):
 
   const formId = typeof payload.formId === 'string' ? payload.formId.trim() : '';
   const responseId = typeof payload.responseId === 'string' ? payload.responseId.trim() : '';
+  const previousTeamIds = Array.isArray(payload.previousTeamIds)
+    ? payload.previousTeamIds
+        .filter((teamId): teamId is string => typeof teamId === 'string')
+        .map((teamId) => teamId.trim())
+        .filter(Boolean)
+    : null;
   const hasAssignmentList = Array.isArray(payload.assignments);
   const targets: Array<{ teamId: string; timeSlot?: unknown }> = hasAssignmentList
     ? (payload.assignments as unknown[]).reduce<Array<{ teamId: string; timeSlot?: unknown }>>(
@@ -78,6 +85,7 @@ export function parseAssignmentMutationPayload(input: unknown):
     formId,
     responseId,
     targets,
+    previousTeamIds,
   };
 }
 

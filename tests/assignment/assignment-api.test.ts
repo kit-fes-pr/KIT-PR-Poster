@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 import {
   buildManualAssignmentRecord,
   buildManualAssignmentRecords,
+  hasAssignmentTeamConflict,
   normalizeAssignmentYear,
   preserveExistingAssignmentLabels,
 } from '../../lib/utils/assignment/assignment-api';
@@ -162,5 +163,14 @@ describe('assignment api utils', () => {
       ]).map(({ teamId, assignedAt, assignedBy }) => ({ teamId, assignedAt, assignedBy })),
       [{ teamId: 'team-1', assignedAt: firstAssignedAt, assignedBy: 'auto' }],
     );
+  });
+
+  test('hasAssignmentTeamConflict compares normalized team id sets', () => {
+    assert.equal(
+      hasAssignmentTeamConflict([' team-2 ', 'team-1', 'team-1'], ['team-1', 'team-2']),
+      false,
+    );
+    assert.equal(hasAssignmentTeamConflict(['team-1', 'team-3'], ['team-1', 'team-2']), true);
+    assert.equal(hasAssignmentTeamConflict([], []), false);
   });
 });
