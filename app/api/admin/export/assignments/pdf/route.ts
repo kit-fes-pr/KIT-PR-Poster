@@ -36,8 +36,9 @@ const HEADER_FONT_SIZE = 10;
 const TITLE_FONT_SIZE = 18;
 const LINE_HEIGHT = 13;
 const TABLE_HEADER_HEIGHT = 22;
-const TABLE_ROW_HEIGHT = 28;
-const COL_WIDTHS = [250, 70, 207];
+const TABLE_ROW_HEIGHT = 26;
+const SECTION_TITLE_HEIGHT = 20;
+const COL_WIDTHS = [80, 447];
 
 let fontEntryCache: Promise<FontEntry> | null = null;
 
@@ -240,29 +241,74 @@ function sortRows(rows: AssignmentExportRow[]): AssignmentExportRow[] {
   });
 }
 
+function groupRowsByTeam(
+  rows: AssignmentExportRow[],
+): Array<{ team: string; rows: AssignmentExportRow[] }> {
+  const groups = new Map<string, AssignmentExportRow[]>();
+
+  for (const row of rows) {
+    const team = row.team || '班未設定';
+    groups.set(team, [...(groups.get(team) || []), row]);
+  }
+
+  return Array.from(groups.entries()).map(([team, groupRows]) => ({
+    team,
+    rows: groupRows,
+  }));
+}
+
 async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
   const fontEntry = await loadFontEntry();
   const font = await pdfDoc.embedFont(fontEntry.bytes, { subset: false });
-  const rows = sortRows(input.rows);
+  const groups = groupRowsByTeam(sortRows(input.rows));
   const header = `工大祭実行委員会-学外配布${input.year}`;
-  const firstPageIntroHeight = 68;
+  const pageChunks: Array<
+    Array<
+      { type: 'section'; team: string; count: number } | { type: 'row'; row: AssignmentExportRow }
+    >
+  > = [];
+  let current: Array<
+    { type: 'section'; team: string; count: number } | { type: 'row'; row: AssignmentExportRow }
+  > = [];
+  let usedHeight = 86;
   const usableHeight = CONTENT_TOP - CONTENT_BOTTOM;
-  const pageChunks: AssignmentExportRow[][] = [];
-  let current: AssignmentExportRow[] = [];
-  let usedHeight = firstPageIntroHeight + TABLE_HEADER_HEIGHT;
 
-  for (const row of rows) {
-    if (current.length > 0 && usedHeight + TABLE_ROW_HEIGHT > usableHeight) {
-      pageChunks.push(current);
-      current = [];
-      usedHeight = TABLE_HEADER_HEIGHT;
+  const pushPage = () => {
+    pageChunks.push(current);
+    current = [];
+    usedHeight = 0;
+  };
+
+  for (const group of groups) {
+    const sectionHeight = SECTION_TITLE_HEIGHT + TABLE_HEADER_HEIGHT;
+    if (current.length > 0 && usedHeight + sectionHeight + TABLE_ROW_HEIGHT > usableHeight) {
+      pushPage();
     }
-    current.push(row);
-    usedHeight += TABLE_ROW_HEIGHT;
+
+    current.push({ type: 'section', team: group.team, count: group.rows.length });
+    usedHeight += sectionHeight;
+
+    for (const row of group.rows) {
+      if (usedHeight + TABLE_ROW_HEIGHT > usableHeight) {
+        pushPage();
+        current.push({
+          type: 'section',
+          team: `${group.team}（続き）`,
+          count: group.rows.length,
+        });
+        usedHeight += sectionHeight;
+      }
+
+      current.push({ type: 'row', row });
+      usedHeight += TABLE_ROW_HEIGHT;
+    }
   }
 
+  if (current.length === 0) {
+    current.push({ type: 'section', team: '割り当てなし', count: 0 });
+  }
   pageChunks.push(current);
 
   for (const [pageIndex, items] of pageChunks.entries()) {
@@ -289,7 +335,7 @@ async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
       drawText({
         page,
         font,
-        text: `年度: ${input.year}　割り当て数: ${rows.length}名　出力日時: ${formatDate(new Date())}`,
+        text: `年度: ${input.year}　割り当て数: ${input.rows.length}名　出力日時: ${formatDate(new Date())}`,
         x: MARGIN_X,
         y,
         size: HEADER_FONT_SIZE,
@@ -304,27 +350,40 @@ async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
       y -= 40;
     }
 
-    let x = MARGIN_X;
-    for (const [index, title] of ['チーム', '学年', '氏名'].entries()) {
-      drawWrappedCell({
-        page,
-        font,
-        text: title,
-        x,
-        y: y - TABLE_HEADER_HEIGHT,
-        width: COL_WIDTHS[index],
-        height: TABLE_HEADER_HEIGHT,
-        size: FONT_SIZE,
-        maxLines: 1,
-        fill: true,
-      });
-      x += COL_WIDTHS[index];
-    }
-    y -= TABLE_HEADER_HEIGHT;
-
     for (const row of items) {
-      const values = [row.team || '-', row.grade > 0 ? `${row.grade}年` : '-', row.name || '-'];
-      x = MARGIN_X;
+      if (row.type === 'section') {
+        drawText({
+          page,
+          font,
+          text: `${row.team} ${row.count}名`,
+          x: MARGIN_X,
+          y: y - 14,
+          size: 12,
+        });
+        y -= SECTION_TITLE_HEIGHT;
+
+        let headerX = MARGIN_X;
+        for (const [index, title] of ['学年', '氏名'].entries()) {
+          drawWrappedCell({
+            page,
+            font,
+            text: title,
+            x: headerX,
+            y: y - TABLE_HEADER_HEIGHT,
+            width: COL_WIDTHS[index],
+            height: TABLE_HEADER_HEIGHT,
+            size: FONT_SIZE,
+            maxLines: 1,
+            fill: true,
+          });
+          headerX += COL_WIDTHS[index];
+        }
+        y -= TABLE_HEADER_HEIGHT;
+        continue;
+      }
+
+      const values = [row.row.grade > 0 ? `${row.row.grade}年` : '-', row.row.name || '-'];
+      let x = MARGIN_X;
       for (const [index, value] of values.entries()) {
         drawWrappedCell({
           page,
@@ -334,7 +393,7 @@ async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
           y: y - TABLE_ROW_HEIGHT,
           width: COL_WIDTHS[index],
           height: TABLE_ROW_HEIGHT,
-          maxLines: index === 0 ? 2 : 1,
+          maxLines: index === 1 ? 2 : 1,
         });
         x += COL_WIDTHS[index];
       }
