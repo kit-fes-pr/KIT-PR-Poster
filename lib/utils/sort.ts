@@ -4,7 +4,7 @@ import { generateKana } from '../kanaUtils';
 const japaneseCollator = new Intl.Collator('ja');
 
 export function compareJapaneseText(a: unknown, b: unknown): number {
-  return japaneseCollator.compare(String(a || ''), String(b || ''));
+  return japaneseCollator.compare(String(a ?? ''), String(b ?? ''));
 }
 
 export function compareGradeThenKanaThenName(
