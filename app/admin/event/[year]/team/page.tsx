@@ -1049,10 +1049,22 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   }
 
   const stats = getAssignmentStats();
-  const unavailableParticipants = participants.filter((p) => {
-    const normalized = normalizeAvailabilitySlots(p.availableSlots);
-    return normalized.length === 0 || normalized.includes(UNAVAILABLE_SLOT_KEY);
-  });
+  const collator = new Intl.Collator('ja');
+  const sortParticipantsByGradeAndName = (items: Participant[]) =>
+    [...items].sort((a, b) => {
+      const aGrade = normalizeGrade(a.grade);
+      const bGrade = normalizeGrade(b.grade);
+      if (aGrade !== bGrade) return aGrade - bGrade;
+      const nameCompare = collator.compare(a.name || '', b.name || '');
+      if (nameCompare !== 0) return nameCompare;
+      return a.responseId.localeCompare(b.responseId);
+    });
+  const unavailableParticipants = sortParticipantsByGradeAndName(
+    participants.filter((p) => {
+      const normalized = normalizeAvailabilitySlots(p.availableSlots);
+      return normalized.length === 0 || normalized.includes(UNAVAILABLE_SLOT_KEY);
+    }),
+  );
   const unavailableCount = unavailableParticipants.length;
   const availableParticipants = participants.filter((p) => {
     const normalized = normalizeAvailabilitySlots(p.availableSlots);
@@ -1070,15 +1082,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     if (!selectedTeamFilter) return true;
     return getAssignmentsForParticipant(p.responseId).some((a) => a.teamId === selectedTeamFilter);
   });
-  const collator = new Intl.Collator('ja');
-  const sortedParticipants = [...filteredParticipants].sort((a, b) => {
-    const aGrade = normalizeGrade(a.grade);
-    const bGrade = normalizeGrade(b.grade);
-    if (bGrade !== aGrade) return bGrade - aGrade;
-    const an = a.name || '';
-    const bn = b.name || '';
-    return collator.compare(an, bn);
-  });
+  const sortedParticipants = sortParticipantsByGradeAndName(filteredParticipants);
   const generatedTeamCodePreview =
     buildNextTeamCode({
       timeSlot: createTeamForm.timeSlot,
