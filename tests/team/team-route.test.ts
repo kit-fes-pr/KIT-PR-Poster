@@ -42,6 +42,7 @@ describe('team route utils', () => {
       eventId: 'kodai2026',
       year: '2026',
       requiresCar: true,
+      maxMembers: '4',
       area: {
         areaId: 'area-1',
         areaCode: ' A-01 ',
@@ -60,6 +61,7 @@ describe('team route utils', () => {
     assert.equal(created.data.eventId, 'kodai2026');
     assert.equal(created.data.year, 2026);
     assert.equal(created.data.requiresCar, true);
+    assert.equal(created.data.maxMembers, 4);
     assert.deepEqual(created.data.adjacentAreas, ['A-02', 'A-03']);
   });
 
@@ -70,6 +72,7 @@ describe('team route utils', () => {
       timeSlot: '2026-06-01_pm',
       isActive: false,
       requiresCar: true,
+      maxMembers: 5,
       areaId: 'area-1',
       assignedArea: 'A-01',
       area: {
@@ -91,6 +94,7 @@ describe('team route utils', () => {
     assert.equal(updated.update.accessWindowVersion, 1);
     assert.equal(updated.update.isActive, false);
     assert.equal(updated.update.requiresCar, true);
+    assert.equal(updated.update.maxMembers, 5);
     assert.equal(updated.update.areaId, 'area-1');
     assert.deepEqual(updated.update.adjacentAreas, ['A-02', 'A-03']);
   });

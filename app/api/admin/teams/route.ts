@@ -8,6 +8,7 @@ import {
 } from '@/lib/utils/availability/availability';
 import {
   buildTeamCreateData,
+  normalizeTeamMaxMembers,
   normalizeTeamYear,
   resolveTeamAreaSelection,
 } from '@/lib/utils/team/team-api';
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 });
     }
 
-    const { teamName, timeSlot, areaId, assignedArea, eventId, year, requiresCar } =
+    const { teamName, timeSlot, areaId, assignedArea, eventId, year, requiresCar, maxMembers } =
       await request.json();
 
     if (!teamName || !eventId) {
@@ -154,6 +155,7 @@ export async function POST(request: NextRequest) {
         eventId,
         year: normalizedYear,
         requiresCar,
+        maxMembers,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -309,6 +311,10 @@ export async function PATCH(request: NextRequest) {
     }
     if (typeof body.requiresCar === 'boolean') {
       update.requiresCar = body.requiresCar;
+    }
+    const normalizedMaxMembers = normalizeTeamMaxMembers(body.maxMembers);
+    if (typeof normalizedMaxMembers === 'number') {
+      update.maxMembers = normalizedMaxMembers;
     }
     if (typeof body.timeSlot === 'string') {
       const normalizedTimeSlot = normalizeTeamTimeSlot(body.timeSlot);

@@ -49,6 +49,12 @@ export function canParticipantDrive(participant: AutoAssignmentParticipant): boo
   return getParticipantCarUsage(participant) === '運転できる';
 }
 
+function getTeamCapacity(team: AutoAssignmentTeam): number {
+  return typeof team.maxMembers === 'number' && Number.isInteger(team.maxMembers)
+    ? team.maxMembers
+    : 10;
+}
+
 export function performAutoAssignment(
   participants: AutoAssignmentParticipant[],
   teams: AutoAssignmentTeam[],
@@ -162,7 +168,7 @@ export function performAutoAssignment(
   };
 
   const assign = (participant: AutoAssignmentParticipant, team: AutoAssignmentTeam): boolean => {
-    if (teamAssignmentCount[team.teamId] >= (team.maxMembers || 10)) return false;
+    if (teamAssignmentCount[team.teamId] >= getTeamCapacity(team)) return false;
     const assignment = createAssignment(participant, team);
     if (!assignment) return false;
 
@@ -181,7 +187,7 @@ export function performAutoAssignment(
     const driverCandidates = sortedParticipants.filter((participant) => {
       if (usedParticipants.has(participant.responseId)) return false;
       if (!canParticipantDrive(participant)) return false;
-      if (teamAssignmentCount[team.teamId] >= (team.maxMembers || 10)) return false;
+      if (teamAssignmentCount[team.teamId] >= getTeamCapacity(team)) return false;
       return createAssignment(participant, team) !== null;
     });
 
@@ -265,7 +271,7 @@ function selectBalancedBestTeam(
   if (candidateTeams.length === 0) return null;
 
   const availableTeams = candidateTeams.filter(
-    (team) => teamAssignmentCount[team.teamId] < (team.maxMembers || 10),
+    (team) => teamAssignmentCount[team.teamId] < getTeamCapacity(team),
   );
   if (availableTeams.length === 0) return null;
 
