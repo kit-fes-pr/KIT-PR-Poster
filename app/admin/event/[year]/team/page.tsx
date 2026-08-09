@@ -1579,8 +1579,9 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                     </select>
                   </div>
                   <div className="flex items-center gap-2 flex-col">
-                    <label className="text-sm text-gray-600">名前で検索</label>
+                    <label htmlFor="participantSearch" className="text-sm text-gray-600">名前で検索</label>
                     <input
+                      id="participantSearch"
                       type="search"
                       value={participantSearchQuery}
                       onChange={(e) => setParticipantSearchQuery(e.target.value)}
