@@ -140,6 +140,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   const [distributionEventId, setDistributionEventId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [autoAssignLoading, setAutoAssignLoading] = useState(false);
   const [selectedForm, setSelectedForm] = useState<string>('');
   const [selectedFormTitle, setSelectedFormTitle] = useState<string>('');
   const [currentForm, setCurrentForm] = useState<CurrentForm | null>(null);
@@ -846,6 +847,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     }
 
     try {
+      setAutoAssignLoading(true);
       if (!user) {
         setError('認証が必要です');
         return;
@@ -889,6 +891,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     } catch (err) {
       setError('自動割り当てに失敗しました');
       console.error(err);
+    } finally {
+      setAutoAssignLoading(false);
     }
   };
 
@@ -929,15 +933,19 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     }
   };
 
-  const clearAutoAssignments = async () => {
+  const clearAutoAssignments = async (options?: { skipConfirm?: boolean; refresh?: boolean }) => {
     const year = resolvedParams?.year;
-    if (!year) return;
-    if (!selectedForm || !user) return;
-    if (!confirm('自動割り当て分だけをクリアしますか？手動割り当ては残ります。')) {
-      return;
+    if (!year) return false;
+    if (!selectedForm || !user) return false;
+    if (
+      !options?.skipConfirm &&
+      !confirm('自動割り当て分だけをクリアしますか？手動割り当ては残ります。')
+    ) {
+      return false;
     }
 
     try {
+      setAutoAssignLoading(true);
       const token = await user.getIdToken();
       const res = await fetch('/api/admin/assignments', {
         method: 'DELETE',
@@ -953,19 +961,39 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       });
 
       if (res.ok) {
-        await loadAssignments();
-        await loadTeams();
+        if (options?.refresh !== false) {
+          await loadAssignments();
+          await loadTeams();
+        }
         clearDashboardCache(Number(year));
         setLastAutoAssignmentStats(null);
         setError('');
+        return true;
       } else {
         const errorData = await res.json();
         setError(errorData.error || '自動割り当てのクリアに失敗しました');
+        return false;
       }
     } catch (err) {
       setError('自動割り当てのクリアに失敗しました');
       console.error(err);
+      return false;
+    } finally {
+      setAutoAssignLoading(false);
     }
+  };
+
+  const clearAutoAssignmentsAndRun = async () => {
+    if (
+      !confirm(
+        '自動割り当て分だけをクリアしてから、未割り当てを自動割り当てしますか？手動割り当ては残ります。',
+      )
+    ) {
+      return;
+    }
+    const cleared = await clearAutoAssignments({ skipConfirm: true, refresh: false });
+    if (!cleared) return;
+    await performAutoAssignment();
   };
 
   const getAssignmentsForParticipant = (responseId: string) => {
@@ -1283,7 +1311,12 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
           <div className="mt-6 flex flex-col gap-3">
             <button
               onClick={performAutoAssignment}
-              disabled={!selectedForm || participants.length === 0 || teams.length === 0}
+              disabled={
+                autoAssignLoading ||
+                !selectedForm ||
+                participants.length === 0 ||
+                teams.length === 0
+              }
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1294,31 +1327,61 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                   d="M13 10V3L4 14h7v7l9-11h-7z"
                 />
               </svg>
-              自動割り当てを実行
+              {autoAssignLoading ? '処理中...' : '未割り当てを自動割り当て'}
             </button>
 
             {assignments.length > 0 && (
               <div className="flex flex-col gap-2 sm:flex-row">
                 {hasAutoAssignments && (
-                  <button
-                    onClick={clearAutoAssignments}
-                    className="inline-flex items-center px-4 py-2 border border-amber-300 text-sm font-medium rounded-md text-amber-800 bg-white hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
-                  >
-                    <svg
-                      className="mr-2 h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
+                  <>
+                    <button
+                      onClick={() => {
+                        void clearAutoAssignments();
+                      }}
+                      disabled={autoAssignLoading}
+                      className="inline-flex items-center px-4 py-2 border border-amber-300 text-sm font-medium rounded-md text-amber-800 bg-white hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 10V3L4 14h7v7l9-11h-7z"
-                      />
-                    </svg>
-                    自動分だけクリア
-                  </button>
+                      <svg
+                        className="mr-2 h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 10V3L4 14h7v7l9-11h-7z"
+                        />
+                      </svg>
+                      自動割り当てをクリア
+                    </button>
+                    <button
+                      onClick={clearAutoAssignmentsAndRun}
+                      disabled={
+                        autoAssignLoading ||
+                        !selectedForm ||
+                        participants.length === 0 ||
+                        teams.length === 0
+                      }
+                      className="inline-flex items-center px-4 py-2 border border-indigo-300 text-sm font-medium rounded-md text-indigo-800 bg-white hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                    >
+                      <svg
+                        className="mr-2 h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0 0 14-3M19 5A9 9 0 0 0 5 8"
+                        />
+                      </svg>
+                      自動割り当てをクリアして再割り当て
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={clearAssignments}
