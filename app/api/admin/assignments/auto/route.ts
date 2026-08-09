@@ -61,27 +61,15 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    const manualAssignments = existingAssignments.filter(
-      (assignment) => assignment.assignedBy === 'manual',
-    );
-
     const assignmentResult = performAutoAssignment(
       participants,
       teams,
       eventSlotChoices,
-      manualAssignments,
+      existingAssignments,
     );
 
-    // 既存の自動割り当てのみを削除し、手動割り当ては保持する
+    // 既存の割り当ては自動・手動とも固定扱いにし、未割り当て分だけ追加する
     const batch = adminDb.batch();
-    existingAssignmentsSnapshot.docs.forEach((doc) => {
-      const data = doc.data();
-      if (data.assignedBy !== 'manual') {
-        batch.delete(doc.ref);
-      }
-    });
-
-    // 割り当て結果をFirestoreに保存
     const assignmentCollection = adminDb.collection('assignments');
 
     assignmentResult.assignments.forEach((assignment) => {
@@ -93,9 +81,11 @@ export async function POST(request: NextRequest) {
       });
     });
 
-    await batch.commit();
+    if (assignmentResult.assignments.length > 0) {
+      await batch.commit();
+    }
 
-    if (year) {
+    if (year && assignmentResult.assignments.length > 0) {
       FirestoreCache.invalidateYear(parseInt(year, 10));
     }
 
@@ -111,11 +101,18 @@ export async function POST(request: NextRequest) {
       );
       return normalizedSlots.length > 0;
     });
-    const existingManualAssignmentCount = manualAssignments.reduce(
-      (count, assignment) => count + (participantIds.has(assignment.responseId) ? 1 : 0),
-      0,
+    const existingAssignedParticipantIds = new Set(
+      existingAssignments
+        .map((assignment) => assignment.responseId)
+        .filter((responseId) => participantIds.has(responseId)),
     );
-    const totalAssignedCount = existingManualAssignmentCount + assignmentResult.assignments.length;
+    const autoAssignedParticipantIds = new Set(
+      assignmentResult.assignments.map((assignment) => assignment.responseId),
+    );
+    const totalAssignedCount = new Set([
+      ...existingAssignedParticipantIds,
+      ...autoAssignedParticipantIds,
+    ]).size;
 
     return NextResponse.json({
       message: '自動割り当てが完了しました',

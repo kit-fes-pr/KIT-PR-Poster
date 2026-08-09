@@ -60,6 +60,7 @@ interface Team {
 }
 
 interface Assignment {
+  formId?: string;
   responseId: string;
   teamId: string;
   assignedAt: Date;
@@ -140,13 +141,15 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   const [distributionEventId, setDistributionEventId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [autoAssignLoading, setAutoAssignLoading] = useState(false);
   const [selectedForm, setSelectedForm] = useState<string>('');
   const [selectedFormTitle, setSelectedFormTitle] = useState<string>('');
   const [currentForm, setCurrentForm] = useState<CurrentForm | null>(null);
   const [responseRecords, setResponseRecords] = useState<Record<string, ResponseRecord>>({});
   const [showManualModal, setShowManualModal] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
-  const [manualAssignTeamId, setManualAssignTeamId] = useState<string>('');
+  const [manualAssignTeamIds, setManualAssignTeamIds] = useState<string[]>([]);
+  const [manualAssignInitialTeamIds, setManualAssignInitialTeamIds] = useState<string[]>([]);
   const [manualAssignLoading, setManualAssignLoading] = useState<boolean>(false);
   const [showResponseEditModal, setShowResponseEditModal] = useState(false);
   const [selectedResponseId, setSelectedResponseId] = useState<string>('');
@@ -266,7 +269,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
       await loadTeams();
       await loadAreas();
-      await loadAssignments();
+      await loadAssignments(nextForm?.formId);
     } catch (err) {
       setError('データの取得に失敗しました');
       console.error(err);
@@ -818,12 +821,14 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     }
   };
 
-  const loadAssignments = async () => {
+  const loadAssignments = async (formId = selectedForm) => {
     if (!resolvedParams || !user) return;
 
     try {
       const token = await user.getIdToken();
-      const res = await fetch(`/api/admin/assignments?year=${resolvedParams.year}`, {
+      const searchParams = new URLSearchParams({ year: resolvedParams.year });
+      if (formId) searchParams.set('formId', formId);
+      const res = await fetch(`/api/admin/assignments?${searchParams.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -846,6 +851,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     }
 
     try {
+      setAutoAssignLoading(true);
       if (!user) {
         setError('認証が必要です');
         return;
@@ -889,6 +895,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     } catch (err) {
       setError('自動割り当てに失敗しました');
       console.error(err);
+    } finally {
+      setAutoAssignLoading(false);
     }
   };
 
@@ -896,6 +904,9 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     const year = resolvedParams?.year;
     if (!year) return;
     if (!selectedForm || !user) return;
+    if (!confirm('このフォームの割り当てをすべてクリアしますか？手動割り当ても削除されます。')) {
+      return;
+    }
 
     try {
       const token = await user.getIdToken();
@@ -926,8 +937,77 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     }
   };
 
+  const clearAutoAssignments = async (options?: { skipConfirm?: boolean; refresh?: boolean }) => {
+    const year = resolvedParams?.year;
+    if (!year) return false;
+    if (!selectedForm || !user) return false;
+    if (
+      !options?.skipConfirm &&
+      !confirm('自動割り当て分だけをクリアしますか？手動割り当ては残ります。')
+    ) {
+      return false;
+    }
+
+    try {
+      setAutoAssignLoading(true);
+      const token = await user.getIdToken();
+      const res = await fetch('/api/admin/assignments', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          year,
+          formId: selectedForm,
+          assignedBy: 'auto',
+        }),
+      });
+
+      if (res.ok) {
+        if (options?.refresh !== false) {
+          await loadAssignments();
+          await loadTeams();
+        }
+        clearDashboardCache(Number(year));
+        setLastAutoAssignmentStats(null);
+        setError('');
+        return true;
+      } else {
+        const errorData = await res.json();
+        setError(errorData.error || '自動割り当てのクリアに失敗しました');
+        return false;
+      }
+    } catch (err) {
+      setError('自動割り当てのクリアに失敗しました');
+      console.error(err);
+      return false;
+    } finally {
+      setAutoAssignLoading(false);
+    }
+  };
+
+  const clearAutoAssignmentsAndRun = async () => {
+    if (
+      !confirm(
+        '自動割り当て分だけをクリアしてから、未割り当てを自動割り当てしますか？手動割り当ては残ります。',
+      )
+    ) {
+      return;
+    }
+    const cleared = await clearAutoAssignments({ skipConfirm: true, refresh: false });
+    if (!cleared) return;
+    await performAutoAssignment();
+  };
+
+  const getAssignmentsForParticipant = (responseId: string) => {
+    return assignments.filter(
+      (a) => a.responseId === responseId && (!selectedForm || a.formId === selectedForm),
+    );
+  };
+
   const getAssignmentForParticipant = (responseId: string) => {
-    return assignments.find((a) => a.responseId === responseId);
+    return getAssignmentsForParticipant(responseId)[0];
   };
 
   const getTeamById = (teamId: string) => {
@@ -985,8 +1065,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     const normalized = normalizeAvailabilitySlots(p.availableSlots);
     if (normalized.length === 0 || normalized.includes(UNAVAILABLE_SLOT_KEY)) return false;
     if (!selectedTeamFilter) return true;
-    const a = getAssignmentForParticipant(p.responseId);
-    return a?.teamId === selectedTeamFilter;
+    return getAssignmentsForParticipant(p.responseId).some((a) => a.teamId === selectedTeamFilter);
   });
   const collator = new Intl.Collator('ja');
   const sortedParticipants = [...filteredParticipants].sort((a, b) => {
@@ -1002,6 +1081,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       timeSlot: createTeamForm.timeSlot,
       existingCodes: teams.map((team) => team.teamCode),
     }) || '配布枠選択後に自動設定';
+  const hasAutoAssignments = assignments.some((assignment) => assignment.assignedBy !== 'manual');
 
   const buildAssignmentExportRows = (): AssignmentExportRow[] => {
     const collator = new Intl.Collator('ja');
@@ -1237,7 +1317,12 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
           <div className="mt-6 flex flex-col gap-3">
             <button
               onClick={performAutoAssignment}
-              disabled={!selectedForm || participants.length === 0 || teams.length === 0}
+              disabled={
+                autoAssignLoading ||
+                !selectedForm ||
+                participants.length === 0 ||
+                teams.length === 0
+              }
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1248,24 +1333,82 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                   d="M13 10V3L4 14h7v7l9-11h-7z"
                 />
               </svg>
-              自動割り当てを実行
+              {autoAssignLoading ? '処理中...' : '未割り当てを自動割り当て'}
             </button>
 
             {assignments.length > 0 && (
-              <button
-                onClick={clearAssignments}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-                割り当てをクリア
-              </button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {hasAutoAssignments && (
+                  <>
+                    <button
+                      onClick={() => {
+                        void clearAutoAssignments();
+                      }}
+                      disabled={autoAssignLoading}
+                      className="inline-flex items-center px-4 py-2 border border-amber-300 text-sm font-medium rounded-md text-amber-800 bg-white hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
+                    >
+                      <svg
+                        className="mr-2 h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 10V3L4 14h7v7l9-11h-7z"
+                        />
+                      </svg>
+                      自動割り当てをクリア
+                    </button>
+                    <button
+                      onClick={clearAutoAssignmentsAndRun}
+                      disabled={
+                        autoAssignLoading ||
+                        !selectedForm ||
+                        participants.length === 0 ||
+                        teams.length === 0
+                      }
+                      className="inline-flex items-center px-4 py-2 border border-indigo-300 text-sm font-medium rounded-md text-indigo-800 bg-white hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                    >
+                      <svg
+                        className="mr-2 h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0 0 14-3M19 5A9 9 0 0 0 5 8"
+                        />
+                      </svg>
+                      自動割り当てをクリアして再割り当て
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={clearAssignments}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <svg
+                    className="mr-2 h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                  割り当てをクリア
+                </button>
+              </div>
             )}
             {lastAutoAssignmentStats?.carRequiredTeamsWithoutDriver ? (
               <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
@@ -1421,8 +1564,9 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {sortedParticipants.map((participant) => {
-                    const assignment = getAssignmentForParticipant(participant.responseId);
-                    const team = assignment ? getTeamById(assignment.teamId) : null;
+                    const participantAssignments = getAssignmentsForParticipant(
+                      participant.responseId,
+                    );
 
                     return (
                       <tr key={participant.responseId}>
@@ -1441,11 +1585,23 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                           {formatDate(participant.submittedAt)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <AssignmentStatusSummary
-                            assignment={assignment}
-                            team={team}
-                            areaLabel={team ? getTeamAreaLabel(team) : undefined}
-                          />
+                          <div className="space-y-2">
+                            {participantAssignments.length === 0 ? (
+                              <AssignmentStatusSummary />
+                            ) : (
+                              participantAssignments.map((assignment) => {
+                                const team = getTeamById(assignment.teamId);
+                                return (
+                                  <AssignmentStatusSummary
+                                    key={`${assignment.teamId}-${assignment.timeSlot}`}
+                                    assignment={assignment}
+                                    team={team}
+                                    areaLabel={team ? getTeamAreaLabel(team) : undefined}
+                                  />
+                                );
+                              })
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-3">
@@ -1457,7 +1613,12 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                             </button>
                             <button
                               onClick={() => {
+                                const assignmentTeamIds = getAssignmentsForParticipant(
+                                  participant.responseId,
+                                ).map((assignment) => assignment.teamId);
                                 setSelectedParticipant(participant);
+                                setManualAssignTeamIds(assignmentTeamIds);
+                                setManualAssignInitialTeamIds(assignmentTeamIds);
                                 setShowManualModal(true);
                               }}
                               className="text-indigo-600 hover:text-indigo-900"
@@ -1485,8 +1646,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
             </div>
             <div className="divide-y divide-gray-200">
               {unavailableParticipants.map((participant) => {
-                const assignment = getAssignmentForParticipant(participant.responseId);
-                const team = assignment ? getTeamById(assignment.teamId) : null;
+                const participantAssignments = getAssignmentsForParticipant(participant.responseId);
 
                 return (
                   <div
@@ -1501,10 +1661,22 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                       <div className="text-xs text-gray-400 mt-1">
                         {getAvailabilityLabel(participant.availableSlots)}
                       </div>
-                      {assignment && team && (
-                        <div className="mt-2 text-xs text-gray-500">
-                          <div className="mb-1">割り当て先: {team.teamName}</div>
-                          <AssignmentStatusSummary assignment={assignment} team={team} compact />
+                      {participantAssignments.length > 0 && (
+                        <div className="mt-2 space-y-2 text-xs text-gray-500">
+                          {participantAssignments.map((assignment) => {
+                            const team = getTeamById(assignment.teamId);
+                            if (!team) return null;
+                            return (
+                              <div key={`${assignment.teamId}-${assignment.timeSlot}`}>
+                                <div className="mb-1">割り当て先: {team.teamName}</div>
+                                <AssignmentStatusSummary
+                                  assignment={assignment}
+                                  team={team}
+                                  compact
+                                />
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -1517,7 +1689,12 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                       </button>
                       <button
                         onClick={() => {
+                          const assignmentTeamIds = getAssignmentsForParticipant(
+                            participant.responseId,
+                          ).map((assignment) => assignment.teamId);
                           setSelectedParticipant(participant);
+                          setManualAssignTeamIds(assignmentTeamIds);
+                          setManualAssignInitialTeamIds(assignmentTeamIds);
                           setShowManualModal(true);
                         }}
                         className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
@@ -1562,6 +1739,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
             onClose={() => {
               setShowManualModal(false);
               setSelectedParticipant(null);
+              setManualAssignTeamIds([]);
+              setManualAssignInitialTeamIds([]);
             }}
             centered={false}
             panelClassName="max-w-lg"
@@ -1575,6 +1754,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                     onClick={() => {
                       setShowManualModal(false);
                       setSelectedParticipant(null);
+                      setManualAssignTeamIds([]);
+                      setManualAssignInitialTeamIds([]);
                     }}
                     className="text-gray-400 hover:text-gray-600"
                   >
@@ -1601,23 +1782,58 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      割り当て先チーム
-                    </label>
-                    <select
-                      value={manualAssignTeamId}
-                      onChange={(e) => setManualAssignTeamId(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      <option value="">チームを選択</option>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        割り当て先チーム
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            !confirm(
+                              `${selectedParticipant.name || 'この参加者'} の割り当て選択をすべて外しますか？保存するまで反映されません。`,
+                            )
+                          ) {
+                            return;
+                          }
+                          setManualAssignTeamIds([]);
+                        }}
+                        disabled={manualAssignLoading || manualAssignTeamIds.length === 0}
+                        className="text-sm font-medium text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:text-gray-400"
+                      >
+                        一括解除
+                      </button>
+                    </div>
+                    <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border border-gray-200 p-3">
                       {teams.map((team) => (
-                        <option key={team.teamId} value={team.teamId}>
-                          {team.teamName} - {getTeamAreaLabel(team)} /{' '}
-                          {formatAvailabilitySlotLabel(team.timeSlot)} (最大{team.maxMembers || 10}
-                          人)
-                        </option>
+                        <label
+                          key={team.teamId}
+                          className="flex cursor-pointer items-start gap-3 rounded-md border border-gray-200 p-3 hover:bg-gray-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={manualAssignTeamIds.includes(team.teamId)}
+                            onChange={(e) => {
+                              setManualAssignTeamIds((current) =>
+                                e.target.checked
+                                  ? [...current, team.teamId]
+                                  : current.filter((teamId) => teamId !== team.teamId),
+                              );
+                            }}
+                            className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium text-gray-900">
+                              {team.teamName} - {getTeamAreaLabel(team)}
+                            </span>
+                            <span className="mt-1 block text-xs text-gray-500">
+                              {formatAvailabilitySlotLabel(team.timeSlot)} / 最大
+                              {team.maxMembers || 10}人
+                            </span>
+                          </span>
+                        </label>
                       ))}
-                    </select>
+                    </div>
                   </div>
                 </div>
 
@@ -1626,23 +1842,53 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                     onClick={() => {
                       setShowManualModal(false);
                       setSelectedParticipant(null);
-                      setManualAssignTeamId('');
+                      setManualAssignTeamIds([]);
+                      setManualAssignInitialTeamIds([]);
                     }}
                     className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                   >
                     キャンセル
                   </button>
                   <button
-                    disabled={manualAssignLoading || !manualAssignTeamId || !selectedParticipant}
+                    disabled={manualAssignLoading || !selectedParticipant}
                     onClick={async () => {
-                      if (!selectedParticipant || !manualAssignTeamId) return;
+                      if (!selectedParticipant) return;
+                      if (
+                        manualAssignTeamIds.length === 0 &&
+                        !confirm(
+                          `${selectedParticipant.name || 'この参加者'} の割り当てをすべて解除しますか？`,
+                        )
+                      ) {
+                        return;
+                      }
+                      const currentAssignmentTeamIds = getAssignmentsForParticipant(
+                        selectedParticipant.responseId,
+                      ).map((assignment) => assignment.teamId);
+                      const currentAssignmentKey = [...currentAssignmentTeamIds].sort().join('\n');
+                      const nextAssignmentKey = [...manualAssignTeamIds].sort().join('\n');
+                      if (
+                        manualAssignTeamIds.length > 0 &&
+                        currentAssignmentKey !== nextAssignmentKey &&
+                        !confirm(
+                          `${selectedParticipant.name || 'この参加者'} の割り当て先を変更しますか？`,
+                        )
+                      ) {
+                        return;
+                      }
                       try {
                         setManualAssignLoading(true);
                         const token = await user!.getIdToken();
-                        // 時間帯の自動決定
-                        const team = teams.find((t) => t.teamId === manualAssignTeamId);
-                        const ts = resolveAssignmentSlot(team);
-                        if (!ts) {
+                        const selectedTeams = manualAssignTeamIds
+                          .map((teamId) => teams.find((t) => t.teamId === teamId))
+                          .filter((team): team is Team => Boolean(team));
+                        const assignmentTargets = selectedTeams.map((team) => ({
+                          teamId: team.teamId,
+                          timeSlot: resolveAssignmentSlot(team),
+                        }));
+                        if (
+                          assignmentTargets.length !== manualAssignTeamIds.length ||
+                          assignmentTargets.some((target) => !target.timeSlot)
+                        ) {
                           throw new Error('選択されたチームに対応する参加可能時間が見つかりません');
                         }
                         const res = await fetch('/api/admin/assignments', {
@@ -1655,12 +1901,18 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                             year: resolvedParams?.year,
                             formId: selectedForm,
                             responseId: selectedParticipant.responseId,
-                            teamId: manualAssignTeamId,
-                            timeSlot: ts,
+                            assignments: assignmentTargets,
+                            previousTeamIds: manualAssignInitialTeamIds,
                           }),
                         });
                         const data = await res.json();
-                        if (!res.ok) throw new Error(data.error || '更新に失敗しました');
+                        if (!res.ok) {
+                          if (res.status === 409) {
+                            await loadAssignments();
+                            await loadTeams();
+                          }
+                          throw new Error(data.error || '更新に失敗しました');
+                        }
                         // 再読込
                         await loadAssignments();
                         await loadTeams();
@@ -1669,7 +1921,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                         }
                         setShowManualModal(false);
                         setSelectedParticipant(null);
-                        setManualAssignTeamId('');
+                        setManualAssignTeamIds([]);
+                        setManualAssignInitialTeamIds([]);
                       } catch (e: unknown) {
                         const msg = e instanceof Error ? e.message : '更新に失敗しました';
                         setError(msg);

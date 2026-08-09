@@ -2,15 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import {
-  buildManualAssignmentRecord,
-  normalizeAssignmentYear,
+  buildManualAssignmentRecords,
+  hasAssignmentTeamConflict,
+  preserveExistingAssignmentLabels,
 } from '@/lib/utils/assignment/assignment-api';
 import {
   normalizeAssignmentAuthHeader,
+  parseAssignmentDeletePayload,
   parseAssignmentListQuery,
   parseAssignmentMutationPayload,
 } from '@/lib/utils/assignment/assignment-route';
 import { FirestoreCache } from '@/lib/utils/server-cache';
+
+class AssignmentConflictError extends Error {}
 
 export async function GET(request: NextRequest) {
   try {
@@ -70,44 +74,108 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: parsedPayload.error }, { status: 400 });
     }
 
-    const manualAssignment = buildManualAssignmentRecord({
-      year: parsedPayload.year,
-      formId: parsedPayload.formId,
-      responseId: parsedPayload.responseId,
-      teamId: parsedPayload.teamId,
-      timeSlot: parsedPayload.timeSlot,
-      assignedAt: new Date(),
-    });
-    if (!manualAssignment) {
+    const manualAssignments =
+      parsedPayload.targets.length > 0
+        ? buildManualAssignmentRecords({
+            year: parsedPayload.year,
+            formId: parsedPayload.formId,
+            responseId: parsedPayload.responseId,
+            targets: parsedPayload.targets,
+            assignedAt: new Date(),
+          })
+        : [];
+    if (!manualAssignments) {
       return NextResponse.json(
         { error: 'year, formId, responseId, teamId, timeSlot が必要です' },
         { status: 400 },
       );
     }
 
-    // 既存の同一参加者の割り当てを削除（同一年度・フォーム内で一意に）
-    const query = await adminDb
-      .collection('assignments')
-      .where('year', '==', manualAssignment.year)
-      .where('formId', '==', manualAssignment.formId)
-      .where('responseId', '==', manualAssignment.responseId)
-      .get();
-    const batch = adminDb.batch();
-    query.docs.forEach((doc) => batch.delete(doc.ref));
+    const { year, formId, responseId } = parsedPayload;
 
-    // 新しい割り当てを追加
-    const docRef = adminDb.collection('assignments').doc();
-    batch.set(docRef, {
-      ...manualAssignment,
-    });
+    let assignmentIds: string[] = [];
 
-    await batch.commit();
+    try {
+      assignmentIds = await adminDb.runTransaction(async (transaction) => {
+        // 手動保存では同一参加者の割り当て先一覧を、競合確認と同じトランザクション内で更新する
+        const query = await transaction.get(
+          adminDb
+            .collection('assignments')
+            .where('year', '==', year)
+            .where('formId', '==', formId)
+            .where('responseId', '==', responseId),
+        );
+        if (
+          parsedPayload.previousTeamIds &&
+          hasAssignmentTeamConflict(
+            query.docs.map((doc) => doc.data().teamId),
+            parsedPayload.previousTeamIds,
+          )
+        ) {
+          throw new AssignmentConflictError();
+        }
 
-    if (manualAssignment.year) {
-      FirestoreCache.invalidateYear(Number(manualAssignment.year));
+        const assignmentsToSave = preserveExistingAssignmentLabels(
+          manualAssignments,
+          query.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              teamId: data.teamId,
+              assignedAt: data.assignedAt,
+              assignedBy: data.assignedBy,
+            };
+          }),
+        );
+        const assignmentsByTeamId = new Map(
+          assignmentsToSave.map((assignment) => [assignment.teamId, assignment] as const),
+        );
+        const retainedTeamIds = new Set<string>();
+        const nextAssignmentIds: string[] = [];
+
+        query.docs.forEach((doc) => {
+          const data = doc.data();
+          const teamId = typeof data.teamId === 'string' ? data.teamId.trim() : '';
+          const nextAssignment = teamId ? assignmentsByTeamId.get(teamId) : undefined;
+
+          if (!nextAssignment || retainedTeamIds.has(teamId)) {
+            transaction.delete(doc.ref);
+            return;
+          }
+
+          retainedTeamIds.add(teamId);
+          nextAssignmentIds.push(doc.id);
+          transaction.set(doc.ref, nextAssignment);
+        });
+
+        assignmentsToSave.forEach((assignment) => {
+          if (retainedTeamIds.has(assignment.teamId)) return;
+          const docRef = adminDb.collection('assignments').doc();
+          nextAssignmentIds.push(docRef.id);
+          transaction.set(docRef, {
+            ...assignment,
+          });
+        });
+
+        return nextAssignmentIds;
+      });
+    } catch (error) {
+      if (error instanceof AssignmentConflictError) {
+        return NextResponse.json(
+          {
+            error:
+              '割り当てが他の操作で更新されています。最新の割り当てを読み込んでから再度保存してください。',
+          },
+          { status: 409 },
+        );
+      }
+      throw error;
     }
 
-    return NextResponse.json({ success: true, assignmentId: docRef.id });
+    if (year) {
+      FirestoreCache.invalidateYear(Number(year));
+    }
+
+    return NextResponse.json({ success: true, assignmentIds });
   } catch (error) {
     console.error('割り当て作成エラー:', error);
     return NextResponse.json({ error: '割り当ての作成に失敗しました' }, { status: 500 });
@@ -126,35 +194,42 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 });
     }
 
-    const { year, formId } = await request.json();
-
-    const normalizedYear = normalizeAssignmentYear(year);
-    if (!normalizedYear) {
-      return NextResponse.json({ error: '年度が必要です' }, { status: 400 });
+    const parsedPayload = parseAssignmentDeletePayload(await request.json());
+    if ('error' in parsedPayload) {
+      return NextResponse.json({ error: parsedPayload.error }, { status: 400 });
     }
 
-    let query = adminDb.collection('assignments').where('year', '==', normalizedYear);
+    let query = adminDb.collection('assignments').where('year', '==', parsedPayload.year);
 
-    if (formId) {
-      query = query.where('formId', '==', formId);
+    if (parsedPayload.formId) {
+      query = query.where('formId', '==', parsedPayload.formId);
     }
 
     const assignmentsSnapshot = await query.get();
+    const docsToDelete =
+      parsedPayload.assignedBy === 'auto'
+        ? assignmentsSnapshot.docs.filter((doc) => doc.data().assignedBy !== 'manual')
+        : assignmentsSnapshot.docs;
 
     const batch = adminDb.batch();
-    assignmentsSnapshot.docs.forEach((doc) => {
+    docsToDelete.forEach((doc) => {
       batch.delete(doc.ref);
     });
 
-    await batch.commit();
+    if (docsToDelete.length > 0) {
+      await batch.commit();
+    }
 
-    if (normalizedYear) {
-      FirestoreCache.invalidateYear(normalizedYear);
+    if (docsToDelete.length > 0) {
+      FirestoreCache.invalidateYear(parsedPayload.year);
     }
 
     return NextResponse.json({
-      message: '割り当てが削除されました',
-      deletedCount: assignmentsSnapshot.size,
+      message:
+        parsedPayload.assignedBy === 'auto'
+          ? '自動割り当てが削除されました'
+          : '割り当てが削除されました',
+      deletedCount: docsToDelete.length,
     });
   } catch (error) {
     console.error('割り当て削除エラー:', error);

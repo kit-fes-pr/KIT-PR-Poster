@@ -51,3 +51,102 @@ export function buildManualAssignmentRecord(input: {
     assignedBy: 'manual',
   };
 }
+
+export function buildManualAssignmentRecords(input: {
+  year: unknown;
+  formId: unknown;
+  responseId: unknown;
+  targets: Array<{ teamId: unknown; timeSlot?: unknown }>;
+  assignedAt?: Date;
+}): Array<{
+  year: number;
+  formId: string;
+  responseId: string;
+  teamId: string;
+  timeSlot: string;
+  assignedAt: Date;
+  assignedBy: 'manual';
+}> | null {
+  if (!Array.isArray(input.targets) || input.targets.length === 0) return null;
+
+  const assignedAt = input.assignedAt || new Date();
+  const seenTeamIds = new Set<string>();
+  const records = input.targets
+    .map((target) =>
+      buildManualAssignmentRecord({
+        year: input.year,
+        formId: input.formId,
+        responseId: input.responseId,
+        teamId: target.teamId,
+        timeSlot: target.timeSlot,
+        assignedAt,
+      }),
+    )
+    .filter((record): record is NonNullable<typeof record> => {
+      if (!record || seenTeamIds.has(record.teamId)) return false;
+      seenTeamIds.add(record.teamId);
+      return true;
+    });
+
+  return records.length > 0 ? records : null;
+}
+
+type AssignmentRecordForLabelMerge = {
+  year: number;
+  formId: string;
+  responseId: string;
+  teamId: string;
+  timeSlot: string;
+  assignedAt: unknown;
+  assignedBy: 'auto' | 'manual';
+};
+
+export function preserveExistingAssignmentLabels(
+  nextAssignments: AssignmentRecordForLabelMerge[],
+  existingAssignments: Array<{
+    teamId?: unknown;
+    assignedAt?: unknown;
+    assignedBy?: unknown;
+  }>,
+): AssignmentRecordForLabelMerge[] {
+  const existingByTeamId = new Map<
+    string,
+    {
+      teamId?: unknown;
+      assignedAt?: unknown;
+      assignedBy?: unknown;
+    }
+  >();
+  existingAssignments.forEach((assignment) => {
+    if (typeof assignment.teamId !== 'string') return;
+    const teamId = assignment.teamId.trim();
+    if (!teamId || existingByTeamId.has(teamId)) return;
+    existingByTeamId.set(teamId, assignment);
+  });
+
+  return nextAssignments.map((assignment) => {
+    const existing = existingByTeamId.get(assignment.teamId);
+    if (!existing) return assignment;
+
+    return {
+      ...assignment,
+      assignedAt: existing.assignedAt || assignment.assignedAt,
+      assignedBy: existing.assignedBy === 'auto' ? 'auto' : 'manual',
+    };
+  });
+}
+
+export function hasAssignmentTeamConflict(currentTeamIds: unknown[], previousTeamIds: string[]) {
+  const normalizeTeamIds = (teamIds: unknown[]) =>
+    Array.from(
+      new Set(
+        teamIds
+          .filter((teamId): teamId is string => typeof teamId === 'string' && !!teamId.trim())
+          .map((teamId) => teamId.trim()),
+      ),
+    ).sort();
+
+  return (
+    normalizeTeamIds(currentTeamIds).join('\n') !== normalizeTeamIds(previousTeamIds).join('\n')
+  );
+}
