@@ -4,6 +4,7 @@ import {
   buildDeletedTeamLogData,
   buildTeamCreateData,
   buildTeamUpdateData,
+  normalizeTeamMaxMembers,
   normalizeTeamYear,
   resolveTeamAreaSelection,
   shouldBlockTeamDeletion,
@@ -22,6 +23,14 @@ describe('team api utils', () => {
     assert.equal(normalizeTeamYear('2026.5'), undefined);
     assert.equal(normalizeTeamYear('26'), undefined);
     assert.equal(normalizeTeamYear(null), undefined);
+  });
+
+  test('normalizeTeamMaxMembers accepts positive integers only', () => {
+    assert.equal(normalizeTeamMaxMembers(4), 4);
+    assert.equal(normalizeTeamMaxMembers('6'), 6);
+    assert.equal(normalizeTeamMaxMembers(0), undefined);
+    assert.equal(normalizeTeamMaxMembers('2.5'), undefined);
+    assert.equal(normalizeTeamMaxMembers(''), undefined);
   });
 
   test('resolveTeamAreaSelection prefers resolved area data', () => {
@@ -74,6 +83,7 @@ describe('team api utils', () => {
         year: '2026',
         area,
         requiresCar: true,
+        maxMembers: '4',
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-02T00:00:00.000Z'),
       }),
@@ -88,6 +98,7 @@ describe('team api utils', () => {
         assignedArea: 'A-01',
         adjacentAreas: ['A-02', 'A-03'],
         requiresCar: true,
+        maxMembers: 4,
         eventId: 'kohdai2026',
         year: 2026,
         isActive: true,
@@ -103,6 +114,7 @@ describe('team api utils', () => {
         timeSlot: '2026-06-01_pm',
         isActive: false,
         requiresCar: true,
+        maxMembers: 5,
         area,
         updatedAt: new Date('2026-02-01T00:00:00.000Z'),
       }),
@@ -117,6 +129,7 @@ describe('team api utils', () => {
         accessWindowVersion: 1,
         isActive: false,
         requiresCar: true,
+        maxMembers: 5,
         areaId: 'area-1',
         assignedArea: 'A-01',
         adjacentAreas: ['A-02', 'A-03'],

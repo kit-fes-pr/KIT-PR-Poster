@@ -23,6 +23,7 @@ export function buildTeamRouteCreatePayload(input: {
   eventId: unknown;
   year: unknown;
   requiresCar?: unknown;
+  maxMembers?: unknown;
   area: { areaId?: unknown; areaCode?: unknown; adjacentAreas?: unknown } | null | undefined;
   eventAvailabilitySlots: unknown;
   createdAt?: Date;
@@ -57,6 +58,7 @@ export function buildTeamRouteCreatePayload(input: {
     eventId: input.eventId,
     year: input.year,
     requiresCar: input.requiresCar,
+    maxMembers: input.maxMembers,
     area: areaSelection,
     createdAt: input.createdAt,
     updatedAt: input.updatedAt,
@@ -104,6 +106,7 @@ export function buildTeamRouteUpdatePayload(input: {
   currentArea?: { areaId?: unknown; areaCode?: unknown; adjacentAreas?: unknown } | null;
   year?: unknown;
   requiresCar?: unknown;
+  maxMembers?: unknown;
   updatedAt?: Date;
   eventAvailabilitySlots?: unknown;
 }) {
@@ -113,6 +116,7 @@ export function buildTeamRouteUpdatePayload(input: {
     year: input.year,
     isActive: input.isActive,
     requiresCar: input.requiresCar,
+    maxMembers: input.maxMembers,
     updatedAt: input.updatedAt,
   });
 

@@ -55,8 +55,9 @@ export default function TeamDetailPage() {
     teamName: string;
     timeSlot: string;
     assignedArea: string;
+    maxMembers: number;
     requiresCar: boolean;
-  }>({ teamName: '', timeSlot: '', assignedArea: '', requiresCar: false });
+  }>({ teamName: '', timeSlot: '', assignedArea: '', maxMembers: 10, requiresCar: false });
   const [memberLoading, setMemberLoading] = useState(false);
   const [assignedMembers, setAssignedMembers] = useState<
     Array<{
@@ -130,6 +131,7 @@ export default function TeamDetailPage() {
           teamName: loadedTeam?.teamName || '',
           timeSlot: loadedTeam?.timeSlot || '',
           assignedArea: selectedArea?.areaId || '',
+          maxMembers: loadedTeam?.maxMembers || 10,
           requiresCar: loadedTeam?.requiresCar === true,
         });
 
@@ -401,6 +403,24 @@ export default function TeamDetailPage() {
                         ))}
                       </select>
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        割り当て上限人数
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        className="mt-1 w-full border rounded px-3 py-2"
+                        value={editForm.maxMembers}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            maxMembers: Math.max(1, Number(e.target.value) || 1),
+                          })
+                        }
+                      />
+                    </div>
                     <label className="flex items-start gap-3 rounded-md border border-gray-200 p-3">
                       <input
                         type="checkbox"
@@ -432,6 +452,7 @@ export default function TeamDetailPage() {
                             teamName: editForm.teamName,
                             timeSlot: editForm.timeSlot,
                             areaId: editForm.assignedArea,
+                            maxMembers: editForm.maxMembers,
                             requiresCar: editForm.requiresCar,
                           };
                           const res = await authenticatedFetch(`/api/admin/teams/${teamId}`, {
@@ -529,6 +550,10 @@ export default function TeamDetailPage() {
                 <p>
                   <span className="text-gray-600">車:</span>{' '}
                   <span className="ml-2">{team?.requiresCar ? '必要' : '不要'}</span>
+                </p>
+                <p>
+                  <span className="text-gray-600">割り当て上限人数:</span>{' '}
+                  <span className="ml-2">{team?.maxMembers || 10}人</span>
                 </p>
               </div>
             )}

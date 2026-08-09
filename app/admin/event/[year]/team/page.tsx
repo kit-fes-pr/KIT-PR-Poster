@@ -179,6 +179,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     teamName: '',
     areaId: '',
     timeSlot: '',
+    maxMembers: 10,
     requiresCar: false,
   });
 
@@ -734,6 +735,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
           eventId: distributionEventId || `kodai${resolvedParams.year}`,
           year: Number(resolvedParams.year),
           requiresCar: createTeamForm.requiresCar,
+          maxMembers: createTeamForm.maxMembers,
         }),
       });
 
@@ -746,6 +748,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         teamName: '',
         areaId: '',
         timeSlot: distributionSlots[0] || '',
+        maxMembers: 10,
         requiresCar: false,
       });
       setShowCreateTeamForm(false);
@@ -1280,6 +1283,24 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                     先に配布設定で配布枠を登録してください。
                   </p>
                 )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  割り当て上限人数
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={createTeamForm.maxMembers}
+                  onChange={(e) =>
+                    setCreateTeamForm({
+                      ...createTeamForm,
+                      maxMembers: Math.max(1, Number(e.target.value) || 1),
+                    })
+                  }
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
               </div>
               <label className="flex items-start gap-3 rounded-md border border-gray-200 p-4 md:col-span-2">
                 <input

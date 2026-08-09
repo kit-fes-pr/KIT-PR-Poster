@@ -28,6 +28,21 @@ export function normalizeTeamYear(value: unknown): number | undefined {
   return undefined;
 }
 
+export function normalizeTeamMaxMembers(value: unknown): number | undefined {
+  const normalized =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim()
+        ? Number(value.trim())
+        : Number.NaN;
+
+  if (Number.isInteger(normalized) && normalized > 0) {
+    return normalized;
+  }
+
+  return undefined;
+}
+
 export function resolveTeamAreaSelection(input: {
   areaId: unknown;
   assignedArea: unknown;
@@ -69,6 +84,7 @@ export function buildTeamCreateData(input: {
   year: unknown;
   area: TeamAreaSelection;
   requiresCar?: unknown;
+  maxMembers?: unknown;
   createdAt?: Date;
   updatedAt?: Date;
 }): Omit<Team, 'teamId'> {
@@ -87,6 +103,7 @@ export function buildTeamCreateData(input: {
     assignedArea: input.area.assignedArea,
     adjacentAreas: normalizeAdjacentAreas(input.area.adjacentAreas),
     requiresCar: input.requiresCar === true,
+    maxMembers: normalizeTeamMaxMembers(input.maxMembers) || 10,
     eventId: String(input.eventId || ''),
     year: normalizeTeamYear(input.year),
     isActive: true,
@@ -103,6 +120,7 @@ export function buildTeamUpdateData(input: {
   isActive?: unknown;
   area?: TeamAreaSelection | null;
   requiresCar?: unknown;
+  maxMembers?: unknown;
   updatedAt?: Date;
 }): Record<string, unknown> {
   const update: Record<string, unknown> = {
@@ -126,6 +144,8 @@ export function buildTeamUpdateData(input: {
 
   if (typeof input.isActive === 'boolean') update.isActive = input.isActive;
   if (typeof input.requiresCar === 'boolean') update.requiresCar = input.requiresCar;
+  const normalizedMaxMembers = normalizeTeamMaxMembers(input.maxMembers);
+  if (typeof normalizedMaxMembers === 'number') update.maxMembers = normalizedMaxMembers;
 
   if (input.area) {
     update.areaId = input.area.areaId;
