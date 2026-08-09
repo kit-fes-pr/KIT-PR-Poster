@@ -3,11 +3,11 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import {
   buildManualAssignmentRecords,
-  normalizeAssignmentYear,
   preserveExistingAssignmentLabels,
 } from '@/lib/utils/assignment/assignment-api';
 import {
   normalizeAssignmentAuthHeader,
+  parseAssignmentDeletePayload,
   parseAssignmentListQuery,
   parseAssignmentMutationPayload,
 } from '@/lib/utils/assignment/assignment-route';
@@ -146,35 +146,42 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 });
     }
 
-    const { year, formId } = await request.json();
-
-    const normalizedYear = normalizeAssignmentYear(year);
-    if (!normalizedYear) {
-      return NextResponse.json({ error: '年度が必要です' }, { status: 400 });
+    const parsedPayload = parseAssignmentDeletePayload(await request.json());
+    if ('error' in parsedPayload) {
+      return NextResponse.json({ error: parsedPayload.error }, { status: 400 });
     }
 
-    let query = adminDb.collection('assignments').where('year', '==', normalizedYear);
+    let query = adminDb.collection('assignments').where('year', '==', parsedPayload.year);
 
-    if (formId) {
-      query = query.where('formId', '==', formId);
+    if (parsedPayload.formId) {
+      query = query.where('formId', '==', parsedPayload.formId);
     }
 
     const assignmentsSnapshot = await query.get();
+    const docsToDelete =
+      parsedPayload.assignedBy === 'auto'
+        ? assignmentsSnapshot.docs.filter((doc) => doc.data().assignedBy !== 'manual')
+        : assignmentsSnapshot.docs;
 
     const batch = adminDb.batch();
-    assignmentsSnapshot.docs.forEach((doc) => {
+    docsToDelete.forEach((doc) => {
       batch.delete(doc.ref);
     });
 
-    await batch.commit();
+    if (docsToDelete.length > 0) {
+      await batch.commit();
+    }
 
-    if (normalizedYear) {
-      FirestoreCache.invalidateYear(normalizedYear);
+    if (docsToDelete.length > 0) {
+      FirestoreCache.invalidateYear(parsedPayload.year);
     }
 
     return NextResponse.json({
-      message: '割り当てが削除されました',
-      deletedCount: assignmentsSnapshot.size,
+      message:
+        parsedPayload.assignedBy === 'auto'
+          ? '自動割り当てが削除されました'
+          : '割り当てが削除されました',
+      deletedCount: docsToDelete.length,
     });
   } catch (error) {
     console.error('割り当て削除エラー:', error);

@@ -926,6 +926,42 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     }
   };
 
+  const clearAutoAssignments = async () => {
+    const year = resolvedParams?.year;
+    if (!year) return;
+    if (!selectedForm || !user) return;
+
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/admin/assignments', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          year,
+          formId: selectedForm,
+          assignedBy: 'auto',
+        }),
+      });
+
+      if (res.ok) {
+        await loadAssignments();
+        await loadTeams();
+        clearDashboardCache(Number(year));
+        setLastAutoAssignmentStats(null);
+        setError('');
+      } else {
+        const errorData = await res.json();
+        setError(errorData.error || '自動割り当てのクリアに失敗しました');
+      }
+    } catch (err) {
+      setError('自動割り当てのクリアに失敗しました');
+      console.error(err);
+    }
+  };
+
   const getAssignmentsForParticipant = (responseId: string) => {
     return assignments.filter((a) => a.responseId === responseId);
   };
@@ -1005,6 +1041,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       timeSlot: createTeamForm.timeSlot,
       existingCodes: teams.map((team) => team.teamCode),
     }) || '配布枠選択後に自動設定';
+  const hasAutoAssignments = assignments.some((assignment) => assignment.assignedBy !== 'manual');
 
   const buildAssignmentExportRows = (): AssignmentExportRow[] => {
     const collator = new Intl.Collator('ja');
@@ -1255,20 +1292,48 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
             </button>
 
             {assignments.length > 0 && (
-              <button
-                onClick={clearAssignments}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-                割り当てをクリア
-              </button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {hasAutoAssignments && (
+                  <button
+                    onClick={clearAutoAssignments}
+                    className="inline-flex items-center px-4 py-2 border border-amber-300 text-sm font-medium rounded-md text-amber-800 bg-white hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
+                  >
+                    <svg
+                      className="mr-2 h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                      />
+                    </svg>
+                    自動分だけクリア
+                  </button>
+                )}
+                <button
+                  onClick={clearAssignments}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <svg
+                    className="mr-2 h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                  割り当てをクリア
+                </button>
+              </div>
             )}
             {lastAutoAssignmentStats?.carRequiredTeamsWithoutDriver ? (
               <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">

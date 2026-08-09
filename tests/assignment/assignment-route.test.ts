@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   normalizeAssignmentAuthHeader,
+  parseAssignmentDeletePayload,
   parseAssignmentListQuery,
   parseAssignmentMutationPayload,
 } from '../../lib/utils/assignment/assignment-route';
@@ -111,5 +112,40 @@ describe('assignment route utils', () => {
       'error' in invalidPrimitive ? invalidPrimitive.error : null,
       'リクエストボディが不正です',
     );
+  });
+
+  test('parseAssignmentDeletePayload supports clearing all or auto assignments only', () => {
+    assert.deepEqual(
+      parseAssignmentDeletePayload({
+        year: '2026',
+        formId: ' form-1 ',
+      }),
+      {
+        year: 2026,
+        formId: 'form-1',
+        assignedBy: 'all',
+      },
+    );
+    assert.deepEqual(
+      parseAssignmentDeletePayload({
+        year: '2026',
+        formId: ' form-1 ',
+        assignedBy: 'auto',
+      }),
+      {
+        year: 2026,
+        formId: 'form-1',
+        assignedBy: 'auto',
+      },
+    );
+
+    const invalidYear = parseAssignmentDeletePayload({
+      year: '2026.5',
+      formId: 'form-1',
+    });
+    assert.equal('error' in invalidYear ? invalidYear.error : null, '年度が必要です');
+
+    const invalidType = parseAssignmentDeletePayload(null);
+    assert.equal('error' in invalidType ? invalidType.error : null, 'リクエストボディが不正です');
   });
 });
