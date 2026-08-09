@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     const { year, formId, responseId } = parsedPayload;
 
-    // 手動保存では同一参加者の割り当て先一覧を置き換える
+    // 手動保存では同一参加者の割り当て先一覧を更新する
     const query = await adminDb
       .collection('assignments')
       .where('year', '==', year)
@@ -98,9 +98,6 @@ export async function POST(request: NextRequest) {
       .where('responseId', '==', responseId)
       .get();
     const batch = adminDb.batch();
-    query.docs.forEach((doc) => batch.delete(doc.ref));
-
-    const assignmentIds: string[] = [];
     const assignmentsToSave = preserveExistingAssignmentLabels(
       manualAssignments,
       query.docs.map((doc) => {
@@ -112,16 +109,43 @@ export async function POST(request: NextRequest) {
         };
       }),
     );
+    const assignmentsByTeamId = new Map(
+      assignmentsToSave.map((assignment) => [assignment.teamId, assignment] as const),
+    );
+    const retainedTeamIds = new Set<string>();
+    const assignmentIds: string[] = [];
+    let mutationCount = 0;
+
+    query.docs.forEach((doc) => {
+      const data = doc.data();
+      const teamId = typeof data.teamId === 'string' ? data.teamId.trim() : '';
+      const nextAssignment = teamId ? assignmentsByTeamId.get(teamId) : undefined;
+
+      if (!nextAssignment || retainedTeamIds.has(teamId)) {
+        batch.delete(doc.ref);
+        mutationCount++;
+        return;
+      }
+
+      retainedTeamIds.add(teamId);
+      assignmentIds.push(doc.id);
+      batch.set(doc.ref, nextAssignment);
+      mutationCount++;
+    });
 
     assignmentsToSave.forEach((assignment) => {
+      if (retainedTeamIds.has(assignment.teamId)) return;
       const docRef = adminDb.collection('assignments').doc();
       assignmentIds.push(docRef.id);
       batch.set(docRef, {
         ...assignment,
       });
+      mutationCount++;
     });
 
-    await batch.commit();
+    if (mutationCount > 0) {
+      await batch.commit();
+    }
 
     if (year) {
       FirestoreCache.invalidateYear(Number(year));

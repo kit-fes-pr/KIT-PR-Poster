@@ -134,4 +134,33 @@ describe('assignment api utils', () => {
       ],
     );
   });
+
+  test('preserveExistingAssignmentLabels uses the first matching existing assignment', () => {
+    const firstAssignedAt = new Date('2026-01-01T00:00:00.000Z');
+    const duplicateAssignedAt = new Date('2026-01-02T00:00:00.000Z');
+    const nextAssignments = buildManualAssignmentRecords({
+      year: '2026',
+      formId: 'form-1',
+      responseId: 'response-1',
+      assignedAt: new Date('2026-02-01T00:00:00.000Z'),
+      targets: [{ teamId: 'team-1', timeSlot: '2026-06-01_am' }],
+    });
+    assert.ok(nextAssignments);
+
+    assert.deepEqual(
+      preserveExistingAssignmentLabels(nextAssignments, [
+        {
+          teamId: 'team-1',
+          assignedAt: firstAssignedAt,
+          assignedBy: 'auto',
+        },
+        {
+          teamId: 'team-1',
+          assignedAt: duplicateAssignedAt,
+          assignedBy: 'manual',
+        },
+      ]).map(({ teamId, assignedAt, assignedBy }) => ({ teamId, assignedAt, assignedBy })),
+      [{ teamId: 'team-1', assignedAt: firstAssignedAt, assignedBy: 'auto' }],
+    );
+  });
 });

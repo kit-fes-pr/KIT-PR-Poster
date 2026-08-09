@@ -109,11 +109,20 @@ export function preserveExistingAssignmentLabels(
     assignedBy?: unknown;
   }>,
 ): AssignmentRecordForLabelMerge[] {
-  const existingByTeamId = new Map(
-    existingAssignments
-      .filter((assignment) => typeof assignment.teamId === 'string' && assignment.teamId.trim())
-      .map((assignment) => [String(assignment.teamId).trim(), assignment] as const),
-  );
+  const existingByTeamId = new Map<
+    string,
+    {
+      teamId?: unknown;
+      assignedAt?: unknown;
+      assignedBy?: unknown;
+    }
+  >();
+  existingAssignments.forEach((assignment) => {
+    if (typeof assignment.teamId !== 'string') return;
+    const teamId = assignment.teamId.trim();
+    if (!teamId || existingByTeamId.has(teamId)) return;
+    existingByTeamId.set(teamId, assignment);
+  });
 
   return nextAssignments.map((assignment) => {
     const existing = existingByTeamId.get(assignment.teamId);
