@@ -137,4 +137,50 @@ describe('auto assignment utils', () => {
       false,
     );
   });
+
+  test('existing auto assignments are preserved when auto assignment runs again', () => {
+    const result = performAutoAssignment(
+      [
+        {
+          responseId: 'driver',
+          name: '既存運転者',
+          grade: 3,
+          section: 'PR',
+          availableSlots: eventSlotKeys,
+          carUsage: '運転できる',
+        },
+        {
+          responseId: 'member',
+          name: '追加メンバー',
+          grade: 2,
+          section: 'PR',
+          availableSlots: eventSlotKeys,
+          carUsage: '免許を持っていない',
+        },
+      ],
+      baseTeams,
+      eventSlotKeys,
+      [
+        {
+          responseId: 'driver',
+          teamId: 'team-car',
+          assignedAt: new Date('2026-01-01T00:00:00.000Z'),
+          assignedBy: 'auto',
+          timeSlot: '2026-06-01_am',
+        },
+      ],
+    );
+
+    assert.equal(result.carRequiredTeamIdsWithoutDriver.length, 0);
+    assert.equal(
+      result.assignments.some(
+        (assignment) => assignment.responseId === 'driver' && assignment.teamId === 'team-car',
+      ),
+      false,
+    );
+    assert.equal(
+      result.assignments.some((assignment) => assignment.responseId === 'member'),
+      true,
+    );
+  });
 });

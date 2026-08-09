@@ -117,14 +117,12 @@ export function performAutoAssignment(
       (teamGradeCount[team.teamId][participant.grade] || 0) + 1;
   };
 
-  existingAssignments
-    .filter((assignment) => assignment.assignedBy === 'manual')
-    .forEach((assignment) => {
-      const participant = participantById.get(assignment.responseId);
-      const team = teamById.get(assignment.teamId);
-      if (!participant || !team) return;
-      applyAssignmentState(participant, team, assignment);
-    });
+  existingAssignments.forEach((assignment) => {
+    const participant = participantById.get(assignment.responseId);
+    const team = teamById.get(assignment.teamId);
+    if (!participant || !team) return;
+    applyAssignmentState(participant, team, assignment);
+  });
 
   const sortedParticipants = [...normalizedParticipants].sort((a, b) => {
     const aIsSenior = a.grade >= 3;
