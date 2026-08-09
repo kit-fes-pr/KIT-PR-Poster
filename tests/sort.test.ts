@@ -6,6 +6,7 @@ describe('sort utils', () => {
   test('compareJapaneseText compares values with Japanese collation', () => {
     assert.equal(compareJapaneseText('あ', 'い') < 0, true);
     assert.equal(compareJapaneseText(null, '') === 0, true);
+    assert.equal(compareJapaneseText(0, '0') === 0, true);
   });
 
   test('sortByGradeThenKanaThenName sorts by grade, kana, name, and response id', () => {
