@@ -11,10 +11,10 @@ import {
   buildAvailabilitySlotChoices,
   formatAvailabilitySlotLabel,
 } from '@/lib/utils/availability/availability';
-import { normalizeGrade } from '@/lib/utils/grade/grade';
 import { clearDashboardCache } from '@/lib/utils/dashboard/dashboard-cache';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
 import { authenticatedFetch, fetcherAuth } from '@/lib/utils/auth-fetcher';
+import { sortByGradeThenKanaThenName } from '@/lib/utils/sort';
 
 export default function TeamDetailPage() {
   const router = useRouter();
@@ -63,6 +63,7 @@ export default function TeamDetailPage() {
     Array<{
       responseId: string;
       name: string;
+      nameKana?: string;
       grade: number;
       section: string;
       timeSlot: string;
@@ -595,36 +596,28 @@ export default function TeamDetailPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {assignedMembers
-                      .slice()
-                      .sort((a, b) => {
-                        const aGrade = normalizeGrade(a.grade);
-                        const bGrade = normalizeGrade(b.grade);
-                        if (bGrade !== aGrade) return bGrade - aGrade;
-                        return new Intl.Collator('ja').compare(a.name || '', b.name || '');
-                      })
-                      .map((m) => (
-                        <tr key={m.responseId}>
-                          <td className="px-6 py-3 text-sm text-gray-900">{m.name}</td>
-                          <td className="px-6 py-3 text-sm text-gray-900">
-                            {m.grade ? `${m.grade}年` : '-'}
-                          </td>
-                          <td className="px-6 py-3 text-sm text-gray-900">{m.section}</td>
-                          <td className="px-6 py-3 text-sm">
-                            <span
-                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                m.timeSlot.endsWith('_am')
-                                  ? 'bg-yellow-100 text-yellow-800'
-                                  : m.timeSlot.endsWith('_pm')
-                                    ? 'bg-purple-100 text-purple-800'
-                                    : 'bg-gray-100 text-gray-800'
-                              }`}
-                            >
-                              {formatAvailabilitySlotLabel(m.timeSlot)}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                    {sortByGradeThenKanaThenName(assignedMembers).map((m) => (
+                      <tr key={m.responseId}>
+                        <td className="px-6 py-3 text-sm text-gray-900">{m.name}</td>
+                        <td className="px-6 py-3 text-sm text-gray-900">
+                          {m.grade ? `${m.grade}年` : '-'}
+                        </td>
+                        <td className="px-6 py-3 text-sm text-gray-900">{m.section}</td>
+                        <td className="px-6 py-3 text-sm">
+                          <span
+                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              m.timeSlot.endsWith('_am')
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : m.timeSlot.endsWith('_pm')
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : 'bg-gray-100 text-gray-800'
+                            }`}
+                          >
+                            {formatAvailabilitySlotLabel(m.timeSlot)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

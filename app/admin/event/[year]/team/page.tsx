@@ -35,10 +35,13 @@ import { clearDashboardCache } from '@/lib/utils/dashboard/dashboard-cache';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
 import { buildCsvContent, downloadCsvFile } from '@/lib/utils/export/export';
 import { buildNextTeamCode } from '@/lib/utils/team/team-code';
+import { compareJapaneseText, sortByGradeThenKanaThenName } from '@/lib/utils/sort';
+import { generateKana } from '@/lib/kanaUtils';
 
 interface Participant {
   responseId: string;
   name: string;
+  nameKana?: string;
   grade: number;
   section: string;
   availableSlots: string[];
@@ -162,6 +165,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   );
   const responseEditModalTopRef = useRef<HTMLDivElement | null>(null);
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>('');
+  const [participantSearchQuery, setParticipantSearchQuery] = useState<string>('');
   const [showCreateTeamForm, setShowCreateTeamForm] = useState(false);
   const [createTeamSubmitting, setCreateTeamSubmitting] = useState(false);
   const [showDebugInfo, setShowDebugInfo] = useState(false);
@@ -803,6 +807,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
             return {
               responseId: response.responseId,
               name: response.participantData?.name || '',
+              nameKana: response.participantData?.nameKana || '',
               grade: normalizeGrade(response.participantData?.grade),
               section: response.participantData?.section || '',
               availableSlots,
@@ -1049,11 +1054,29 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   }
 
   const stats = getAssignmentStats();
-  const unavailableParticipants = participants.filter((p) => {
+  const normalizedParticipantSearchQuery = participantSearchQuery.trim();
+  const participantMatchesSearch = (participant: Participant) => {
+    if (!normalizedParticipantSearchQuery) return true;
+
+    const query = normalizedParticipantSearchQuery.toLowerCase();
+    const kanaQuery = generateKana(normalizedParticipantSearchQuery).toLowerCase();
+    const searchTargets = [
+      participant.name,
+      participant.nameKana,
+      generateKana(participant.name || ''),
+      generateKana(participant.nameKana || ''),
+    ].map((value) => String(value || '').toLowerCase());
+
+    return searchTargets.some((value) => value.includes(query) || value.includes(kanaQuery));
+  };
+  const baseUnavailableParticipants = participants.filter((p) => {
     const normalized = normalizeAvailabilitySlots(p.availableSlots);
     return normalized.length === 0 || normalized.includes(UNAVAILABLE_SLOT_KEY);
   });
-  const unavailableCount = unavailableParticipants.length;
+  const unavailableParticipants = sortByGradeThenKanaThenName(
+    baseUnavailableParticipants.filter(participantMatchesSearch),
+  );
+  const unavailableCount = baseUnavailableParticipants.length;
   const availableParticipants = participants.filter((p) => {
     const normalized = normalizeAvailabilitySlots(p.availableSlots);
     return normalized.length > 0 && !normalized.includes(UNAVAILABLE_SLOT_KEY);
@@ -1067,18 +1090,11 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   const filteredParticipants = participants.filter((p) => {
     const normalized = normalizeAvailabilitySlots(p.availableSlots);
     if (normalized.length === 0 || normalized.includes(UNAVAILABLE_SLOT_KEY)) return false;
+    if (!participantMatchesSearch(p)) return false;
     if (!selectedTeamFilter) return true;
     return getAssignmentsForParticipant(p.responseId).some((a) => a.teamId === selectedTeamFilter);
   });
-  const collator = new Intl.Collator('ja');
-  const sortedParticipants = [...filteredParticipants].sort((a, b) => {
-    const aGrade = normalizeGrade(a.grade);
-    const bGrade = normalizeGrade(b.grade);
-    if (bGrade !== aGrade) return bGrade - aGrade;
-    const an = a.name || '';
-    const bn = b.name || '';
-    return collator.compare(an, bn);
-  });
+  const sortedParticipants = sortByGradeThenKanaThenName(filteredParticipants);
   const generatedTeamCodePreview =
     buildNextTeamCode({
       timeSlot: createTeamForm.timeSlot,
@@ -1087,7 +1103,6 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   const hasAutoAssignments = assignments.some((assignment) => assignment.assignedBy !== 'manual');
 
   const buildAssignmentExportRows = (): AssignmentExportRow[] => {
-    const collator = new Intl.Collator('ja');
     const rows = assignments
       .map((assignment) => {
         const participant = participants.find((item) => item.responseId === assignment.responseId);
@@ -1103,10 +1118,10 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       .filter(Boolean) as AssignmentExportRow[];
 
     return rows.sort((a, b) => {
-      const teamCompare = collator.compare(a.team, b.team);
+      const teamCompare = compareJapaneseText(a.team, b.team);
       if (teamCompare !== 0) return teamCompare;
       if (b.grade !== a.grade) return b.grade - a.grade;
-      return collator.compare(a.name, b.name);
+      return compareJapaneseText(a.name, b.name);
     });
   };
 
@@ -1562,6 +1577,19 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div className="flex items-center gap-2 flex-col">
+                    <label htmlFor="participantSearch" className="text-sm text-gray-600">
+                      名前で検索
+                    </label>
+                    <input
+                      id="participantSearch"
+                      type="search"
+                      value={participantSearchQuery}
+                      onChange={(e) => setParticipantSearchQuery(e.target.value)}
+                      placeholder="氏名・ふりがな"
+                      className="block w-48 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    />
                   </div>
                 </div>
               </div>
