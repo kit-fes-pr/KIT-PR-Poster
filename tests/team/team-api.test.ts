@@ -25,11 +25,14 @@ describe('team api utils', () => {
     assert.equal(normalizeTeamYear(null), undefined);
   });
 
-  test('normalizeTeamMaxMembers accepts positive integers only', () => {
+  test('normalizeTeamMaxMembers accepts decimal integers from 0 to 99 only', () => {
+    assert.equal(normalizeTeamMaxMembers(0), 0);
     assert.equal(normalizeTeamMaxMembers(4), 4);
     assert.equal(normalizeTeamMaxMembers('6'), 6);
-    assert.equal(normalizeTeamMaxMembers(0), undefined);
+    assert.equal(normalizeTeamMaxMembers(99), 99);
+    assert.equal(normalizeTeamMaxMembers(100), undefined);
     assert.equal(normalizeTeamMaxMembers('2.5'), undefined);
+    assert.equal(normalizeTeamMaxMembers('0x10'), undefined);
     assert.equal(normalizeTeamMaxMembers(''), undefined);
   });
 

@@ -1290,13 +1290,17 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                 </label>
                 <input
                   type="number"
-                  min={1}
+                  min={0}
+                  max={99}
                   step={1}
                   value={createTeamForm.maxMembers}
                   onChange={(e) =>
                     setCreateTeamForm({
                       ...createTeamForm,
-                      maxMembers: Math.max(1, Number(e.target.value) || 1),
+                      maxMembers: Math.min(
+                        99,
+                        Math.max(0, Math.trunc(Number(e.target.value) || 0)),
+                      ),
                     })
                   }
                   className="block w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -1849,7 +1853,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                             </span>
                             <span className="mt-1 block text-xs text-gray-500">
                               {formatAvailabilitySlotLabel(team.timeSlot)} / 最大
-                              {team.maxMembers || 10}人
+                              {team.maxMembers ?? 10}人
                             </span>
                           </span>
                         </label>

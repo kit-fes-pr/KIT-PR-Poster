@@ -131,7 +131,7 @@ export default function TeamDetailPage() {
           teamName: loadedTeam?.teamName || '',
           timeSlot: loadedTeam?.timeSlot || '',
           assignedArea: selectedArea?.areaId || '',
-          maxMembers: loadedTeam?.maxMembers || 10,
+          maxMembers: loadedTeam?.maxMembers ?? 10,
           requiresCar: loadedTeam?.requiresCar === true,
         });
 
@@ -409,14 +409,18 @@ export default function TeamDetailPage() {
                       </label>
                       <input
                         type="number"
-                        min={1}
+                        min={0}
+                        max={99}
                         step={1}
                         className="mt-1 w-full border rounded px-3 py-2"
                         value={editForm.maxMembers}
                         onChange={(e) =>
                           setEditForm({
                             ...editForm,
-                            maxMembers: Math.max(1, Number(e.target.value) || 1),
+                            maxMembers: Math.min(
+                              99,
+                              Math.max(0, Math.trunc(Number(e.target.value) || 0)),
+                            ),
                           })
                         }
                       />
@@ -553,7 +557,7 @@ export default function TeamDetailPage() {
                 </p>
                 <p>
                   <span className="text-gray-600">割り当て上限人数:</span>{' '}
-                  <span className="ml-2">{team?.maxMembers || 10}人</span>
+                  <span className="ml-2">{team?.maxMembers ?? 10}人</span>
                 </p>
               </div>
             )}

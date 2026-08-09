@@ -183,4 +183,33 @@ describe('auto assignment utils', () => {
       true,
     );
   });
+
+  test('performAutoAssignment treats maxMembers 0 as zero capacity', () => {
+    const result = performAutoAssignment(
+      [
+        {
+          responseId: 'member',
+          name: '追加メンバー',
+          grade: 2,
+          section: 'PR',
+          availableSlots: eventSlotKeys,
+          carUsage: '免許を持っていない',
+        },
+      ],
+      [
+        {
+          teamId: 'team-zero',
+          teamCode: 'ZERO',
+          teamName: '定員なし',
+          timeSlot: '2026-06-01_am',
+          assignedArea: 'A-01',
+          maxMembers: 0,
+        },
+      ],
+      eventSlotKeys,
+    );
+
+    assert.deepEqual(result.assignments, []);
+    assert.equal(result.skippedFull, 1);
+  });
 });

@@ -32,11 +32,11 @@ export function normalizeTeamMaxMembers(value: unknown): number | undefined {
   const normalized =
     typeof value === 'number'
       ? value
-      : typeof value === 'string' && value.trim()
+      : typeof value === 'string' && /^\d+$/.test(value.trim())
         ? Number(value.trim())
         : Number.NaN;
 
-  if (Number.isInteger(normalized) && normalized > 0) {
+  if (Number.isInteger(normalized) && normalized >= 0 && normalized <= 99) {
     return normalized;
   }
 
@@ -103,7 +103,7 @@ export function buildTeamCreateData(input: {
     assignedArea: input.area.assignedArea,
     adjacentAreas: normalizeAdjacentAreas(input.area.adjacentAreas),
     requiresCar: input.requiresCar === true,
-    maxMembers: normalizeTeamMaxMembers(input.maxMembers) || 10,
+    maxMembers: normalizeTeamMaxMembers(input.maxMembers) ?? 10,
     eventId: String(input.eventId || ''),
     year: normalizeTeamYear(input.year),
     isActive: true,
