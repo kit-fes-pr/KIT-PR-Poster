@@ -60,6 +60,7 @@ interface Team {
 }
 
 interface Assignment {
+  formId?: string;
   responseId: string;
   teamId: string;
   assignedAt: Date;
@@ -268,7 +269,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
       await loadTeams();
       await loadAreas();
-      await loadAssignments();
+      await loadAssignments(nextForm?.formId);
     } catch (err) {
       setError('データの取得に失敗しました');
       console.error(err);
@@ -820,12 +821,14 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     }
   };
 
-  const loadAssignments = async () => {
+  const loadAssignments = async (formId = selectedForm) => {
     if (!resolvedParams || !user) return;
 
     try {
       const token = await user.getIdToken();
-      const res = await fetch(`/api/admin/assignments?year=${resolvedParams.year}`, {
+      const searchParams = new URLSearchParams({ year: resolvedParams.year });
+      if (formId) searchParams.set('formId', formId);
+      const res = await fetch(`/api/admin/assignments?${searchParams.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -998,7 +1001,9 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   };
 
   const getAssignmentsForParticipant = (responseId: string) => {
-    return assignments.filter((a) => a.responseId === responseId);
+    return assignments.filter(
+      (a) => a.responseId === responseId && (!selectedForm || a.formId === selectedForm),
+    );
   };
 
   const getAssignmentForParticipant = (responseId: string) => {
