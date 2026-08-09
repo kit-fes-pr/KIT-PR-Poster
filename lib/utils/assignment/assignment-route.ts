@@ -106,8 +106,12 @@ export function parseAssignmentDeletePayload(input: unknown):
       : typeof payload.year === 'string' && /^\d{4}$/.test(payload.year.trim())
         ? Number(payload.year.trim())
         : Number.NaN;
-  const formId =
-    typeof payload.formId === 'string' && payload.formId.trim() ? payload.formId.trim() : null;
+  let formId: string | null = null;
+  if (typeof payload.formId === 'string') {
+    const trimmed = payload.formId.trim();
+    if (!trimmed) return { error: 'formId が不正です' };
+    formId = trimmed;
+  }
   const assignedBy = payload.assignedBy === 'auto' ? 'auto' : 'all';
 
   if (!Number.isInteger(year) || year <= 0) {
