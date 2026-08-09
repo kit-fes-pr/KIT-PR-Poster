@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
       FirestoreCache.invalidateYear(Number(year));
     }
 
-    return NextResponse.json({ success: true, assignmentIds, assignmentId: assignmentIds[0] });
+    return NextResponse.json({ success: true, assignmentIds });
   } catch (error) {
     console.error('割り当て作成エラー:', error);
     return NextResponse.json({ error: '割り当ての作成に失敗しました' }, { status: 500 });
