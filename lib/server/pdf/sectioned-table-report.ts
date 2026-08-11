@@ -287,27 +287,28 @@ export async function buildSectionedTableReportPdf<Row>(
   };
 
   for (const section of options.sections) {
-    const firstRowHeight = section.rows[0]
-      ? calculateRowHeight({
-          font,
-          columns: options.columns,
-          row: section.rows[0],
-        })
-      : 0;
-    if (current.length > 0 && usedHeight + sectionHeight + firstRowHeight > usableHeight) {
+    const rowHeights = section.rows.map((row) =>
+      calculateRowHeight({
+        font,
+        columns: options.columns,
+        row,
+      }),
+    );
+    const totalSectionHeight = sectionHeight + rowHeights.reduce((sum, height) => sum + height, 0);
+
+    // チームの見出しとメンバーを同じページに収め、チーム単位で改ページする。
+    // 先頭ページのタイトル領域に収まらない場合も、タイトルだけのページにして次ページへ送る。
+    if ((current.length > 0 || usedHeight > 0) && usedHeight + totalSectionHeight > usableHeight) {
       pushPage();
     }
 
     current.push({ type: 'section', label: section.label, count: section.count });
     usedHeight += sectionHeight;
 
-    for (const row of section.rows) {
-      const rowHeight = calculateRowHeight({
-        font,
-        columns: options.columns,
-        row,
-      });
+    for (const [rowIndex, row] of section.rows.entries()) {
+      const rowHeight = rowHeights[rowIndex];
 
+      // 1チームが1ページに収まらない場合だけ、表示不能を避けるため従来どおり分割する。
       if (usedHeight + rowHeight > usableHeight) {
         pushPage();
         current.push({
