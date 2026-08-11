@@ -21,6 +21,7 @@ export interface AssignmentTeam {
   maxMembers: number;
   memberCount?: number;
   leaderId?: string;
+  driverId?: string;
   preferredGrades?: number[];
   requiresCar?: boolean;
 }
@@ -39,6 +40,7 @@ export interface AssignmentExportRow {
   grade: number;
   name: string;
   isLeader?: boolean;
+  isDriver?: boolean;
 }
 
 export interface AssignmentForm {

@@ -27,6 +27,7 @@ function normalizeRows(value: unknown): AssignmentExportRow[] {
       grade: Number.isFinite(Number(source.grade)) ? Number(source.grade) : 0,
       name: normalizeString(source.name),
       isLeader: source.isLeader === true,
+      isDriver: source.isDriver === true,
     };
   });
 }
@@ -37,6 +38,7 @@ function sortRows(rows: AssignmentExportRow[]): AssignmentExportRow[] {
     const teamCompare = collator.compare(a.team, b.team);
     if (teamCompare !== 0) return teamCompare;
     if (a.isLeader !== b.isLeader) return a.isLeader ? -1 : 1;
+    if (a.isDriver !== b.isDriver) return a.isDriver ? -1 : 1;
     if (b.grade !== a.grade) return b.grade - a.grade;
     return collator.compare(a.name, b.name);
   });
@@ -68,7 +70,7 @@ async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
   return buildSectionedTableReportPdf({
     title: 'チーム割り当て一覧',
     metaText: `年度: ${input.year}　割り当て数: ${input.rows.length}名　出力日時: ${formatDate(new Date())}`,
-    legendText: '○ : 班リーダー',
+    legendText: '○ = 班リーダー　□ = 運転手',
     header: `工大祭実行委員会-学外配布${input.year}`,
     sections: groups.map((group) => ({
       label: group.team,
@@ -86,7 +88,12 @@ async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
       {
         title: '氏名',
         width: COL_WIDTHS[1],
-        getText: (row) => (row.isLeader ? `○ ${row.name || '-'}` : row.name || '-'),
+        getText: (row) => {
+          const markers = [row.isLeader ? '○' : '', row.isDriver ? '□' : '']
+            .filter(Boolean)
+            .join(' ');
+          return `${markers ? `${markers} ` : ''}${row.name || '-'}`;
+        },
         maxLines: 3,
       },
     ],

@@ -21,6 +21,7 @@ export interface Team {
   maxMembers?: number;
   memberCount?: number;
   leaderId?: string;
+  driverId?: string;
   // タイムスタンプ
   createdAt: Date | string;
   updatedAt?: Date | string;

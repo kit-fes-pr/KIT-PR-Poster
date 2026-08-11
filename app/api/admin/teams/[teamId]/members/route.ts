@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { normalizeGrade } from '@/lib/utils/grade/grade';
+import { canParticipantDrive } from '@/lib/utils/assignment/auto-assignment';
 
 type MemberItem = {
   responseId: string;
@@ -12,6 +13,7 @@ type MemberItem = {
   section: string;
   timeSlot: string;
   formId: string;
+  canDrive: boolean;
 };
 
 export async function GET(
@@ -107,6 +109,15 @@ export async function GET(
         section: pd.section || '-',
         timeSlot: String(a.timeSlot || ''),
         formId: rec.formId || a.formId || 'unknown',
+        canDrive: canParticipantDrive({
+          responseId: a.responseId,
+          name: pd.name || '',
+          grade: normalizeGrade(pd.grade),
+          section: pd.section || '',
+          availableSlots: [],
+          carUsage: pd.carUsage,
+          answers: rec.data?.answers,
+        }),
       });
     };
 

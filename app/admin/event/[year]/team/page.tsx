@@ -1063,6 +1063,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
           grade: normalizeGrade(participant.grade),
           name: participant.name || '',
           isLeader: team.leaderId === participant.responseId,
+          isDriver: team.driverId === participant.responseId,
         };
       })
       .filter(Boolean) as AssignmentExportRow[];
@@ -1086,7 +1087,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       r.team,
       r.grade ? `${r.grade}` : '',
       r.name,
-      r.isLeader ? '班リーダー' : '',
+      [r.isLeader ? '班リーダー' : '', r.isDriver ? '運転手' : ''].filter(Boolean).join(' / '),
     ]);
     downloadCsvFile(
       `チーム割り当て_${resolvedParams?.year || ''}.csv`,
@@ -1602,6 +1603,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                                     team={team}
                                     areaLabel={team ? getTeamAreaLabel(team) : undefined}
                                     isLeader={team?.leaderId === participant.responseId}
+                                    isDriver={team?.driverId === participant.responseId}
                                   />
                                 );
                               })
@@ -1679,6 +1681,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                                   team={team}
                                   compact
                                   isLeader={team.leaderId === participant.responseId}
+                                  isDriver={team.driverId === participant.responseId}
                                 />
                               </div>
                             );
