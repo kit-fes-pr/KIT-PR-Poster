@@ -20,8 +20,8 @@ export interface AssignmentTeam {
   assignedArea: string;
   maxMembers: number;
   memberCount?: number;
-  leaderId?: string;
-  driverId?: string;
+  leaderId?: string | null;
+  driverId?: string | null;
   preferredGrades?: number[];
   requiresCar?: boolean;
 }
