@@ -74,6 +74,7 @@ describe('team route utils', () => {
       requiresCar: true,
       maxMembers: 5,
       leaderId: ' leader-1 ',
+      driverId: ' driver-1 ',
       areaId: 'area-1',
       assignedArea: 'A-01',
       area: {
