@@ -46,10 +46,11 @@ const LINE_HEIGHT = 12;
 const TABLE_HEADER_HEIGHT = 20;
 const TABLE_ROW_MIN_HEIGHT = 20;
 const SECTION_TITLE_HEIGHT = 18;
-const FIRST_PAGE_INTRO_HEIGHT = 86;
+const FIRST_PAGE_BASE_INTRO_HEIGHT = 86;
 const TITLE_GAP = 20;
 const DIVIDER_OFFSET = 8;
 const INTRO_BOTTOM_GAP = 28;
+const LEGEND_HEIGHT = 14;
 const CELL_HORIZONTAL_PADDING = 4;
 const CELL_VERTICAL_PADDING = 8;
 
@@ -266,6 +267,9 @@ export async function buildSectionedTableReportPdf<Row>(
   const headerFontSize = options.headerFontSize || DEFAULT_HEADER_FONT_SIZE;
   const titleFontSize = options.titleFontSize || DEFAULT_TITLE_FONT_SIZE;
   const usableHeight = CONTENT_TOP - CONTENT_BOTTOM;
+  const firstPageIntroHeight =
+    FIRST_PAGE_BASE_INTRO_HEIGHT + (options.legendText ? LEGEND_HEIGHT : 0);
+  const firstPageBottomGap = INTRO_BOTTOM_GAP + (options.legendText ? LEGEND_HEIGHT : 0);
   const sectionHeight = SECTION_TITLE_HEIGHT + TABLE_HEADER_HEIGHT;
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
@@ -279,7 +283,7 @@ export async function buildSectionedTableReportPdf<Row>(
   let current: Array<
     { type: 'section'; label: string; count: number } | { type: 'row'; row: Row; height: number }
   > = [];
-  let usedHeight = FIRST_PAGE_INTRO_HEIGHT;
+  let usedHeight = firstPageIntroHeight;
 
   const pushPage = () => {
     pageChunks.push(current);
@@ -378,7 +382,7 @@ export async function buildSectionedTableReportPdf<Row>(
           color: rgb(0.29, 0.33, 0.39),
         });
       }
-      y -= INTRO_BOTTOM_GAP;
+      y -= firstPageBottomGap;
     }
 
     for (const item of items) {
