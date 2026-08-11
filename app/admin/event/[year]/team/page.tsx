@@ -646,6 +646,17 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     return team.timeSlot || '';
   };
 
+  const hasSelectedTeamInSameTimeSlot = (team: AssignmentTeam) => {
+    const timeSlot = resolveAssignmentSlot(team);
+    if (!timeSlot) return false;
+
+    return manualAssignTeamIds.some((teamId) => {
+      if (teamId === team.teamId) return false;
+      const selectedTeam = teams.find((candidate) => candidate.teamId === teamId);
+      return resolveAssignmentSlot(selectedTeam) === timeSlot;
+    });
+  };
+
   const createTeam = async (e: FormEvent) => {
     e.preventDefault();
     if (!resolvedParams || !user) return;
@@ -1792,34 +1803,56 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                       </button>
                     </div>
                     <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border border-gray-200 p-3">
-                      {teams.map((team) => (
-                        <label
-                          key={team.teamId}
-                          className="flex cursor-pointer items-start gap-3 rounded-md border border-gray-200 p-3 hover:bg-gray-50"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={manualAssignTeamIds.includes(team.teamId)}
-                            onChange={(e) => {
-                              setManualAssignTeamIds((current) =>
-                                e.target.checked
-                                  ? [...current, team.teamId]
-                                  : current.filter((teamId) => teamId !== team.teamId),
-                              );
-                            }}
-                            className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <span className="min-w-0">
-                            <span className="block text-sm font-medium text-gray-900">
-                              {team.teamName} - {getTeamAreaLabel(team)}
-                            </span>
-                            <span className="mt-1 block text-xs text-gray-500">
-                              {formatAvailabilitySlotLabel(team.timeSlot)} / 最大
-                              {team.maxMembers ?? 10}人
-                            </span>
-                          </span>
-                        </label>
-                      ))}
+                      {teams.map((team) =>
+                        (() => {
+                          const isSelected = manualAssignTeamIds.includes(team.teamId);
+                          const hasSameTimeSlotSelected =
+                            !isSelected && hasSelectedTeamInSameTimeSlot(team);
+
+                          return (
+                            <label
+                              key={team.teamId}
+                              className={`flex items-start gap-3 rounded-md border border-gray-200 p-3 ${
+                                hasSameTimeSlotSelected
+                                  ? 'cursor-not-allowed bg-gray-50 opacity-60'
+                                  : 'cursor-pointer hover:bg-gray-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                disabled={manualAssignLoading || hasSameTimeSlotSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked && hasSelectedTeamInSameTimeSlot(team)) {
+                                    setError('同じ時間帯のチームは複数選択できません');
+                                    return;
+                                  }
+                                  setManualAssignTeamIds((current) =>
+                                    e.target.checked
+                                      ? [...current, team.teamId]
+                                      : current.filter((teamId) => teamId !== team.teamId),
+                                  );
+                                }}
+                                className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed"
+                              />
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium text-gray-900">
+                                  {team.teamName} - {getTeamAreaLabel(team)}
+                                </span>
+                                <span className="mt-1 block text-xs text-gray-500">
+                                  {formatAvailabilitySlotLabel(team.timeSlot)} / 最大
+                                  {team.maxMembers ?? 10}人
+                                </span>
+                                {hasSameTimeSlotSelected && (
+                                  <span className="mt-1 block text-xs text-red-600">
+                                    同じ時間帯のチームを選択中です
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          );
+                        })(),
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1872,6 +1905,12 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                           teamId: team.teamId,
                           timeSlot: resolveAssignmentSlot(team),
                         }));
+                        const selectedTimeSlots = assignmentTargets.map(
+                          (target) => target.timeSlot,
+                        );
+                        if (new Set(selectedTimeSlots).size !== selectedTimeSlots.length) {
+                          throw new Error('同じ時間帯のチームは複数選択できません');
+                        }
                         if (
                           assignmentTargets.length !== manualAssignTeamIds.length ||
                           assignmentTargets.some((target) => !target.timeSlot)
