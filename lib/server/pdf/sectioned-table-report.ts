@@ -23,6 +23,7 @@ export type PdfTableSection<Row> = {
 export type SectionedTableReportOptions<Row> = {
   title: string;
   metaText: string;
+  legendText?: string;
   header: string;
   sections: PdfTableSection<Row>[];
   emptySectionLabel: string;
@@ -359,12 +360,24 @@ export async function buildSectionedTableReportPdf<Row>(
         size: headerFontSize,
         color: rgb(0.29, 0.33, 0.39),
       });
+      const dividerY = y - DIVIDER_OFFSET;
       page.drawLine({
-        start: { x: MARGIN_X, y: y - DIVIDER_OFFSET },
-        end: { x: PAGE_WIDTH - MARGIN_X, y: y - DIVIDER_OFFSET },
+        start: { x: MARGIN_X, y: dividerY },
+        end: { x: PAGE_WIDTH - MARGIN_X, y: dividerY },
         thickness: 0.5,
         color: rgb(0.82, 0.84, 0.88),
       });
+      if (options.legendText) {
+        drawText({
+          page,
+          font,
+          text: options.legendText,
+          x: MARGIN_X,
+          y: dividerY - 14,
+          size: headerFontSize,
+          color: rgb(0.29, 0.33, 0.39),
+        });
+      }
       y -= INTRO_BOTTOM_GAP;
     }
 

@@ -1062,6 +1062,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
           team: teamLabel,
           grade: normalizeGrade(participant.grade),
           name: participant.name || '',
+          isLeader: team.leaderId === participant.responseId,
         };
       })
       .filter(Boolean) as AssignmentExportRow[];
@@ -1080,11 +1081,12 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       return;
     }
 
-    const header = ['チーム', '学年', '氏名'];
+    const header = ['チーム', '学年', '氏名', '役割'];
     const data = buildAssignmentExportRows().map((r) => [
       r.team,
       r.grade ? `${r.grade}` : '',
       r.name,
+      r.isLeader ? '班リーダー' : '',
     ]);
     downloadCsvFile(
       `チーム割り当て_${resolvedParams?.year || ''}.csv`,
@@ -1599,6 +1601,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                                     assignment={assignment}
                                     team={team}
                                     areaLabel={team ? getTeamAreaLabel(team) : undefined}
+                                    isLeader={team?.leaderId === participant.responseId}
                                   />
                                 );
                               })
@@ -1675,6 +1678,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                                   assignment={assignment}
                                   team={team}
                                   compact
+                                  isLeader={team.leaderId === participant.responseId}
                                 />
                               </div>
                             );
@@ -1843,6 +1847,16 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                                 <span className="block text-sm font-medium text-gray-900">
                                   {team.teamName} - {getTeamAreaLabel(team)}
                                 </span>
+                                {(() => {
+                                  const leader = participants.find(
+                                    (participant) => participant.responseId === team.leaderId,
+                                  );
+                                  return leader ? (
+                                    <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                                      班リーダー: {leader.name}
+                                    </span>
+                                  ) : null;
+                                })()}
                                 <span className="mt-1 block text-xs text-gray-500">
                                   {formatAvailabilitySlotLabel(team.timeSlot)} / 最大
                                   {team.maxMembers ?? 10}人

@@ -38,6 +38,7 @@ export interface AssignmentExportRow {
   team: string;
   grade: number;
   name: string;
+  isLeader?: boolean;
 }
 
 export interface AssignmentForm {
