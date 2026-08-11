@@ -11,6 +11,7 @@ import {
   normalizeTeamRouteAuthHeader,
 } from '@/lib/utils/team/team-route';
 import { FirestoreCache } from '@/lib/utils/server-cache';
+import { canParticipantDrive } from '@/lib/utils/assignment/auto-assignment';
 import {
   generateAndReserveNextTeamCodeInTransaction,
   getTeamCodeReservationRef,
@@ -143,6 +144,8 @@ export async function PATCH(
       year: body.year,
       requiresCar: body.requiresCar,
       maxMembers: body.maxMembers,
+      leaderId: body.leaderId,
+      driverId: body.driverId,
       eventAvailabilitySlots: await loadEventAvailabilitySlotsForTeamUpdate(body, currentTeam),
       updatedAt: new Date(),
     });
@@ -152,6 +155,9 @@ export async function PATCH(
     const update: Record<string, unknown> = updateResult.update;
     if (typeof body.eventId === 'string' && body.eventId) {
       update.eventId = body.eventId;
+    }
+    if (update.requiresCar === false) {
+      update.driverId = null;
     }
 
     const targetEventId =
@@ -166,6 +172,105 @@ export async function PATCH(
         : typeof currentTeam.year === 'number'
           ? currentTeam.year
           : undefined;
+    if (body.leaderId !== undefined) {
+      if (body.leaderId === null || body.leaderId === '') {
+        update.leaderId = null;
+      } else if (typeof body.leaderId === 'string') {
+        const leaderId = body.leaderId.trim();
+        if (!leaderId) {
+          update.leaderId = null;
+        } else if (typeof targetYear !== 'number') {
+          return NextResponse.json({ error: 'チームの年度が見つかりません' }, { status: 400 });
+        } else {
+          const memberSnapshot = await adminDb
+            .collection('assignments')
+            .where('year', '==', targetYear)
+            .where('teamId', '==', String(teamId))
+            .get();
+          const isAssignedMember = memberSnapshot.docs.some(
+            (assignment) => assignment.data().responseId === leaderId,
+          );
+          if (!isAssignedMember) {
+            return NextResponse.json(
+              { error: '班リーダーはこのチームの割り当てメンバーから選択してください' },
+              { status: 400 },
+            );
+          }
+          update.leaderId = leaderId;
+        }
+      } else {
+        return NextResponse.json({ error: 'leaderId が不正です' }, { status: 400 });
+      }
+    }
+    if (body.driverId !== undefined) {
+      if (body.driverId === null || body.driverId === '') {
+        update.driverId = null;
+      } else if (typeof body.driverId === 'string') {
+        const driverId = body.driverId.trim();
+        if (!driverId) {
+          update.driverId = null;
+        } else if (currentTeam.requiresCar !== true && update.requiresCar !== true) {
+          return NextResponse.json(
+            { error: '車が必要なチームのみ運転手を指定できます' },
+            { status: 400 },
+          );
+        } else if (typeof targetYear !== 'number') {
+          return NextResponse.json({ error: 'チームの年度が見つかりません' }, { status: 400 });
+        } else {
+          const memberSnapshot = await adminDb
+            .collection('assignments')
+            .where('year', '==', targetYear)
+            .where('teamId', '==', String(teamId))
+            .get();
+          const driverAssignment = memberSnapshot.docs.find(
+            (assignment) => assignment.data().responseId === driverId,
+          );
+          if (!driverAssignment) {
+            return NextResponse.json(
+              { error: '運転手はこのチームの割り当てメンバーから選択してください' },
+              { status: 400 },
+            );
+          }
+          const assignmentData = driverAssignment.data();
+          const responseSnapshot =
+            typeof assignmentData.formId === 'string' &&
+            typeof assignmentData.responseId === 'string'
+              ? await adminDb
+                  .collection('forms')
+                  .doc(assignmentData.formId)
+                  .collection('responses')
+                  .doc(assignmentData.responseId)
+                  .get()
+              : null;
+          const responseData = responseSnapshot?.data() as
+            | {
+                participantData?: { name?: string; carUsage?: unknown };
+                answers?: Array<{ fieldId: string; value: unknown }>;
+              }
+            | undefined;
+          if (
+            !responseData ||
+            !canParticipantDrive({
+              responseId: driverId,
+              name: responseData.participantData?.name || '',
+              grade: 0,
+              section: '',
+              availableSlots: [],
+              carUsage: responseData.participantData?.carUsage,
+              answers: responseData.answers,
+            })
+          ) {
+            return NextResponse.json(
+              { error: '運転可能と回答したメンバーのみ運転手に指定できます' },
+              { status: 400 },
+            );
+          }
+          update.driverId = driverId;
+        }
+      } else {
+        return NextResponse.json({ error: 'driverId が不正です' }, { status: 400 });
+      }
+    }
     const targetTimeSlot =
       typeof update.timeSlot === 'string'
         ? update.timeSlot

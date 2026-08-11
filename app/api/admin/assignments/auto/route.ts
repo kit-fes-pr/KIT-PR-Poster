@@ -4,14 +4,19 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { buildAvailabilitySlotChoices } from '@/lib/utils/availability/availability';
 import {
-  AutoAssignmentParticipant as Participant,
-  AutoAssignmentRecord as Assignment,
-  AutoAssignmentTeam as Team,
-  StoredAutoAssignmentRecord as StoredAssignment,
+  canParticipantDrive,
   performAutoAssignment,
+  type AutoAssignmentParticipant as Participant,
+  type AutoAssignmentTeam as Team,
+  type StoredAutoAssignmentRecord as StoredAssignment,
 } from '@/lib/utils/assignment/auto-assignment';
 import { resolveParticipantSlotKeys } from '@/lib/utils/assignment/assignment';
+import { selectTeamDriverResponseId } from '@/lib/utils/team/team-driver';
+import { selectTeamLeaderResponseId } from '@/lib/utils/team/team-leader';
 import { FirestoreCache } from '@/lib/utils/server-cache';
+
+const FIRESTORE_BATCH_LIMIT = 500;
+const TEAM_UPDATE_BATCH_SIZE = FIRESTORE_BATCH_LIMIT - 50;
 
 export async function POST(request: NextRequest) {
   try {
@@ -85,7 +90,78 @@ export async function POST(request: NextRequest) {
       await batch.commit();
     }
 
-    if (year && assignmentResult.assignments.length > 0) {
+    const allAssignments = [...existingAssignments, ...assignmentResult.assignments];
+    const participantById = new Map<string, Participant>(
+      participants.map(
+        (participant: Participant) => [participant.responseId, participant] as const,
+      ),
+    );
+    const leaderUpdates: Array<{ teamId: string; data: Record<string, unknown> }> = [];
+    let leaderUpdateCount = 0;
+
+    teams.forEach((team: Team) => {
+      const teamAssignments = allAssignments.filter(
+        (assignment) => assignment.teamId === team.teamId,
+      );
+      const teamMembers = teamAssignments
+        .map((assignment) => {
+          const participant = participantById.get(assignment.responseId);
+          if (!participant) return null;
+          return {
+            responseId: participant.responseId,
+            name: participant.name,
+            grade: Number(participant.grade) || 0,
+            section: participant.section,
+            canDrive: canParticipantDrive(participant),
+            assignedBy: assignment.assignedBy,
+          };
+        })
+        .filter((member): member is NonNullable<typeof member> => member !== null);
+      const currentLeaderResponseId =
+        typeof team.leaderId === 'string' &&
+        teamMembers.some((member) => member.responseId === team.leaderId)
+          ? team.leaderId
+          : undefined;
+      const leaderId = currentLeaderResponseId || selectTeamLeaderResponseId(teamMembers) || null;
+      const currentDriverId =
+        team.requiresCar === true &&
+        typeof team.driverId === 'string' &&
+        teamMembers.some((member) => member.responseId === team.driverId && member.canDrive)
+          ? team.driverId
+          : undefined;
+      const driverId =
+        team.requiresCar === true
+          ? currentDriverId || selectTeamDriverResponseId(teamMembers) || null
+          : null;
+      const teamUpdate: Record<string, unknown> = {};
+
+      if (leaderId !== team.leaderId) {
+        teamUpdate.leaderId = leaderId;
+      }
+      if (driverId !== team.driverId) {
+        teamUpdate.driverId = driverId;
+      }
+      if (Object.keys(teamUpdate).length > 0) {
+        leaderUpdates.push({
+          teamId: team.teamId,
+          data: { ...teamUpdate, updatedAt: new Date() },
+        });
+        leaderUpdateCount++;
+      }
+    });
+
+    if (leaderUpdateCount > 0) {
+      for (let offset = 0; offset < leaderUpdates.length; offset += TEAM_UPDATE_BATCH_SIZE) {
+        const batch = adminDb.batch();
+        const updates = leaderUpdates.slice(offset, offset + TEAM_UPDATE_BATCH_SIZE);
+        updates.forEach(({ teamId, data }) => {
+          batch.update(adminDb.collection('teams').doc(teamId), data);
+        });
+        await batch.commit();
+      }
+    }
+
+    if (year && (assignmentResult.assignments.length > 0 || leaderUpdateCount > 0)) {
       FirestoreCache.invalidateYear(parseInt(year, 10));
     }
 

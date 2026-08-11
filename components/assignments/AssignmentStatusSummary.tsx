@@ -9,6 +9,8 @@ type AssignmentStatusSummaryProps = {
     teamName?: string;
   } | null;
   areaLabel?: string;
+  isLeader?: boolean;
+  isDriver?: boolean;
   compact?: boolean;
 };
 
@@ -22,6 +24,8 @@ export function AssignmentStatusSummary({
   assignment,
   team,
   areaLabel,
+  isLeader = false,
+  isDriver = false,
   compact = false,
 }: AssignmentStatusSummaryProps) {
   if (!assignment || !team) {
@@ -54,6 +58,16 @@ export function AssignmentStatusSummary({
             )}`}
           >
             {formatAvailabilitySlotLabel(assignment.timeSlot)}
+          </span>
+        )}
+        {isLeader && (
+          <span className="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+            班リーダー
+          </span>
+        )}
+        {isDriver && (
+          <span className="inline-flex rounded-full bg-cyan-100 px-2 py-1 text-xs font-semibold text-cyan-800">
+            運転手
           </span>
         )}
       </div>

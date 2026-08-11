@@ -107,6 +107,8 @@ export function buildTeamRouteUpdatePayload(input: {
   year?: unknown;
   requiresCar?: unknown;
   maxMembers?: unknown;
+  leaderId?: unknown;
+  driverId?: unknown;
   updatedAt?: Date;
   eventAvailabilitySlots?: unknown;
 }) {
@@ -145,6 +147,16 @@ export function buildTeamRouteUpdatePayload(input: {
     }
     update.timeSlot = normalizedTimeSlot;
     Object.assign(update, buildTeamAccessWindowFromTimeSlot(normalizedTimeSlot) || {});
+  }
+
+  if (input.leaderId !== undefined) {
+    update.leaderId =
+      typeof input.leaderId === 'string' && input.leaderId.trim() ? input.leaderId.trim() : null;
+  }
+
+  if (input.driverId !== undefined) {
+    update.driverId =
+      typeof input.driverId === 'string' && input.driverId.trim() ? input.driverId.trim() : null;
   }
 
   return { update };

@@ -73,6 +73,8 @@ describe('team route utils', () => {
       isActive: false,
       requiresCar: true,
       maxMembers: 5,
+      leaderId: ' leader-1 ',
+      driverId: ' driver-1 ',
       areaId: 'area-1',
       assignedArea: 'A-01',
       area: {
@@ -95,6 +97,7 @@ describe('team route utils', () => {
     assert.equal(updated.update.isActive, false);
     assert.equal(updated.update.requiresCar, true);
     assert.equal(updated.update.maxMembers, 5);
+    assert.equal(updated.update.leaderId, 'leader-1');
     assert.equal(updated.update.areaId, 'area-1');
     assert.deepEqual(updated.update.adjacentAreas, ['A-02', 'A-03']);
   });

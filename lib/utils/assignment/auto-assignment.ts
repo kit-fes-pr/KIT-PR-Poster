@@ -21,6 +21,8 @@ export interface AutoAssignmentTeam {
   maxMembers?: number;
   preferredGrades?: number[];
   requiresCar?: boolean;
+  leaderId?: string | null;
+  driverId?: string | null;
 }
 
 export interface AutoAssignmentRecord {

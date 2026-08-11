@@ -23,6 +23,7 @@ export type PdfTableSection<Row> = {
 export type SectionedTableReportOptions<Row> = {
   title: string;
   metaText: string;
+  legendText?: string;
   header: string;
   sections: PdfTableSection<Row>[];
   emptySectionLabel: string;
@@ -45,10 +46,11 @@ const LINE_HEIGHT = 12;
 const TABLE_HEADER_HEIGHT = 20;
 const TABLE_ROW_MIN_HEIGHT = 20;
 const SECTION_TITLE_HEIGHT = 18;
-const FIRST_PAGE_INTRO_HEIGHT = 86;
+const FIRST_PAGE_BASE_INTRO_HEIGHT = 86;
 const TITLE_GAP = 20;
 const DIVIDER_OFFSET = 8;
 const INTRO_BOTTOM_GAP = 28;
+const LEGEND_HEIGHT = 14;
 const CELL_HORIZONTAL_PADDING = 4;
 const CELL_VERTICAL_PADDING = 8;
 
@@ -265,6 +267,9 @@ export async function buildSectionedTableReportPdf<Row>(
   const headerFontSize = options.headerFontSize || DEFAULT_HEADER_FONT_SIZE;
   const titleFontSize = options.titleFontSize || DEFAULT_TITLE_FONT_SIZE;
   const usableHeight = CONTENT_TOP - CONTENT_BOTTOM;
+  const firstPageIntroHeight =
+    FIRST_PAGE_BASE_INTRO_HEIGHT + (options.legendText ? LEGEND_HEIGHT : 0);
+  const firstPageBottomGap = INTRO_BOTTOM_GAP + (options.legendText ? LEGEND_HEIGHT : 0);
   const sectionHeight = SECTION_TITLE_HEIGHT + TABLE_HEADER_HEIGHT;
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
@@ -278,7 +283,7 @@ export async function buildSectionedTableReportPdf<Row>(
   let current: Array<
     { type: 'section'; label: string; count: number } | { type: 'row'; row: Row; height: number }
   > = [];
-  let usedHeight = FIRST_PAGE_INTRO_HEIGHT;
+  let usedHeight = firstPageIntroHeight;
 
   const pushPage = () => {
     pageChunks.push(current);
@@ -360,13 +365,25 @@ export async function buildSectionedTableReportPdf<Row>(
         size: headerFontSize,
         color: rgb(0.29, 0.33, 0.39),
       });
+      const dividerY = y - DIVIDER_OFFSET;
       page.drawLine({
-        start: { x: MARGIN_X, y: y - DIVIDER_OFFSET },
-        end: { x: PAGE_WIDTH - MARGIN_X, y: y - DIVIDER_OFFSET },
+        start: { x: MARGIN_X, y: dividerY },
+        end: { x: PAGE_WIDTH - MARGIN_X, y: dividerY },
         thickness: 0.5,
         color: rgb(0.82, 0.84, 0.88),
       });
-      y -= INTRO_BOTTOM_GAP;
+      if (options.legendText) {
+        drawText({
+          page,
+          font,
+          text: options.legendText,
+          x: MARGIN_X,
+          y: dividerY - 14,
+          size: headerFontSize,
+          color: rgb(0.29, 0.33, 0.39),
+        });
+      }
+      y -= firstPageBottomGap;
     }
 
     for (const item of items) {

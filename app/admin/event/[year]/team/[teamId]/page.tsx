@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { LoadingInline } from '@/components/ui/Loading';
 import { Modal } from '@/components/ui/Modal';
-import { Area, Team, Store } from '@/types';
+import type { Area, Team, Store } from '@/types';
 import YearPageSectionHeader from '@/components/admin/YearPageSectionHeader';
 import {
   buildAvailabilitySlotChoices,
@@ -59,6 +59,10 @@ export default function TeamDetailPage() {
     requiresCar: boolean;
   }>({ teamName: '', timeSlot: '', assignedArea: '', maxMembers: 10, requiresCar: false });
   const [memberLoading, setMemberLoading] = useState(false);
+  const [leaderSaving, setLeaderSaving] = useState(false);
+  const [driverSaving, setDriverSaving] = useState(false);
+  const [selectedLeaderResponseId, setSelectedLeaderResponseId] = useState('');
+  const [selectedDriverId, setSelectedDriverId] = useState('');
   const [assignedMembers, setAssignedMembers] = useState<
     Array<{
       responseId: string;
@@ -68,6 +72,7 @@ export default function TeamDetailPage() {
       section: string;
       timeSlot: string;
       formId: string;
+      canDrive: boolean;
     }>
   >([]);
 
@@ -126,6 +131,8 @@ export default function TeamDetailPage() {
             area.areaCode === loadedTeam?.assignedArea,
         );
         setTeam(loadedTeam);
+        setSelectedLeaderResponseId(loadedTeam.leaderId || '');
+        setSelectedDriverId(loadedTeam.driverId || '');
         setAreas(loadedAreas);
 
         setEditForm({
@@ -567,8 +574,78 @@ export default function TeamDetailPage() {
           {/* 割り当てメンバー */}
           <div className="bg-white p-6 rounded-lg shadow lg:col-span-3">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-medium">割り当てメンバー</h2>
-              <span className="text-sm text-gray-500">{assignedMembers.length} 名</span>
+              <div>
+                <h2 className="text-lg font-medium">割り当てメンバー</h2>
+                <p className="mt-1 text-xs text-gray-500">
+                  班リーダーと運転手をそれぞれ1名選択してください
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-500">{assignedMembers.length} 名</span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!teamId || !selectedLeaderResponseId) return;
+                    try {
+                      setLeaderSaving(true);
+                      const res = await authenticatedFetch(`/api/admin/teams/${teamId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ leaderId: selectedLeaderResponseId }),
+                      });
+                      const data = await res.json().catch(() => ({}));
+                      if (!res.ok) throw new Error(data.error || '班リーダーの保存に失敗しました');
+                      setTeam(data.team as Team);
+                      clearDashboardCache(Number(y));
+                    } catch (error) {
+                      console.error('班リーダー保存エラー:', error);
+                    } finally {
+                      setLeaderSaving(false);
+                    }
+                  }}
+                  disabled={
+                    memberLoading ||
+                    leaderSaving ||
+                    assignedMembers.length === 0 ||
+                    !selectedLeaderResponseId
+                  }
+                  className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {leaderSaving ? '保存中...' : '班リーダーを保存'}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!teamId || !selectedDriverId) return;
+                    try {
+                      setDriverSaving(true);
+                      const res = await authenticatedFetch(`/api/admin/teams/${teamId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ driverId: selectedDriverId }),
+                      });
+                      const data = await res.json().catch(() => ({}));
+                      if (!res.ok) throw new Error(data.error || '運転手の保存に失敗しました');
+                      setTeam(data.team as Team);
+                      clearDashboardCache(Number(y));
+                    } catch (error) {
+                      console.error('運転手保存エラー:', error);
+                    } finally {
+                      setDriverSaving(false);
+                    }
+                  }}
+                  disabled={
+                    memberLoading ||
+                    driverSaving ||
+                    team?.requiresCar !== true ||
+                    assignedMembers.length === 0 ||
+                    !selectedDriverId
+                  }
+                  className="rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {driverSaving ? '保存中...' : '運転手を保存'}
+                </button>
+              </div>
             </div>
             {memberLoading ? (
               <LoadingInline />
@@ -582,6 +659,9 @@ export default function TeamDetailPage() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        班リーダー
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         氏名
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -593,11 +673,29 @@ export default function TeamDetailPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         時間帯
                       </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        運転手
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {sortByGradeThenKanaThenName(assignedMembers).map((m) => (
                       <tr key={m.responseId}>
+                        <td className="px-6 py-3 text-sm">
+                          <label className="inline-flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name="team-leader"
+                              value={m.responseId}
+                              checked={selectedLeaderResponseId === m.responseId}
+                              onChange={() => setSelectedLeaderResponseId(m.responseId)}
+                              className="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="text-xs text-gray-600">
+                              {selectedLeaderResponseId === m.responseId ? '選択中' : '選択'}
+                            </span>
+                          </label>
+                        </td>
                         <td className="px-6 py-3 text-sm text-gray-900">{m.name}</td>
                         <td className="px-6 py-3 text-sm text-gray-900">
                           {m.grade ? `${m.grade}年` : '-'}
@@ -615,6 +713,28 @@ export default function TeamDetailPage() {
                           >
                             {formatAvailabilitySlotLabel(m.timeSlot)}
                           </span>
+                        </td>
+                        <td className="px-6 py-3 text-sm">
+                          <label className="inline-flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedDriverId === m.responseId}
+                              disabled={team?.requiresCar !== true || !m.canDrive || driverSaving}
+                              onChange={(event) =>
+                                setSelectedDriverId(event.target.checked ? m.responseId : '')
+                              }
+                              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 disabled:cursor-not-allowed"
+                            />
+                            <span className="text-xs text-gray-600">
+                              {team?.requiresCar !== true
+                                ? '車不要'
+                                : !m.canDrive
+                                  ? '運転不可'
+                                  : selectedDriverId === m.responseId
+                                    ? '選択中'
+                                    : '運転手にする'}
+                            </span>
+                          </label>
                         </td>
                       </tr>
                     ))}
