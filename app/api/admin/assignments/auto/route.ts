@@ -15,6 +15,9 @@ import { selectTeamDriverResponseId } from '@/lib/utils/team/team-driver';
 import { selectTeamLeaderResponseId } from '@/lib/utils/team/team-leader';
 import { FirestoreCache } from '@/lib/utils/server-cache';
 
+const FIRESTORE_BATCH_LIMIT = 500;
+const TEAM_UPDATE_BATCH_SIZE = FIRESTORE_BATCH_LIMIT - 50;
+
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -93,7 +96,7 @@ export async function POST(request: NextRequest) {
         (participant: Participant) => [participant.responseId, participant] as const,
       ),
     );
-    const leaderBatch = adminDb.batch();
+    const leaderUpdates: Array<{ teamId: string; data: Record<string, unknown> }> = [];
     let leaderUpdateCount = 0;
 
     teams.forEach((team: Team) => {
@@ -139,16 +142,23 @@ export async function POST(request: NextRequest) {
         teamUpdate.driverId = driverId;
       }
       if (Object.keys(teamUpdate).length > 0) {
-        leaderBatch.update(adminDb.collection('teams').doc(team.teamId), {
-          ...teamUpdate,
-          updatedAt: new Date(),
+        leaderUpdates.push({
+          teamId: team.teamId,
+          data: { ...teamUpdate, updatedAt: new Date() },
         });
         leaderUpdateCount++;
       }
     });
 
     if (leaderUpdateCount > 0) {
-      await leaderBatch.commit();
+      for (let offset = 0; offset < leaderUpdates.length; offset += TEAM_UPDATE_BATCH_SIZE) {
+        const batch = adminDb.batch();
+        const updates = leaderUpdates.slice(offset, offset + TEAM_UPDATE_BATCH_SIZE);
+        updates.forEach(({ teamId, data }) => {
+          batch.update(adminDb.collection('teams').doc(teamId), data);
+        });
+        await batch.commit();
+      }
     }
 
     if (year && (assignmentResult.assignments.length > 0 || leaderUpdateCount > 0)) {
