@@ -143,6 +143,7 @@ export async function PATCH(
       year: body.year,
       requiresCar: body.requiresCar,
       maxMembers: body.maxMembers,
+      leaderId: body.leaderId,
       eventAvailabilitySlots: await loadEventAvailabilitySlotsForTeamUpdate(body, currentTeam),
       updatedAt: new Date(),
     });
@@ -166,6 +167,36 @@ export async function PATCH(
         : typeof currentTeam.year === 'number'
           ? currentTeam.year
           : undefined;
+    if (body.leaderId !== undefined) {
+      if (body.leaderId === null || body.leaderId === '') {
+        update.leaderId = null;
+      } else if (typeof body.leaderId === 'string') {
+        const leaderId = body.leaderId.trim();
+        if (!leaderId) {
+          update.leaderId = null;
+        } else if (typeof targetYear !== 'number') {
+          return NextResponse.json({ error: 'チームの年度が見つかりません' }, { status: 400 });
+        } else {
+          const memberSnapshot = await adminDb
+            .collection('assignments')
+            .where('year', '==', targetYear)
+            .where('teamId', '==', String(teamId))
+            .get();
+          const isAssignedMember = memberSnapshot.docs.some(
+            (assignment) => assignment.data().responseId === leaderId,
+          );
+          if (!isAssignedMember) {
+            return NextResponse.json(
+              { error: '班リーダーはこのチームの割り当てメンバーから選択してください' },
+              { status: 400 },
+            );
+          }
+          update.leaderId = leaderId;
+        }
+      } else {
+        return NextResponse.json({ error: 'leaderId が不正です' }, { status: 400 });
+      }
+    }
     const targetTimeSlot =
       typeof update.timeSlot === 'string'
         ? update.timeSlot

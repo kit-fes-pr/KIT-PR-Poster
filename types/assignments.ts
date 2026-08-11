@@ -20,6 +20,7 @@ export interface AssignmentTeam {
   assignedArea: string;
   maxMembers: number;
   memberCount?: number;
+  leaderId?: string;
   preferredGrades?: number[];
   requiresCar?: boolean;
 }

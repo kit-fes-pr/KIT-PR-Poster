@@ -4,13 +4,13 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { buildAvailabilitySlotChoices } from '@/lib/utils/availability/availability';
 import {
-  AutoAssignmentParticipant as Participant,
-  AutoAssignmentRecord as Assignment,
-  AutoAssignmentTeam as Team,
-  StoredAutoAssignmentRecord as StoredAssignment,
   performAutoAssignment,
+  type AutoAssignmentParticipant as Participant,
+  type AutoAssignmentTeam as Team,
+  type StoredAutoAssignmentRecord as StoredAssignment,
 } from '@/lib/utils/assignment/auto-assignment';
 import { resolveParticipantSlotKeys } from '@/lib/utils/assignment/assignment';
+import { selectTeamLeaderResponseId } from '@/lib/utils/team/team-leader';
 import { FirestoreCache } from '@/lib/utils/server-cache';
 
 export async function POST(request: NextRequest) {
@@ -85,7 +85,52 @@ export async function POST(request: NextRequest) {
       await batch.commit();
     }
 
-    if (year && assignmentResult.assignments.length > 0) {
+    const allAssignments = [...existingAssignments, ...assignmentResult.assignments];
+    const participantById = new Map<string, Participant>(
+      participants.map(
+        (participant: Participant) => [participant.responseId, participant] as const,
+      ),
+    );
+    const leaderBatch = adminDb.batch();
+    let leaderUpdateCount = 0;
+
+    teams.forEach((team: Team) => {
+      const teamAssignments = allAssignments.filter(
+        (assignment) => assignment.teamId === team.teamId,
+      );
+      const teamMembers = teamAssignments
+        .map((assignment) => {
+          const participant = participantById.get(assignment.responseId);
+          if (!participant) return null;
+          return {
+            responseId: participant.responseId,
+            name: participant.name,
+            grade: Number(participant.grade) || 0,
+            section: participant.section,
+          };
+        })
+        .filter((member): member is NonNullable<typeof member> => member !== null);
+      const currentLeaderResponseId =
+        typeof team.leaderId === 'string' &&
+        teamMembers.some((member) => member.responseId === team.leaderId)
+          ? team.leaderId
+          : undefined;
+      const leaderId = currentLeaderResponseId || selectTeamLeaderResponseId(teamMembers) || null;
+
+      if (leaderId !== team.leaderId) {
+        leaderBatch.update(adminDb.collection('teams').doc(team.teamId), {
+          leaderId,
+          updatedAt: new Date(),
+        });
+        leaderUpdateCount++;
+      }
+    });
+
+    if (leaderUpdateCount > 0) {
+      await leaderBatch.commit();
+    }
+
+    if (year && (assignmentResult.assignments.length > 0 || leaderUpdateCount > 0)) {
       FirestoreCache.invalidateYear(parseInt(year, 10));
     }
 

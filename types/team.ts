@@ -20,6 +20,7 @@ export interface Team {
   // メンバー関連
   maxMembers?: number;
   memberCount?: number;
+  leaderId?: string;
   // タイムスタンプ
   createdAt: Date | string;
   updatedAt?: Date | string;

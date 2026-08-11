@@ -107,6 +107,7 @@ export function buildTeamRouteUpdatePayload(input: {
   year?: unknown;
   requiresCar?: unknown;
   maxMembers?: unknown;
+  leaderId?: unknown;
   updatedAt?: Date;
   eventAvailabilitySlots?: unknown;
 }) {
@@ -145,6 +146,11 @@ export function buildTeamRouteUpdatePayload(input: {
     }
     update.timeSlot = normalizedTimeSlot;
     Object.assign(update, buildTeamAccessWindowFromTimeSlot(normalizedTimeSlot) || {});
+  }
+
+  if (input.leaderId !== undefined) {
+    update.leaderId =
+      typeof input.leaderId === 'string' && input.leaderId.trim() ? input.leaderId.trim() : null;
   }
 
   return { update };
