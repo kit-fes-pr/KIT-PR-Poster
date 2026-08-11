@@ -616,8 +616,7 @@ export default function TeamDetailPage() {
                 <button
                   type="button"
                   onClick={async () => {
-                    if (!teamId || !selectedDriverId) return;
-                    try {
+                    if (!teamId) return;
                       setDriverSaving(true);
                       const res = await authenticatedFetch(`/api/admin/teams/${teamId}`, {
                         method: 'PATCH',
