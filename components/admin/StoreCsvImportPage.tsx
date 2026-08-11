@@ -5,6 +5,7 @@ import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
 import { LoadingInline } from '@/components/ui/Loading';
 import { Modal } from '@/components/ui/Modal';
 import { buildCsvContent, downloadCsvFile } from '@/lib/utils/export/export';
+import type { Area } from '@/types';
 
 type AddressCandidate = {
   label: string;
@@ -14,7 +15,6 @@ type AddressCandidate = {
   source: 'saved' | 'geocoding' | 'csv';
 };
 
-type Area = { areaId: string; areaCode: string; areaName: string };
 type PreviewRow = {
   rowIndex: number;
   rowNumber: number;

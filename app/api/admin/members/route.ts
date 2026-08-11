@@ -4,17 +4,7 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { normalizeAvailabilitySlots } from '@/lib/utils/availability/availability';
 import { normalizeGrade } from '@/lib/utils/grade/grade';
-
-type Member = {
-  memberId: string; // responseId を流用
-  name: string;
-  section: string;
-  grade: number;
-  availableSlots: string[];
-  source: 'form';
-  teamId?: string;
-  createdAt: Date;
-};
+import type { Member } from '@/types';
 
 export async function GET(request: NextRequest) {
   try {

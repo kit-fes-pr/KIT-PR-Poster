@@ -3,18 +3,13 @@ import { adminAuth } from '@/lib/firebase-admin';
 import { buildSectionedTableReportPdf } from '@/lib/server/pdf/sectioned-table-report';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { formatDate } from '@/lib/utils/dateUtils';
+import type { AssignmentExportRow } from '@/types';
 
 export const runtime = 'nodejs';
 
 type PdfRequestBody = {
   year?: unknown;
   rows?: unknown;
-};
-
-type AssignmentExportRow = {
-  team: string;
-  grade: number;
-  name: string;
 };
 
 const COL_WIDTHS = [80, 447];

@@ -29,7 +29,7 @@ import { SectionCard } from '@/components/ui/SectionCard';
 import { ExportActionButtons } from '@/components/ui/ExportActionButtons';
 import { AssignmentStatusSummary } from '@/components/assignments/AssignmentStatusSummary';
 import YearPageSectionHeader from '@/components/admin/YearPageSectionHeader';
-import { Area } from '@/types';
+import type { Area } from '@/types';
 import type { FormAnswer } from '@/types/forms';
 import { clearDashboardCache } from '@/lib/utils/dashboard/dashboard-cache';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
@@ -37,85 +37,15 @@ import { buildCsvContent, downloadCsvFile } from '@/lib/utils/export/export';
 import { buildNextTeamCode } from '@/lib/utils/team/team-code';
 import { compareJapaneseText, sortByGradeThenKanaThenName } from '@/lib/utils/sort';
 import { generateKana } from '@/lib/kanaUtils';
-
-interface Participant {
-  responseId: string;
-  name: string;
-  nameKana?: string;
-  grade: number;
-  section: string;
-  availableSlots: string[];
-  carUsage?: string;
-  submittedAt: Date;
-}
-
-interface Team {
-  teamId: string;
-  teamCode: string;
-  teamName: string;
-  timeSlot: string;
-  areaId?: string;
-  assignedArea: string;
-  maxMembers: number;
-  memberCount?: number;
-  preferredGrades?: number[];
-  requiresCar?: boolean;
-}
-
-interface Assignment {
-  formId?: string;
-  responseId: string;
-  teamId: string;
-  assignedAt: Date;
-  assignedBy: 'auto' | 'manual';
-  timeSlot: string;
-}
-
-type AssignmentExportRow = {
-  team: string;
-  grade: number;
-  name: string;
-};
-
-interface FormField {
-  fieldId: string;
-  type: 'text' | 'select' | 'radio' | 'checkbox' | 'textarea' | 'number';
-  label: string;
-  placeholder?: string;
-  required: boolean;
-  visibleFromGrade?: number;
-  options?: string[];
-  validation?: {
-    minLength?: number;
-    maxLength?: number;
-    min?: number;
-    max?: number;
-    pattern?: string;
-  };
-  order: number;
-}
-
-interface CurrentForm {
-  formId: string;
-  title: string;
-  fields: FormField[];
-  isActive?: boolean;
-  createdAt?: string | Date;
-  updatedAt?: string | Date;
-}
-
-interface ResponseRecord {
-  responseId: string;
-  participantData?: {
-    name: string;
-    nameKana?: string;
-    grade: number;
-    section: string;
-    availableSlots?: string[];
-  };
-  answers?: FormAnswer[];
-  submittedAt: string | Date;
-}
+import type {
+  AssignmentExportRow,
+  AssignmentForm,
+  AssignmentParticipant,
+  AssignmentRecord,
+  AssignmentResponseRecord,
+  AssignmentTeam,
+} from '@/types/assignments';
+import type { FormField } from '@/types/forms';
 
 function parseDateTimestamp(value: string | Date | number | null | undefined): number {
   if (value === null || value === undefined) return 0;
@@ -136,10 +66,10 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   const router = useRouter();
   const [resolvedParams, setResolvedParams] = useState<{ year: string } | null>(null);
   const { user, loading: authLoading } = useRequireAdmin();
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
+  const [participants, setParticipants] = useState<AssignmentParticipant[]>([]);
+  const [teams, setTeams] = useState<AssignmentTeam[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentRecord[]>([]);
   const [distributionSlots, setDistributionSlots] = useState<string[]>([]);
   const [distributionEventId, setDistributionEventId] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -147,10 +77,14 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
   const [autoAssignLoading, setAutoAssignLoading] = useState(false);
   const [selectedForm, setSelectedForm] = useState<string>('');
   const [selectedFormTitle, setSelectedFormTitle] = useState<string>('');
-  const [currentForm, setCurrentForm] = useState<CurrentForm | null>(null);
-  const [responseRecords, setResponseRecords] = useState<Record<string, ResponseRecord>>({});
+  const [currentForm, setCurrentForm] = useState<AssignmentForm | null>(null);
+  const [responseRecords, setResponseRecords] = useState<Record<string, AssignmentResponseRecord>>(
+    {},
+  );
   const [showManualModal, setShowManualModal] = useState(false);
-  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
+  const [selectedParticipant, setSelectedParticipant] = useState<AssignmentParticipant | null>(
+    null,
+  );
   const [manualAssignTeamIds, setManualAssignTeamIds] = useState<string[]>([]);
   const [manualAssignInitialTeamIds, setManualAssignInitialTeamIds] = useState<string[]>([]);
   const [manualAssignLoading, setManualAssignLoading] = useState<boolean>(false);
@@ -249,7 +183,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
       const formsData = formsRes.ok ? await formsRes.json() : null;
       const availableForms = Array.isArray(formsData?.forms)
-        ? (formsData.forms as CurrentForm[])
+        ? (formsData.forms as AssignmentForm[])
         : [];
       const nextForm =
         availableForms.find((form) => form.isActive) ||
@@ -289,7 +223,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     return normalized.map((slot) => formatAvailabilitySlotLabel(slot)).join(' / ');
   };
 
-  const openResponseEditModal = (participant: Participant) => {
+  const openResponseEditModal = (participant: AssignmentParticipant) => {
     const record = responseRecords[participant.responseId];
     const answerMap = new Map(
       (record?.answers || []).map((answer) => [answer.fieldId, answer.value]),
@@ -660,7 +594,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       });
 
       if (res.ok) {
-        const data: { teams: Team[] } = await res.json();
+        const data: { teams: AssignmentTeam[] } = await res.json();
         setTeams(
           (data.teams || [])
             .slice()
@@ -695,7 +629,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     return area.areaName || '-';
   };
 
-  const getTeamAreaLabel = (team?: Team | null) => {
+  const getTeamAreaLabel = (team?: AssignmentTeam | null) => {
     if (!team) return '-';
     const matched = areas.find(
       (area) =>
@@ -707,9 +641,20 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     return '-';
   };
 
-  const resolveAssignmentSlot = (team: Team | null | undefined) => {
+  const resolveAssignmentSlot = (team: AssignmentTeam | null | undefined) => {
     if (!team) return '';
     return team.timeSlot || '';
+  };
+
+  const hasSelectedTeamInSameTimeSlot = (team: AssignmentTeam) => {
+    const timeSlot = resolveAssignmentSlot(team);
+    if (!timeSlot) return false;
+
+    return manualAssignTeamIds.some((teamId) => {
+      if (teamId === team.teamId) return false;
+      const selectedTeam = teams.find((candidate) => candidate.teamId === teamId);
+      return resolveAssignmentSlot(selectedTeam) === timeSlot;
+    });
   };
 
   const createTeam = async (e: FormEvent) => {
@@ -774,7 +719,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
       if (res.ok) {
         const data = await res.json();
-        const recordMap: Record<string, ResponseRecord> = {};
+        const recordMap: Record<string, AssignmentResponseRecord> = {};
         const participantList = data.responses.map(
           (response: {
             responseId: string;
@@ -819,7 +764,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         setResponseRecords(recordMap);
         setParticipants(
           participantList.filter(
-            (participant: Participant) => participant.availableSlots.length > 0,
+            (participant: AssignmentParticipant) => participant.availableSlots.length > 0,
           ),
         );
       }
@@ -829,8 +774,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     }
   };
 
-  const loadAssignments = async (formId = selectedForm) => {
-    if (!resolvedParams || !user) return;
+  const loadAssignments = async (formId = selectedForm): Promise<AssignmentRecord[] | null> => {
+    if (!resolvedParams || !user) return null;
 
     try {
       const token = await user.getIdToken();
@@ -842,10 +787,14 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
       if (res.ok) {
         const data = await res.json();
-        setAssignments(data.assignments || []);
+        const nextAssignments = (data.assignments || []) as AssignmentRecord[];
+        setAssignments(nextAssignments);
+        return nextAssignments;
       }
+      return null;
     } catch (err) {
       console.error('割り当て取得エラー:', err);
+      return null;
     }
   };
 
@@ -1055,7 +1004,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
   const stats = getAssignmentStats();
   const normalizedParticipantSearchQuery = participantSearchQuery.trim();
-  const participantMatchesSearch = (participant: Participant) => {
+  const participantMatchesSearch = (participant: AssignmentParticipant) => {
     if (!normalizedParticipantSearchQuery) return true;
 
     const query = normalizedParticipantSearchQuery.toLowerCase();
@@ -1858,34 +1807,56 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                       </button>
                     </div>
                     <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border border-gray-200 p-3">
-                      {teams.map((team) => (
-                        <label
-                          key={team.teamId}
-                          className="flex cursor-pointer items-start gap-3 rounded-md border border-gray-200 p-3 hover:bg-gray-50"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={manualAssignTeamIds.includes(team.teamId)}
-                            onChange={(e) => {
-                              setManualAssignTeamIds((current) =>
-                                e.target.checked
-                                  ? [...current, team.teamId]
-                                  : current.filter((teamId) => teamId !== team.teamId),
-                              );
-                            }}
-                            className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <span className="min-w-0">
-                            <span className="block text-sm font-medium text-gray-900">
-                              {team.teamName} - {getTeamAreaLabel(team)}
-                            </span>
-                            <span className="mt-1 block text-xs text-gray-500">
-                              {formatAvailabilitySlotLabel(team.timeSlot)} / 最大
-                              {team.maxMembers ?? 10}人
-                            </span>
-                          </span>
-                        </label>
-                      ))}
+                      {teams.map((team) =>
+                        (() => {
+                          const isSelected = manualAssignTeamIds.includes(team.teamId);
+                          const hasSameTimeSlotSelected =
+                            !isSelected && hasSelectedTeamInSameTimeSlot(team);
+
+                          return (
+                            <label
+                              key={team.teamId}
+                              className={`flex items-start gap-3 rounded-md border border-gray-200 p-3 ${
+                                hasSameTimeSlotSelected
+                                  ? 'cursor-not-allowed bg-gray-50 opacity-60'
+                                  : 'cursor-pointer hover:bg-gray-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                disabled={manualAssignLoading || hasSameTimeSlotSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked && hasSelectedTeamInSameTimeSlot(team)) {
+                                    setError('同じ時間帯のチームは複数選択できません');
+                                    return;
+                                  }
+                                  setManualAssignTeamIds((current) =>
+                                    e.target.checked
+                                      ? [...current, team.teamId]
+                                      : current.filter((teamId) => teamId !== team.teamId),
+                                  );
+                                }}
+                                className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed"
+                              />
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium text-gray-900">
+                                  {team.teamName} - {getTeamAreaLabel(team)}
+                                </span>
+                                <span className="mt-1 block text-xs text-gray-500">
+                                  {formatAvailabilitySlotLabel(team.timeSlot)} / 最大
+                                  {team.maxMembers ?? 10}人
+                                </span>
+                                {hasSameTimeSlotSelected && (
+                                  <span className="mt-1 block text-xs text-red-600">
+                                    同じ時間帯のチームを選択中です
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          );
+                        })(),
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1933,11 +1904,17 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                         const token = await user!.getIdToken();
                         const selectedTeams = manualAssignTeamIds
                           .map((teamId) => teams.find((t) => t.teamId === teamId))
-                          .filter((team): team is Team => Boolean(team));
+                          .filter((team): team is AssignmentTeam => Boolean(team));
                         const assignmentTargets = selectedTeams.map((team) => ({
                           teamId: team.teamId,
                           timeSlot: resolveAssignmentSlot(team),
                         }));
+                        const selectedTimeSlots = assignmentTargets.map(
+                          (target) => target.timeSlot,
+                        );
+                        if (new Set(selectedTimeSlots).size !== selectedTimeSlots.length) {
+                          throw new Error('同じ時間帯のチームは複数選択できません');
+                        }
                         if (
                           assignmentTargets.length !== manualAssignTeamIds.length ||
                           assignmentTargets.some((target) => !target.timeSlot)
@@ -1961,8 +1938,19 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                         const data = await res.json();
                         if (!res.ok) {
                           if (res.status === 409) {
-                            await loadAssignments();
+                            const latestAssignments = await loadAssignments();
                             await loadTeams();
+                            if (latestAssignments) {
+                              const latestTeamIds = latestAssignments
+                                .filter(
+                                  (assignment) =>
+                                    assignment.responseId === selectedParticipant.responseId &&
+                                    (!selectedForm || assignment.formId === selectedForm),
+                                )
+                                .map((assignment) => assignment.teamId);
+                              setManualAssignTeamIds(latestTeamIds);
+                              setManualAssignInitialTeamIds(latestTeamIds);
+                            }
                           }
                           throw new Error(data.error || '更新に失敗しました');
                         }
