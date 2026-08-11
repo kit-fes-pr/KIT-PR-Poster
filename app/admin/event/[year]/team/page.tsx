@@ -29,7 +29,7 @@ import { SectionCard } from '@/components/ui/SectionCard';
 import { ExportActionButtons } from '@/components/ui/ExportActionButtons';
 import { AssignmentStatusSummary } from '@/components/assignments/AssignmentStatusSummary';
 import YearPageSectionHeader from '@/components/admin/YearPageSectionHeader';
-import { Area } from '@/types';
+import type { Area } from '@/types';
 import type { FormAnswer } from '@/types/forms';
 import { clearDashboardCache } from '@/lib/utils/dashboard/dashboard-cache';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
