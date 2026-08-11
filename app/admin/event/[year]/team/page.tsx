@@ -774,8 +774,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
     }
   };
 
-  const loadAssignments = async (formId = selectedForm) => {
-    if (!resolvedParams || !user) return;
+  const loadAssignments = async (formId = selectedForm): Promise<AssignmentRecord[] | null> => {
+    if (!resolvedParams || !user) return null;
 
     try {
       const token = await user.getIdToken();
@@ -787,10 +787,14 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
       if (res.ok) {
         const data = await res.json();
-        setAssignments(data.assignments || []);
+        const nextAssignments = (data.assignments || []) as AssignmentRecord[];
+        setAssignments(nextAssignments);
+        return nextAssignments;
       }
+      return null;
     } catch (err) {
       console.error('割り当て取得エラー:', err);
+      return null;
     }
   };
 
@@ -1934,8 +1938,19 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
                         const data = await res.json();
                         if (!res.ok) {
                           if (res.status === 409) {
-                            await loadAssignments();
+                            const latestAssignments = await loadAssignments();
                             await loadTeams();
+                            if (latestAssignments) {
+                              const latestTeamIds = latestAssignments
+                                .filter(
+                                  (assignment) =>
+                                    assignment.responseId === selectedParticipant.responseId &&
+                                    (!selectedForm || assignment.formId === selectedForm),
+                                )
+                                .map((assignment) => assignment.teamId);
+                              setManualAssignTeamIds(latestTeamIds);
+                              setManualAssignInitialTeamIds(latestTeamIds);
+                            }
                           }
                           throw new Error(data.error || '更新に失敗しました');
                         }
