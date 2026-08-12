@@ -21,6 +21,22 @@ export async function getDashboardEventIdForYear(year: number): Promise<string |
   return snap.empty ? null : snap.docs[0].id;
 }
 
+export async function getDashboardEventIdsBeforeYear(year: number): Promise<string[]> {
+  const snapshot = await adminDb.collection('distributionEvents').get();
+  return snapshot.docs
+    .filter((doc) => {
+      const data = doc.data() as Record<string, unknown>;
+      const eventYear =
+        typeof data.year === 'number'
+          ? data.year
+          : typeof data.year === 'string' && /^\d{4}$/.test(data.year)
+            ? Number(data.year)
+            : null;
+      return eventYear !== null && eventYear < year;
+    })
+    .map((doc) => doc.id);
+}
+
 export function teamBelongsToDashboardYear(
   data: Record<string, unknown>,
   year: number,

@@ -38,6 +38,18 @@ test('parseStoreImportCsv parses the distribution count column', () => {
   assert.equal(result.rows[1].distributedCount, 0);
 });
 
+test('parseStoreImportCsv parses coordinates in the full store import format', () => {
+  const result = parseStoreImportCsv(
+    '店舗名,住所,緯度,経度,配布年度,配布可否,配布枚数,備考,配布地域\n' +
+      '店舗,金沢市〇〇1-2-3,36.55,136.65,2026,可,2,駅前,A-01',
+  );
+
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.rows[0]?.latitude, 36.55);
+  assert.equal(result.rows[0]?.longitude, 136.65);
+  assert.equal(result.rows[0]?.distributedCount, 2);
+});
+
 test('parseStoreImportCsv rejects an invalid header and availability value', () => {
   const result = parseStoreImportCsv('店舗名,年度,配布可否,備考,配布地域\n店舗,2026,○,,A-01');
 

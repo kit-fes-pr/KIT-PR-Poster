@@ -11,6 +11,8 @@ export type ParsedStoreImportRow = {
   notes: string;
   csvArea: string;
   address: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 function normalizeCsvValue(value: string) {
@@ -77,6 +79,17 @@ export function parseStoreImportCsv(
     '備考',
     '配布地域',
   ];
+  const headersWithCoordinates = [
+    '店舗名',
+    '住所',
+    '緯度',
+    '経度',
+    '配布年度',
+    '配布可否',
+    '配布枚数',
+    '備考',
+    '配布地域',
+  ];
   const isLegacyFormat =
     headers.length === legacyHeaders.length &&
     headers.every((value, index) => value === legacyHeaders[index]);
@@ -86,7 +99,10 @@ export function parseStoreImportCsv(
   const isCountFormat =
     headers.length === headersWithCount.length &&
     headers.every((value, index) => value === headersWithCount[index]);
-  if (!isLegacyFormat && !isAddressFormat && !isCountFormat) {
+  const isCoordinateFormat =
+    headers.length === headersWithCoordinates.length &&
+    headers.every((value, index) => value === headersWithCoordinates[index]);
+  if (!isLegacyFormat && !isAddressFormat && !isCountFormat && !isCoordinateFormat) {
     return {
       rows: [],
       errors: [`ヘッダーは「${headersWithCount.join(',')}」の順で指定してください`],
@@ -103,17 +119,23 @@ export function parseStoreImportCsv(
     const [
       storeName,
       address = '',
+      latitudeValue = '',
+      longitudeValue = '',
       yearValue,
       availability,
       distributedCountValue,
       notes,
       csvArea,
-    ] = isCountFormat
+    ] = isCoordinateFormat
       ? values
-      : isAddressFormat
-        ? [values[0], values[1], values[2], values[3], '', values[4], values[5]]
-        : [values[0], '', values[1], values[2], '', values[3], values[4]];
+      : isCountFormat
+        ? [values[0], values[1], '', '', values[2], values[3], values[4], values[5], values[6]]
+        : isAddressFormat
+          ? [values[0], values[1], '', '', values[2], values[3], '', values[4], values[5]]
+          : [values[0], '', '', '', values[1], values[2], '', values[3], values[4]];
     const year = Number(yearValue);
+    const latitude = latitudeValue ? Number(latitudeValue) : undefined;
+    const longitude = longitudeValue ? Number(longitudeValue) : undefined;
     const defaultDistributedCount = availability === '可' ? 1 : 0;
     const distributedCount = distributedCountValue
       ? Number(distributedCountValue)
@@ -126,6 +148,12 @@ export function parseStoreImportCsv(
     }
     if (availability !== '可' && availability !== '否') {
       rowErrors.push('配布可否は「可」または「否」で指定してください');
+    }
+    if (latitudeValue && (!Number.isFinite(latitude) || latitude! < -90 || latitude! > 90)) {
+      rowErrors.push('緯度は-90から90の数値で指定してください');
+    }
+    if (longitudeValue && (!Number.isFinite(longitude) || longitude! < -180 || longitude! > 180)) {
+      rowErrors.push('経度は-180から180の数値で指定してください');
     }
     if (
       !Number.isInteger(distributedCount) ||
@@ -151,6 +179,8 @@ export function parseStoreImportCsv(
       notes,
       csvArea,
       address,
+      latitude,
+      longitude,
     });
   });
 

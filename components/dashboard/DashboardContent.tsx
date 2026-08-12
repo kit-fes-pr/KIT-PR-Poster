@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import useSWR from 'swr';
 import { Modal } from '@/components/ui/Modal';
 import { StorePlacePicker } from '@/components/dashboard/StorePlacePicker';
@@ -41,10 +42,12 @@ export default function DashboardContent({
   mode,
   teamId,
   year,
+  includeOld = false,
 }: {
   mode: Mode;
   teamId?: string;
   year?: number;
+  includeOld?: boolean;
 }) {
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
@@ -59,11 +62,13 @@ export default function DashboardContent({
   const teamHref = (id: string) => (year ? `/${year}/${id}` : '/');
   const swrKey =
     mode === 'all'
-      ? withYearQuery('/api/stores?scope=all')
+      ? withYearQuery(`/api/stores?scope=all${includeOld ? '&includeOld=true' : ''}`)
       : mode === 'teams' && teamId
-        ? withYearQuery(`/api/stores?teamId=${encodeURIComponent(teamId)}`)
+        ? withYearQuery(
+            `/api/stores?teamId=${encodeURIComponent(teamId)}${includeOld ? '&includeOld=true' : ''}`,
+          )
         : mode === 'self'
-          ? withYearQuery('/api/stores')
+          ? withYearQuery(`/api/stores${includeOld ? '?includeOld=true' : ''}`)
           : null;
   const { data: storesData, mutate } = useSWR(swrKey, fetcherAuth);
   const { data: teamsData } = useSWR<{ teams: DashboardTeam[] }>(
@@ -197,6 +202,10 @@ export default function DashboardContent({
   ).length;
   const failedStores = filteredStores.filter((s) => s.distributionStatus === 'failed').length;
   const posterPickupStores = filteredStores.filter(isPosterPickupStore);
+  const distributedStoreHistory = (storesData?.stores || []).filter(
+    (store: Store) =>
+      store.distributionStatus === 'completed' || store.distributionStatus === 'revisit',
+  );
   const totalDistributedCount = filteredStores.reduce(
     (sum, s) => sum + (Number(s.distributedCount) || 0),
     0,
@@ -211,6 +220,19 @@ export default function DashboardContent({
         : undefined;
   const isViewingOtherTeam =
     mode === 'teams' && !!currentTeam && !!ownTeam && currentTeam.teamId !== ownTeam.teamId;
+  const historyTeamId = mode === 'teams' ? teamId : mode === 'self' ? authUser?.teamId : undefined;
+  const historyHref =
+    mode === 'all'
+      ? includeOld
+        ? `/${year}/all`
+        : `/${year}/all/old`
+      : historyTeamId
+        ? includeOld
+          ? mode === 'self'
+            ? `/${year}`
+            : `/${year}/${historyTeamId}`
+          : `/${year}/${historyTeamId}/old`
+        : null;
 
   const applySelectedPlace = useCallback(
     (place: { name: string; address: string; latitude?: number; longitude?: number }) => {
@@ -438,10 +460,6 @@ export default function DashboardContent({
             <p className="mt-1 text-2xl font-bold text-gray-900 sm:text-3xl">{totalStores}</p>
           </div>
           <div className="rounded-lg bg-white p-4 shadow sm:p-6">
-            <h3 className="text-sm font-medium text-gray-500 sm:text-base">配布済み</h3>
-            <p className="mt-1 text-2xl font-bold text-green-600 sm:text-3xl">{completedStores}</p>
-          </div>
-          <div className="rounded-lg bg-white p-4 shadow sm:p-6">
             <h3 className="text-sm font-medium text-gray-500 sm:text-base">配布不可</h3>
             <p className="mt-1 text-2xl font-bold text-red-600 sm:text-3xl">{failedStores}</p>
           </div>
@@ -459,6 +477,20 @@ export default function DashboardContent({
           </div>
         </div>
 
+        {historyHref && year && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 lg:mb-6">
+            <Link
+              href={historyHref}
+              className="rounded-md border border-indigo-300 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50"
+            >
+              {includeOld ? '今年度の配布店舗を見る' : '前年以前の配布情報を見る'}
+            </Link>
+            {includeOld && (
+              <span className="text-sm text-gray-500">{year - 1}年度以前の配布情報を表示中</span>
+            )}
+          </div>
+        )}
+
         {!readOnly && (
           <div className="lg:hidden w-full flex justify-center px-4 pb-4">
             <button
@@ -473,7 +505,10 @@ export default function DashboardContent({
         {posterPickupStores.length > 0 && (
           <div className="mb-4 rounded-lg bg-white shadow lg:mb-6">
             <div className="border-b border-gray-200 px-4 py-4 sm:px-6">
-              <h2 className="text-base font-semibold text-gray-900">回収対象店舗</h2>
+              <h2 className="text-base font-semibold text-gray-900">掲示協力店舗（回収対象）</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                ポスターを掲示してもらえた店舗を確認できます（{posterPickupStores.length}件）
+              </p>
             </div>
             <div className="p-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
