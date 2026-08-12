@@ -66,11 +66,12 @@ export default function DashboardYearShell({
     const parts = pathname.split('/').filter(Boolean);
     const afterYear = parts[1];
     const isMap = parts.includes('map');
-    if (!afterYear) return { mode: 'self' as const };
-    if (afterYear === 'map') return { mode: 'self' as const, isMap };
-    if (afterYear === 'all') return { mode: 'all' as const, isMap };
-    if (afterYear === 'teams') return { mode: 'teams' as const, isMap };
-    return { mode: 'teams' as const, teamId: afterYear, isMap };
+    const isOld = parts.includes('old');
+    if (!afterYear) return { mode: 'self' as const, isOld };
+    if (afterYear === 'map') return { mode: 'self' as const, isMap, isOld };
+    if (afterYear === 'all') return { mode: 'all' as const, isMap, isOld };
+    if (afterYear === 'teams') return { mode: 'teams' as const, isMap, isOld };
+    return { mode: 'teams' as const, teamId: afterYear, isMap, isOld };
   }, [pathname]);
 
   const teams = teamsData?.teams || [];
@@ -89,10 +90,10 @@ export default function DashboardYearShell({
         : '全班の配布店舗'
       : routeState.mode === 'teams'
         ? currentTeam
-          ? `${currentTeam.teamName} の配布店舗${routeState.isMap ? 'マップ' : ''}`
+          ? `${currentTeam.teamName} の配布店舗${routeState.isMap ? 'マップ' : ''}${routeState.isOld ? '（過去年度）' : ''}`
           : '班を選ぶ'
         : currentTeam
-          ? `${currentTeam.teamName} の配布店舗${routeState.isMap ? 'マップ' : ''}`
+          ? `${currentTeam.teamName} の配布店舗${routeState.isMap ? 'マップ' : ''}${routeState.isOld ? '（過去年度）' : ''}`
           : `自班の配布店舗${routeState.isMap ? 'マップ' : ''}`;
 
   const mapHref =

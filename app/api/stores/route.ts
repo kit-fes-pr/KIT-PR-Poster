@@ -5,6 +5,7 @@ import { Store } from '@/types';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import {
   getDashboardEventIdForYear,
+  getDashboardEventIdsBeforeYear,
   parseDashboardYear,
   teamBelongsToDashboardYear,
 } from '@/lib/server/dashboard-year';
@@ -18,6 +19,10 @@ function parseOptionalCoordinate(value: unknown) {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
+}
+
+function normalizeTeamCode(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 export async function GET(request: NextRequest) {
@@ -41,11 +46,19 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const q = searchParams.get('q');
     const scope = (searchParams.get('scope') || '').toLowerCase();
+    const includeOld = searchParams.get('includeOld') === 'true';
     const requestedTeamId = searchParams.get('teamId');
     const yearParam = searchParams.get('year');
     const targetYear = yearParam ? parseDashboardYear(yearParam) : null;
     if (yearParam && !targetYear) {
       return NextResponse.json({ error: 'year は4桁の年度で指定してください' }, { status: 400 });
+    }
+
+    if (includeOld && !targetYear) {
+      return NextResponse.json(
+        { error: '過去年度表示には year の指定が必要です' },
+        { status: 400 },
+      );
     }
 
     let targetEventId: string | null = targetYear
@@ -61,6 +74,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: '班が見つかりません' }, { status: 404 });
       }
       const teamData = teamDoc.data() as Record<string, unknown> | undefined;
+      if (typeof teamData?.eventId === 'string' && teamData.eventId.trim()) {
+        targetEventId = teamData.eventId;
+      }
       if (
         targetYear &&
         (!teamData || !teamBelongsToDashboardYear(teamData, targetYear, targetEventId))
@@ -68,13 +84,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: '班が見つかりません' }, { status: 404 });
       }
       filterTeamCode = typeof teamData?.teamCode === 'string' ? teamData.teamCode : null;
-      if (!targetEventId && typeof teamData?.eventId === 'string') {
-        targetEventId = teamData.eventId;
-      }
     } else if (decodedToken.role === 'team' && scope !== 'all') {
       // チームログイン時の既定表示は自班の担当区域＋周辺区域に限定
       const teamDoc = await adminDb.collection('teams').doc(String(decodedToken.teamId)).get();
       const teamData = teamDoc.data() as Record<string, unknown> | undefined;
+      if (typeof teamData?.eventId === 'string' && teamData.eventId.trim()) {
+        targetEventId = teamData.eventId;
+      }
       if (
         targetYear &&
         (!teamData || !teamBelongsToDashboardYear(teamData, targetYear, targetEventId))
@@ -82,9 +98,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: '班が見つかりません' }, { status: 404 });
       }
       filterTeamCode = typeof decodedToken.teamCode === 'string' ? decodedToken.teamCode : null;
-      if (!targetEventId && typeof teamData?.eventId === 'string') {
-        targetEventId = teamData.eventId;
-      }
       if (typeof teamData?.assignedArea === 'string' && teamData.assignedArea) {
         const adjacent = Array.isArray(teamData.adjacentAreas)
           ? teamData.adjacentAreas.filter(
@@ -94,58 +107,61 @@ export async function GET(request: NextRequest) {
           : [];
         allowedAreas = [teamData.assignedArea, ...adjacent];
         hasAllowedAreas = allowedAreas.length > 0;
-        // Firestore 'in' フィルタは最大10要素。超える場合は全件取得して後段で絞り込み。
-        if (hasAllowedAreas && allowedAreas.length <= 10) {
-          if (!targetEventId) return NextResponse.json({ stores: [] });
-          let query = adminDb.collection('stores').where('eventId', '==', targetEventId);
-          query = query.where('areaCode', 'in', allowedAreas);
-          if (status) {
-            query = query.where('distributionStatus', '==', status);
-          }
-          const snapshot = await query.get();
-          let stores = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as unknown as Store[];
-          if (q) {
-            const searchTerm = q.toLowerCase();
-            stores = stores.filter(
-              (store) =>
-                store.storeName.toLowerCase().includes(searchTerm) ||
-                store.address.toLowerCase().includes(searchTerm),
-            );
-          }
-          const selfCode = filterTeamCode;
-          stores = stores.filter(
-            (s: Store) => s.createdByTeamCode === selfCode || s.distributedBy === selfCode,
-          );
-          stores.sort((a, b) => {
-            const nameCompare = a.storeNameKana.localeCompare(b.storeNameKana, 'ja');
-            if (nameCompare !== 0) return nameCompare;
-            return a.addressKana.localeCompare(b.addressKana, 'ja');
-          });
-          return NextResponse.json({ stores });
-        }
+        // 自班の店舗履歴は担当区域ではなく班コードで絞り込む。
+        // CSV取込などで areaCode が現在の担当区域と異なっていても表示できるようにする。
       }
     }
 
     if (!targetEventId) {
-      return NextResponse.json({ stores: [] });
+      if (!includeOld) return NextResponse.json({ stores: [] });
     }
 
-    let query = adminDb.collection('stores').where('eventId', '==', targetEventId);
-    if (area) {
-      query = query.where('areaCode', '==', area);
-    }
-    if (status) {
-      query = query.where('distributionStatus', '==', status);
-    }
+    const oldEventIds = includeOld
+      ? await getDashboardEventIdsBeforeYear(targetYear as number)
+      : [];
+    const eventIds = includeOld ? oldEventIds : targetEventId ? [targetEventId] : [];
+    if (eventIds.length === 0) return NextResponse.json({ stores: [] });
 
-    const snapshot = await query.get();
-    let stores = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as unknown as Store[];
+    const loadStoreSnapshots = async () => {
+      if (eventIds.length <= 10) {
+        let query = adminDb.collection('stores').where('eventId', 'in', eventIds);
+        if (area) query = query.where('areaCode', '==', area);
+        if (status) query = query.where('distributionStatus', '==', status);
+        return [await query.get()];
+      }
+
+      return Promise.all(
+        eventIds.map(async (eventId) => {
+          let query = adminDb.collection('stores').where('eventId', '==', eventId);
+          if (area) query = query.where('areaCode', '==', area);
+          if (status) query = query.where('distributionStatus', '==', status);
+          return query.get();
+        }),
+      );
+    };
+
+    const snapshots = await loadStoreSnapshots();
+    const historicalTeamSnapshots =
+      includeOld && filterTeamCode
+        ? await Promise.all([
+            adminDb
+              .collection('stores')
+              .where('createdByTeamCode', '==', filterTeamCode.trim())
+              .get(),
+            adminDb.collection('stores').where('distributedBy', '==', filterTeamCode.trim()).get(),
+          ])
+        : [];
+    let stores = [...snapshots, ...historicalTeamSnapshots].flatMap((snapshot) =>
+      snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    ) as unknown as Store[];
+
+    stores = Array.from(new Map(stores.map((store) => [store.storeId, store])).values());
+    if (includeOld && area) {
+      stores = stores.filter((store) => store.areaCode === area);
+    }
+    if (includeOld && status) {
+      stores = stores.filter((store) => store.distributionStatus === status);
+    }
 
     if (q) {
       const searchTerm = q.toLowerCase();
@@ -164,13 +180,17 @@ export async function GET(request: NextRequest) {
       // ログインコード（班）単位で管理: 自分が作成 or 自分が配布した店舗のみ表示
       const selfCode = filterTeamCode;
       stores = stores.filter(
-        (s: Store) => s.createdByTeamCode === selfCode || s.distributedBy === selfCode,
+        (s: Store) =>
+          normalizeTeamCode(s.createdByTeamCode) === normalizeTeamCode(selfCode) ||
+          normalizeTeamCode(s.distributedBy) === normalizeTeamCode(selfCode),
       );
     }
 
     if (filterTeamCode && requestedTeamId) {
       stores = stores.filter(
-        (s: Store) => s.createdByTeamCode === filterTeamCode || s.distributedBy === filterTeamCode,
+        (s: Store) =>
+          normalizeTeamCode(s.createdByTeamCode) === normalizeTeamCode(filterTeamCode) ||
+          normalizeTeamCode(s.distributedBy) === normalizeTeamCode(filterTeamCode),
       );
     }
 
