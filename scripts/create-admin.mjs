@@ -23,8 +23,11 @@ if (!adminEmailPattern.test(email)) {
 const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
 const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
 const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
+const useEmulators = Boolean(
+  process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.FIRESTORE_EMULATOR_HOST,
+);
 
-if (!projectId || !clientEmail || !privateKey) {
+if (!useEmulators && (!projectId || !clientEmail || !privateKey)) {
   console.error(
     'FIREBASE_ADMIN_PROJECT_ID / FIREBASE_ADMIN_CLIENT_EMAIL / FIREBASE_ADMIN_PRIVATE_KEY が必要です',
   );
@@ -33,14 +36,16 @@ if (!projectId || !clientEmail || !privateKey) {
 
 const app = getApps().length
   ? getApps()[0]
-  : initializeApp({
-      credential: cert({
+  : useEmulators
+    ? initializeApp({ projectId: projectId || 'demo-kit-pr-poster' })
+    : initializeApp({
+        credential: cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
         projectId,
-        clientEmail,
-        privateKey,
-      }),
-      projectId,
-    });
+      });
 
 const adminAuth = getAuth(app);
 const adminDb = getFirestore(app);

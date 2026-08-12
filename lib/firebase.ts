@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { connectAuthEmulator, getAuth } from 'firebase/auth';
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -16,14 +16,16 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// エミュレーターは本番環境では使用しない
-// if (process.env.NODE_ENV === 'development') {
-//   try {
-//     connectAuthEmulator(auth, 'http://localhost:9099');
-//     connectFirestoreEmulator(db, 'localhost', 8080);
-//   } catch {
-//     console.log('Firebase emulators already connected');
-//   }
-// }
+const useEmulators = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true';
+type EmulatorGlobal = typeof globalThis & { __firebaseEmulatorsConnected?: boolean };
+
+if (useEmulators && !(globalThis as EmulatorGlobal).__firebaseEmulatorsConnected) {
+  const host = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST || '127.0.0.1';
+  const authPort = Number(process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_PORT || 9099);
+  const firestorePort = Number(process.env.NEXT_PUBLIC_FIREBASE_FIRESTORE_EMULATOR_PORT || 8080);
+  connectAuthEmulator(auth, `http://${host}:${authPort}`, { disableWarnings: true });
+  connectFirestoreEmulator(db, host, firestorePort);
+  (globalThis as EmulatorGlobal).__firebaseEmulatorsConnected = true;
+}
 
 export default app;

@@ -3,7 +3,9 @@
   "version": "1.2.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/team-access-startup-backfill.mjs && next dev --turbopack",
+    "dev": "node scripts/start-local.mjs",
+    "dev:app": "node scripts/team-access-startup-backfill.mjs && next dev --turbopack",
+    "dev:local": "node scripts/seed-emulator.mjs && npm run dev:app",
     "dev:docker": "node scripts/team-access-startup-backfill.mjs && next dev",
     "build": "next build --turbopack",
     "start": "node scripts/team-access-startup-backfill.mjs && next start",
@@ -38,6 +40,7 @@
     "@types/react-dom": "^19",
     "eslint": "^10.6.0",
     "eslint-config-next": "16.3.0",
+    "firebase-tools": "^15.26.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.3.0",
     "prettier": "^3.9.5",

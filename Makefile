@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help up down dev build fmt lint test ci admin
+.PHONY: help init up down dev build fmt lint test ci admin
 
 ADMIN_EMAIL ?=
 ADMIN_PASSWORD ?=
@@ -8,6 +8,7 @@ ADMIN_ENV_FILE ?= .env
 
 help:
 	@printf "Available targets:\n"
+	@printf "  init   - Install dependencies and create local emulator config\n"
 	@printf "  up     - Start the app with Docker Compose\n"
 	@printf "  down   - Stop the app with Docker Compose\n"
 	@printf "  dev    - Start the app with npm\n"
@@ -17,6 +18,13 @@ help:
 	@printf "  test   - Run build verification\n"
 	@printf "  ci     - Run format check, lint, and test\n"
 	@printf "  admin  - Create an admin user via Firebase Admin SDK\n"
+
+init:
+	@command -v node >/dev/null 2>&1 || { printf "Node.js 24 or newer is required\n" >&2; exit 1; }
+	@command -v java >/dev/null 2>&1 || { printf "Java 21 or newer is required\n" >&2; exit 1; }
+	npm ci
+	@test -f .env || cp .env.example .env
+	@printf "Ready. Run: make dev\n"
 
 up:
 	docker compose up --build

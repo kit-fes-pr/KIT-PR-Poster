@@ -37,19 +37,20 @@ cp .env.example .env
 
 ### ローカル起動
 
-1. 依存関係をインストールします。
+初回はローカル用設定を準備します（Node.js 24以上・Java 21以上が必要です）。
 
 ```bash
-npm install
+make init
 ```
 
-2. 開発サーバーを起動します。
+Firebase Auth／Firestore Emulator とアプリをまとめて起動します。
 
 ```bash
-npm run dev
+make dev
 ```
 
-3. ブラウザで `http://localhost:3000` を開きます。
+アプリは `http://localhost:3000`、Emulator UI は `http://localhost:4000` です。
+ローカル管理者は `developer@kanazawa-it.ac.jp` / `local-password` で自動作成されます。
 
 ### Docker 起動
 

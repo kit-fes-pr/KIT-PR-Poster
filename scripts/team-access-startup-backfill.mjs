@@ -35,7 +35,9 @@ function getAdminDb() {
     const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
     const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
-    if (projectId && clientEmail && privateKey?.includes('BEGIN PRIVATE KEY')) {
+    if (process.env.FIRESTORE_EMULATOR_HOST) {
+      initializeApp({ projectId: projectId || 'demo-kit-pr-poster' });
+    } else if (projectId && clientEmail && privateKey?.includes('BEGIN PRIVATE KEY')) {
       initializeApp({
         credential: cert({ projectId, clientEmail, privateKey }),
         projectId,
