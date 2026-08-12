@@ -161,7 +161,15 @@ async function buildPreview(rows: ParsedStoreImportRow[], targetYear: number | n
     const savedStoreInfo = await findSavedStoreInfo(storeName);
     let candidates: AddressCandidate[];
     if (row.address) {
-      candidates = [{ label: row.address, address: row.address, source: 'csv' }];
+      candidates = [
+        {
+          label: row.address,
+          address: row.address,
+          latitude: row.latitude,
+          longitude: row.longitude,
+          source: 'csv',
+        },
+      ];
     } else if (savedStoreInfo.addressCandidates.length > 0) {
       candidates = savedStoreInfo.addressCandidates;
     } else {
@@ -445,12 +453,14 @@ export async function POST(request: NextRequest) {
         fallbackAddresses.get(row.rowIndex)?.address,
       );
       const latitude = parseCoordinate(
-        addressSelection.latitude ?? fallbackAddresses.get(row.rowIndex)?.latitude,
+        addressSelection.latitude ?? fallbackAddresses.get(row.rowIndex)?.latitude ?? row.latitude,
         -90,
         90,
       );
       const longitude = parseCoordinate(
-        addressSelection.longitude ?? fallbackAddresses.get(row.rowIndex)?.longitude,
+        addressSelection.longitude ??
+          fallbackAddresses.get(row.rowIndex)?.longitude ??
+          row.longitude,
         -180,
         180,
       );
