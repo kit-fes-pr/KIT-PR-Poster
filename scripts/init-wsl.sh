@@ -12,10 +12,11 @@ if ! command -v sudo >/dev/null 2>&1; then
 fi
 
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl gnupg
 
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1 || ! command -v npx >/dev/null 2>&1; then
+  sudo apt-get install -y ca-certificates curl gnupg
   curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+  sudo apt-get update
   sudo apt-get install -y nodejs
 fi
 
