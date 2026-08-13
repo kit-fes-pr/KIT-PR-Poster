@@ -19,7 +19,7 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1 || ! co
   sudo apt-get install -y nodejs
 fi
 
-if ! command -v docker >/dev/null 2>&1; then
+if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
   sudo apt-get install -y docker.io docker-compose-plugin
 fi
 
