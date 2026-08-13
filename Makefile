@@ -1,11 +1,25 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help up down dev build fmt lint test ci admin
+.PHONY: help init init/mac install up down dev build fmt lint test ci admin
 
 ADMIN_ENV_FILE ?= .env
 
+init:
+	@bash scripts/init-wsl.sh
+
+init/mac:
+	@bash scripts/init-mac.sh
+
+install:
+	@command -v node >/dev/null 2>&1 || (printf "Node.js is not installed. Run make init or make init/mac first.\n" >&2; exit 1)
+	@command -v npm >/dev/null 2>&1 || (printf "npm is not installed. Run make init or make init/mac first.\n" >&2; exit 1)
+	npm install
+
 help:
 	@printf "Available targets:\n"
+	@printf "  init   - Install/check development tools for WSL/Linux\n"
+	@printf "  init/mac - Install/check development tools for macOS\n"
+	@printf "  install - Install Node.js dependencies\n"
 	@printf "  up     - Start the app with Docker Compose\n"
 	@printf "  down   - Stop the app with Docker Compose\n"
 	@printf "  dev    - Start the app with npm\n"
