@@ -28,51 +28,96 @@
 
 ## 🚀 起動方法
 
-### ローカルで起動する
+### 開発環境を使う方
 
-1. `.env.example` をコピーして `.env` を作成します。
+開発環境では、本番 Firebase ではなく、Docker 上の Firebase Emulator を使用します。
 
-```bash
-cp .env.example .env
-```
+#### 1. Docker Desktop を起動する
 
-2. `.env` の中身を Firebase の設定に合わせて編集します。
-3. 依存関係をインストールします。
+Docker Desktop を起動し、Docker が利用可能な状態にします。
 
-```bash
-npm install
-```
+#### 2. アプリと Firebase Emulator を起動する
 
-4. 開発サーバーを起動します。
+ターミナルで、このリポジトリのフォルダに移動して実行します。
 
 ```bash
-npm run dev
+make up
 ```
 
-5. `http://localhost:3000` を開きます。
+初回は Docker イメージや Firebase Emulator のファイルをダウンロードするため、起動に時間がかかる場合があります。次のような表示が出れば起動成功です。
 
-### Docker で起動する
+```text
+All emulators ready! It is now safe to connect your app.
+```
 
-1. Docker Desktop を起動します。
-2. コンテナを起動します。
+#### 3. ブラウザで画面を開く
+
+次の URL を開きます。
+
+- アプリ: http://localhost:3000
+- Firebase Emulator 管理画面: http://localhost:4000
+
+Firebase Emulator 管理画面では、Auth のユーザーや Firestore のデータを確認できます。
+
+#### 4. 最初の管理者を作成する
+
+アプリへ管理者としてログインするには、管理者アカウントを1つ作成します。アプリを起動したまま、別のターミナルを開いて次を実行します。
 
 ```bash
-docker compose up --build
+make admin
 ```
 
-3. `http://localhost:3000` を開きます。
+画面の指示に従って、次の3つを入力します。
 
-### 停止する
+1. 管理者メールアドレス（`@+.kanazawa-it.ac.jp`）
+2. パスワード（入力中は画面に表示されません）
+3. 管理者名
+
+開発環境では、本番 Firebase の認証情報が設定されていないため、自動的に Firebase Emulator へ管理者が作成されます。作成後、`http://localhost:3000/admin/login` からログインします。
+
+#### 5. アプリを停止する
+
+起動中のターミナルで `Ctrl + C` を押します。別のターミナルから停止する場合は次を実行します。
 
 ```bash
-Ctrl + C
+make down
 ```
 
-Docker の場合は必要に応じて以下も実行します。
+`make down` ではデータは削除されません。もう一度 `make up` を実行すると、前回のユーザーやデータをそのまま使えます。
+
+#### 開発データをすべて削除する
+
+最初からやり直したい場合だけ、次を実行します。
 
 ```bash
-docker compose down
+docker compose down -v
 ```
+
+このコマンドは管理者ユーザー、Firestore のデータ、その他の Emulator データを削除します。通常の停止では `make down` を使用してください。
+
+### 本番 Firebase を使う場合
+
+本番 Firebase を操作する必要がある場合だけ、本番用の環境ファイルを用意します。`.env.example` は本番用テンプレートです。
+
+```bash
+cp .env.example .env.production
+```
+
+`.env.production` に次の値を設定します。
+
+```env
+FIREBASE_ADMIN_PROJECT_ID=本番プロジェクトID
+FIREBASE_ADMIN_CLIENT_EMAIL=サービスアカウントのメールアドレス
+FIREBASE_ADMIN_PRIVATE_KEY=サービスアカウントの秘密鍵
+```
+
+本番用の管理者を作成する場合は、次を実行します。
+
+```bash
+make admin ADMIN_ENV_FILE=.env.production
+```
+
+`FIREBASE_ADMIN_*` の3つが揃っている場合は本番 Firebase、揃っていない場合は Emulator が選択されます。接続先を間違えないよう、本番操作の前に環境ファイルを確認してください。
 
 ---
 
@@ -393,6 +438,6 @@ CSVフォーマット:
 
 ---
 
-**📅 最終更新**: 2025年9月23日  
-**📖 マニュアルバージョン**: 1.0  
+**📅 最終更新**: 2026年8月14日  
+**📖 マニュアルバージョン**: 1.1
 **🎯 対象システム**: 工大祭ポスター配布管理システム v1.2.0
