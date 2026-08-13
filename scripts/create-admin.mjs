@@ -24,13 +24,6 @@ const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n')
 const hasAdminCredentials = Boolean(projectId && clientEmail && privateKey);
 const useEmulators = process.env.FIREBASE_USE_EMULATORS === 'true' || !hasAdminCredentials;
 
-if (!useEmulators && !hasAdminCredentials) {
-  console.error(
-    'FIREBASE_ADMIN_PROJECT_ID / FIREBASE_ADMIN_CLIENT_EMAIL / FIREBASE_ADMIN_PRIVATE_KEY が必要です',
-  );
-  process.exit(1);
-}
-
 if (useEmulators) {
   process.env.FIREBASE_AUTH_EMULATOR_HOST ||= 'localhost:9099';
   process.env.FIRESTORE_EMULATOR_HOST ||= 'localhost:8080';
