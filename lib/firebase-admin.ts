@@ -11,7 +11,9 @@ if (!getApps().length) {
 
   const isValidKey = !!privateKey?.includes('BEGIN PRIVATE KEY');
 
-  if (!projectId || !clientEmail || !privateKey || !isValidKey) {
+  if (process.env.FIREBASE_USE_EMULATORS === 'true') {
+    adminApp = initializeApp({ projectId: projectId || 'demo-kit-pr-poster' });
+  } else if (!projectId || !clientEmail || !privateKey || !isValidKey) {
     console.warn(
       'Firebase Admin SDK credentials not provided or invalid - some functionality will be limited',
     );

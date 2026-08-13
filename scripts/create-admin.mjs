@@ -2,14 +2,12 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
-const [argEmail] = process.argv.slice(2);
-const email = argEmail || process.env.ADMIN_EMAIL;
+const email = process.env.ADMIN_EMAIL;
+const displayName = process.env.ADMIN_NAME?.trim();
 const password = process.env.ADMIN_PASSWORD;
 
-if (!email || !password) {
-  console.error(
-    'Usage: ADMIN_EMAIL=... ADMIN_PASSWORD=... node --env-file=.env scripts/create-admin.mjs',
-  );
+if (!email || !password || !displayName) {
+  console.error('Run `make admin` and enter the email, password, and name interactively.');
   process.exit(1);
 }
 
@@ -23,31 +21,38 @@ if (!adminEmailPattern.test(email)) {
 const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
 const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
 const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
+const hasAdminCredentials = Boolean(projectId && clientEmail && privateKey);
+const useEmulators = process.env.FIREBASE_USE_EMULATORS === 'true' || !hasAdminCredentials;
 
-if (!projectId || !clientEmail || !privateKey) {
+if (!useEmulators && !hasAdminCredentials) {
   console.error(
     'FIREBASE_ADMIN_PROJECT_ID / FIREBASE_ADMIN_CLIENT_EMAIL / FIREBASE_ADMIN_PRIVATE_KEY が必要です',
   );
   process.exit(1);
 }
 
+if (useEmulators) {
+  process.env.FIREBASE_AUTH_EMULATOR_HOST ||= 'localhost:9099';
+  process.env.FIRESTORE_EMULATOR_HOST ||= 'localhost:8080';
+}
+
 const app = getApps().length
   ? getApps()[0]
-  : initializeApp({
-      credential: cert({
+  : useEmulators
+    ? initializeApp({ projectId: projectId || 'demo-kit-pr-poster' })
+    : initializeApp({
+        credential: cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
         projectId,
-        clientEmail,
-        privateKey,
-      }),
-      projectId,
-    });
+      });
 
 const adminAuth = getAuth(app);
 const adminDb = getFirestore(app);
 
 (async () => {
-  const displayName = email.split('@')[0];
-
   let userRecord;
   let operation;
   try {
