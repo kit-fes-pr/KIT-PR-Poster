@@ -13,6 +13,7 @@ init/mac:
 install:
 	@command -v node >/dev/null 2>&1 || (printf "Node.js is not installed. Run make init or make init/mac first.\n" >&2; exit 1)
 	@command -v npm >/dev/null 2>&1 || (printf "npm is not installed. Run make init or make init/mac first.\n" >&2; exit 1)
+	@command -v npx >/dev/null 2>&1 || (printf "npx is not installed. Run make init or make init/mac first.\n" >&2; exit 1)
 	npm install
 
 help:
