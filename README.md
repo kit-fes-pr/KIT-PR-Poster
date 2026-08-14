@@ -23,10 +23,30 @@
 
 ### ローカル起動（Docker）
 
-Docker Compose にローカル開発用の固定値を定義しているため、`.env` は不要です。Docker Desktop を起動して、次を実行します。
+Docker Compose にローカル開発用の固定値を定義しているため、`.env` は不要です。初回は次の順番で実行します。
+
+macOS:
 
 ```bash
-docker compose up --build
+make init/mac
+make install
+make up
+```
+
+WSL/Linux:
+
+```bash
+make init
+make install
+make up
+```
+
+`make init` / `make init/mac` は導入済みのツールを再インストールしません。macOS の Docker Desktop はインストール後に起動してください。
+
+Docker Desktop を起動済みの場合は、次だけで起動できます。
+
+```bash
+make up
 ```
 
 Firebase Auth / Firestore Emulator は `http://localhost:4000` で確認できます。データは Docker の名前付き volume に保存され、Compose を停止して再起動しても復元されます。通常の `docker compose down` を使って終了してください。`docker compose down -v` を実行するとデータも削除されます。

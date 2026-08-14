@@ -32,11 +32,37 @@
 
 開発環境では、本番 Firebase ではなく、Docker 上の Firebase Emulator を使用します。
 
-#### 1. Docker Desktop を起動する
+#### 1. 開発ツールを準備する
+
+macOS の場合は、ターミナルで次を実行します。
+
+```bash
+make init/mac
+```
+
+Homebrew、Node.js、npm、npx、Docker Desktop がない場合だけインストールされます。Docker Desktop のインストール後は、Docker Desktop を起動してください。
+
+WSL の場合は、WSL のターミナルで次を実行します。
+
+```bash
+make init
+```
+
+Node.js、npm、npx、Docker CLI がない場合だけインストールされます。WSL から Docker Desktop を利用する場合は、Docker Desktop の Settings → Resources → WSL Integration で使用する WSL を有効にしてください。
+
+#### 2. Node.js の依存関係をインストールする
+
+```bash
+make install
+```
+
+内部では `npm install` を実行します。
+
+#### 3. Docker Desktop を起動する
 
 Docker Desktop を起動し、Docker が利用可能な状態にします。
 
-#### 2. アプリと Firebase Emulator を起動する
+#### 4. アプリと Firebase Emulator を起動する
 
 ターミナルで、このリポジトリのフォルダに移動して実行します。
 
@@ -50,7 +76,7 @@ make up
 All emulators ready! It is now safe to connect your app.
 ```
 
-#### 3. ブラウザで画面を開く
+#### 5. ブラウザで画面を開く
 
 次の URL を開きます。
 
@@ -59,7 +85,7 @@ All emulators ready! It is now safe to connect your app.
 
 Firebase Emulator 管理画面では、Auth のユーザーや Firestore のデータを確認できます。
 
-#### 4. 最初の管理者を作成する
+#### 6. 最初の管理者を作成する
 
 アプリへ管理者としてログインするには、管理者アカウントを1つ作成します。アプリを起動したまま、別のターミナルを開いて次を実行します。
 
@@ -75,7 +101,7 @@ make admin
 
 開発環境では、本番 Firebase の認証情報が設定されていないため、自動的に Firebase Emulator へ管理者が作成されます。作成後、`http://localhost:3000/admin/login` からログインします。
 
-#### 5. アプリを停止する
+#### 7. アプリを停止する
 
 起動中のターミナルで `Ctrl + C` を押します。別のターミナルから停止する場合は次を実行します。
 
