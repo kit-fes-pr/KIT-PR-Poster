@@ -8,7 +8,12 @@ fi
 
 if ! command -v brew >/dev/null 2>&1; then
   printf '%s\n' 'Homebrew をインストールします。'
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  homebrew_install_script=$(mktemp)
+  trap 'rm -f "$homebrew_install_script"' EXIT
+  curl --fail --location --silent --show-error \
+    --output "$homebrew_install_script" \
+    https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+  /bin/bash "$homebrew_install_script"
   if [[ -x /opt/homebrew/bin/brew ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
   elif [[ -x /usr/local/bin/brew ]]; then
