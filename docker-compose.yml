@@ -1,14 +1,40 @@
 services:
+  firebase:
+    build:
+      context: .
+      dockerfile: Dockerfile.firebase
+    ports:
+      - '4000:4000'
+      - '8080:8080'
+      - '9099:9099'
+    volumes:
+      - firebase-data:/opt/firebase/data
+    restart: unless-stopped
+
   web:
     build:
       context: .
       dockerfile: Dockerfile
       target: dev
-    env_file:
-      - ./.env
     environment:
       NEXT_TELEMETRY_DISABLED: '1'
       PORT: 3000
+      NEXT_PUBLIC_FIREBASE_API_KEY: demo-api-key
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: demo-kit-pr-poster.firebaseapp.com
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: demo-kit-pr-poster
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: demo-kit-pr-poster.appspot.com
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '123456789'
+      NEXT_PUBLIC_FIREBASE_APP_ID: demo-app-id
+      NEXT_PUBLIC_FIREBASE_USE_EMULATORS: 'true'
+      NEXT_PUBLIC_FIREBASE_EMULATOR_HOST: localhost
+      FIREBASE_USE_EMULATORS: 'true'
+      FIREBASE_ADMIN_CLIENT_EMAIL: ''
+      FIREBASE_ADMIN_PRIVATE_KEY: ''
+      FIRESTORE_EMULATOR_HOST: firebase:8080
+      FIREBASE_AUTH_EMULATOR_HOST: firebase:9099
+      FIREBASE_ADMIN_PROJECT_ID: demo-kit-pr-poster
+    depends_on:
+      - firebase
     ports:
       - '3000:3000'
     volumes:
@@ -16,3 +42,6 @@ services:
       - /app/node_modules
       - /app/.next
     restart: unless-stopped
+
+volumes:
+  firebase-data:

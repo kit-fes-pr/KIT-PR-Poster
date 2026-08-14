@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { connectAuthEmulator, getAuth } from 'firebase/auth';
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -16,14 +16,18 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// エミュレーターは本番環境では使用しない
-// if (process.env.NODE_ENV === 'development') {
-//   try {
-//     connectAuthEmulator(auth, 'http://localhost:9099');
-//     connectFirestoreEmulator(db, 'localhost', 8080);
-//   } catch {
-//     console.log('Firebase emulators already connected');
-//   }
-// }
+if (process.env.NEXT_PUBLIC_FIREBASE_USE_EMULATORS === 'true') {
+  const emulatorHost = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST || 'localhost';
+  try {
+    connectAuthEmulator(auth, `http://${emulatorHost}:9099`, { disableWarnings: true });
+  } catch {
+    // Next.js development reloads can evaluate this module more than once.
+  }
+  try {
+    connectFirestoreEmulator(db, emulatorHost, 8080);
+  } catch {
+    // Next.js development reloads can evaluate this module more than once.
+  }
+}
 
 export default app;

@@ -18,49 +18,42 @@
 
 ### 必要なもの
 
-- `.env`（リポジトリ直下）
-- ローカル起動
-  - Node.js 24以上
-  - npm
 - Docker 起動
   - Docker Desktop
 
-### `.env` の準備
+### ローカル起動（Docker）
 
-1. `.env.example` をコピーして `.env` を作成します。
+Docker Compose にローカル開発用の固定値を定義しているため、`.env` は不要です。初回は次の順番で実行します。
 
-```bash
-cp .env.example .env
-```
-
-2. `.env` の値を実際の Firebase 設定に合わせて編集します。
-
-### ローカル起動
-
-1. 依存関係をインストールします。
+macOS:
 
 ```bash
-npm install
+make init/mac
+make install
+make up
 ```
 
-2. 開発サーバーを起動します。
+WSL/Linux:
 
 ```bash
-npm run dev
+make init
+make install
+make up
 ```
 
-3. ブラウザで `http://localhost:3000` を開きます。
+`make init` / `make init/mac` は導入済みのツールを再インストールしません。macOS の Docker Desktop はインストール後に起動してください。
 
-### Docker 起動
-
-1. Docker Desktop を起動します。
-2. コンテナを起動します。
+Docker Desktop を起動済みの場合は、次だけで起動できます。
 
 ```bash
-docker compose up --build
+make up
 ```
 
-3. ブラウザで `http://localhost:3000` を開きます。
+Firebase Auth / Firestore Emulator は `http://localhost:4000` で確認できます。データは Docker の名前付き volume に保存され、Compose を停止して再起動しても復元されます。通常の `docker compose down` を使って終了してください。`docker compose down -v` を実行するとデータも削除されます。
+
+ブラウザで `http://localhost:3000` を開きます。
+
+本番環境の設定が必要な場合のみ、`.env.example` を `.env` にコピーして本番 Firebase の値を設定してください。
 
 ### 停止
 
@@ -382,7 +375,7 @@ interface Member {
 - **Firebase Auth**: `signInWithEmailAndPassword` を使用
 - **招待制**: 管理者が admin 画面からユーザー招待を作成します
 - **招待メール**: メールアドレスを入力すると Firebase のパスワード再設定メールを送信します
-- **初期作成**: `make admin` でローカル作成できます
+- **初期作成**: `make admin` 実行後にメールアドレス・パスワード・名前を入力して、Emulator または本番 Firebase に作成できます
 - **認証フロー**:
   1. 管理者が admin 画面で招待を作成
   2. Firebase からパスワード再設定メールが送信される
@@ -400,22 +393,7 @@ npm install firebase firebase-admin
 ```
 
 **環境変数設定**
-`.env.local` ファイルに以下を追加:
-
-```
-# Firebase設定
-NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
-NEXT_PUBLIC_FIREBASE_APP_ID=1:123456789:web:abcdef
-
-# Firebase Admin SDK（サーバーサイド）
-FIREBASE_ADMIN_PRIVATE_KEY=your-private-key
-FIREBASE_ADMIN_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
-FIREBASE_ADMIN_PROJECT_ID=your-project-id
-```
+ローカル開発の Firebase 設定は `docker-compose.yml` に固定しています。本番運用では `.env.example` をVercelなどに設定します。
 
 **実装するファイル構成**
 
@@ -450,109 +428,6 @@ Pages/Components:
 | 配布日以外のアクセス | "本日は配布日ではありません。イベント: {dateまたはrange}" |
 | 権限不足             | 自動的に適切な認証画面にリダイレクト                      |
 | セッション期限切れ   | "セッションが期限切れです。再度ログインしてください"      |
-
-##### 6. 管理者 (`/admins/{adminId}`)
-
-```typescript
-interface Admin {
-  adminId: string;
-  email: string; // sub.kanazawa-it.ac.jp ドメイン限定
-  name: string;
-  isActive: boolean;
-  createdAt: Date;
-}
-```
-
-##### 7. 一時アカウント (`/tempAccounts/{accountId}`)
-
-```typescript
-interface TempAccount {
-  accountId: string;
-  teamCode: string; // 元のログインコード
-  tempEmail: string; // 一時メールアドレス
-  createdAt: Date;
-  expiresAt: Date; // 24時間後
-  isActive: boolean;
-}
-```
-
-##### 8. 年次統計 (`/yearlyStats/{year}`)
-
-```typescript
-interface YearlyStats {
-  year: number;
-  eventName: string;
-  totalEvents: number;
-  totalStores: number;
-  totalTeams: number;
-  totalMembers: number;
-  averageCompletionRate: number;
-  bestPerformingTeam: {
-    teamCode: string;
-    teamName: string;
-    completionRate: number;
-  };
-  distributionTrends: {
-    date: Date;
-    completedStores: number;
-    totalStores: number;
-  }[];
-}
-```
-
----
-
-## API設計
-
-### REST APIエンドポイント
-
-#### 認証関連
-
-| メソッド | エンドポイント         | 説明               |
-| -------- | ---------------------- | ------------------ |
-| `POST`   | `/api/auth/team-login` | ログインコード認証 |
-| `POST`   | `/api/auth/logout`     | ログアウト         |
-| `GET`    | `/api/auth/verify`     | 認証状態確認       |
-
-#### 店舗管理
-
-| メソッド | エンドポイント          | 説明                                                                                                             |
-| -------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/api/stores`           | インテリジェント店舗一覧取得<br>・担当区域＋周辺区域の自動フィルタ<br>・五十音順ソート機能<br>・配布状況フィルタ |
-| `POST`   | `/api/stores`           | 店舗登録（手動追加・カナ自動生成）                                                                               |
-| `PUT`    | `/api/stores/{storeId}` | 店舗配布状況更新                                                                                                 |
-| `GET`    | `/api/stores/search`    | 高度検索（クエリパラメータ：q, area, status）                                                                    |
-
-#### 管理機能
-
-| メソッド | エンドポイント                     | 説明                                               |
-| -------- | ---------------------------------- | -------------------------------------------------- |
-| `GET`    | `/api/admin/stats`                 | 配布統計データ（年度指定可能）                     |
-| `GET`    | `/api/admin/events`                | イベント一覧取得                                   |
-| `POST`   | `/api/admin/events`                | イベント作成                                       |
-| `PATCH`  | `/api/admin/events`                | イベント更新                                       |
-| `DELETE` | `/api/admin/events`                | イベント削除                                       |
-| `GET`    | `/api/admin/teams`                 | チーム一覧取得（年度指定可能、配布枠キー）         |
-| `POST`   | `/api/admin/teams`                 | チーム作成                                         |
-| `GET`    | `/api/admin/teams/{teamId}`        | チーム詳細取得                                     |
-| `PATCH`  | `/api/admin/teams/{teamId}`        | チーム更新                                         |
-| `DELETE` | `/api/admin/teams/{teamId}`        | チーム削除                                         |
-| `GET`    | `/api/admin/teams/{teamId}/stores` | チーム別店舗情報取得                               |
-| `GET`    | `/api/admin/assignments`           | 通常割り当て一覧取得（year / formId 指定可）       |
-| `GET`    | `/api/admin/members`               | フォーム回答由来のメンバー一覧取得（年度指定可能） |
-| `GET`    | `/api/admin/current-year-total`    | 当年度店舗履歴取得                                 |
-
-#### アンケートフォーム関連
-
-| メソッド | エンドポイント                  | 説明                                         |
-| -------- | ------------------------------- | -------------------------------------------- |
-| `GET`    | `/api/forms`                    | フォーム一覧取得（管理者用、1年度1フォーム） |
-| `POST`   | `/api/forms`                    | フォーム作成                                 |
-| `GET`    | `/api/forms/{formId}`           | フォーム詳細取得                             |
-| `PATCH`  | `/api/forms/{formId}`           | フォーム更新                                 |
-| `DELETE` | `/api/forms/{formId}`           | フォーム削除                                 |
-| `GET`    | `/api/forms/{formId}/responses` | 回答一覧取得（管理者用）                     |
-| `POST`   | `/api/forms/{formId}/responses` | 回答送信（availableSlots）                   |
 
 ---
 
@@ -608,21 +483,21 @@ interface YearlyStats {
 #### 使える target
 
 - `make up`: Docker Compose で起動します
-- `make dev`: npm で開発サーバーを起動します
+- `make dev`: npm で開発サーバーを起動します（通常のローカル開発は `make up` を使用）
 - `make build`: Next.js の本番ビルドを実行します
 - `make fmt`: Prettier でコード整形を行います
 - `make lint`: ESLint を実行します
 - `make test`: 現状は build による検証を行います
 - `make ci`: `format:check -> lint -> test` をまとめて実行します
-- `make admin`: Firebase Admin SDK を使って管理者ユーザーを作成します。パスワードは対話入力です
+- `make admin`: Firebase Admin SDK を使って管理者ユーザーを作成します。メールアドレス・パスワード・名前を対話入力します
 
 #### admin の使い方
 
-`admin` は API サーバーを起動していなくても使えます。`FIREBASE_ADMIN_PROJECT_ID` / `FIREBASE_ADMIN_CLIENT_EMAIL` / `FIREBASE_ADMIN_PRIVATE_KEY` が `.env` に入っている前提です。  
-`ADMIN_EMAIL` は環境変数か `make` の引数で渡し、`ADMIN_PASSWORD` は入力プロンプトで渡します。
+`admin` は API サーバーを起動していなくても使えます。本番 Firebase を対象にする場合は、`FIREBASE_ADMIN_PROJECT_ID` / `FIREBASE_ADMIN_CLIENT_EMAIL` / `FIREBASE_ADMIN_PRIVATE_KEY` を `.env.production` などに設定します。3つが揃っていない場合は自動的に `localhost:9099` / `localhost:8080` の Emulator を使用します。
+実行後、メールアドレス・パスワード・表示名を順番に入力します。
 
 ```bash
-make admin ADMIN_EMAIL=admin@sub.kanazawa-it.ac.jp
+make admin
 ```
 
 #### 補足
@@ -631,7 +506,7 @@ make admin ADMIN_EMAIL=admin@sub.kanazawa-it.ac.jp
 
 ```bash
 make -n ci
-make -n admin ADMIN_EMAIL=admin@sub.kanazawa-it.ac.jp
+make -n admin
 ```
 
 ### インフラ
@@ -679,6 +554,6 @@ make -n admin ADMIN_EMAIL=admin@sub.kanazawa-it.ac.jp
 
 ## 文書情報
 
-**最終更新**: 2026年6月20日  
+**最終更新**: 2026年8月14日  
 **作成者**: 工大祭実行委員会  
-**文書バージョン**: 1.2
+**文書バージョン**: 1.3

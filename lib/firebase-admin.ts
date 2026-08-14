@@ -8,10 +8,15 @@ if (!getApps().length) {
   const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const useEmulators = process.env.FIREBASE_USE_EMULATORS === 'true';
 
   const isValidKey = !!privateKey?.includes('BEGIN PRIVATE KEY');
 
-  if (!projectId || !clientEmail || !privateKey || !isValidKey) {
+  if (useEmulators) {
+    process.env.FIREBASE_AUTH_EMULATOR_HOST ||= 'localhost:9099';
+    process.env.FIRESTORE_EMULATOR_HOST ||= 'localhost:8080';
+    adminApp = initializeApp({ projectId: projectId || 'demo-kit-pr-poster' });
+  } else if (!projectId || !clientEmail || !privateKey || !isValidKey) {
     console.warn(
       'Firebase Admin SDK credentials not provided or invalid - some functionality will be limited',
     );
