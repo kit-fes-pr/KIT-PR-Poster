@@ -483,7 +483,11 @@ Pages/Components:
 #### 使える target
 
 - `make up`: Docker Compose で起動します
-- `make dev`: npm で開発サーバーを起動します（通常のローカル開発は `make up` を使用）
+- `make updb`: Firebase Emulator だけを Docker で起動します
+- `make dev`: Firebase Emulator を起動して、Next.js をホスト側で起動します
+- `make install`: npm 依存関係をインストールします
+- `make clean`: npm 依存関係、ビルド・テスト生成物を削除します
+- `make clean/all`: `make clean` に加えて Docker volume と Emulator データを削除します
 - `make build`: Next.js の本番ビルドを実行します
 - `make fmt`: Prettier でコード整形を行います
 - `make lint`: ESLint を実行します
