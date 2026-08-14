@@ -1,5 +1,7 @@
 # 工大祭ポスター配布管理システム 利用マニュアル
 
+初心者向けのローカル開発手順は [doc/local-manual.md](doc/local-manual.md) を参照してください。
+
 ## 📖 目次
 
 - [🎯 システム概要](#システム概要)
@@ -70,6 +72,20 @@ Docker Desktop を起動し、Docker が利用可能な状態にします。
 make up
 ```
 
+アプリを Docker ではなくホスト側の Node.js で起動する場合は、次の2つのターミナルを使います。まず Firebase Emulator だけを起動します。
+
+```bash
+make updb
+```
+
+別のターミナルで、Next.js を起動します。
+
+```bash
+make dev
+```
+
+`make dev` は Emulator 用の設定を自動で設定してから Next.js を起動します。通常は `make updb` の後に `make dev` を実行すれば、Docker 上の Firebase とローカルの Next.js を組み合わせて開発できます。
+
 初回は Docker イメージや Firebase Emulator のファイルをダウンロードするため、起動に時間がかかる場合があります。次のような表示が出れば起動成功です。
 
 ```text
@@ -113,15 +129,30 @@ make down
 
 `make down` ではデータは削除されません。もう一度 `make up` を実行すると、前回のユーザーやデータをそのまま使えます。
 
-#### 開発データをすべて削除する
+#### ローカルの依存関係や生成物を削除する
+
+Node.js の依存関係、Next.js のビルド生成物、テスト生成物を削除する場合は次を実行します。Firebase Emulator のデータは保持されます。
+
+```bash
+make clean
+```
+
+削除後に再び利用する場合は、次を実行します。
+
+```bash
+make install
+make up
+```
+
+#### 開発データを含めてすべて削除する
 
 最初からやり直したい場合だけ、次を実行します。
 
 ```bash
-docker compose down -v
+make clean/all
 ```
 
-このコマンドは管理者ユーザー、Firestore のデータ、その他の Emulator データを削除します。通常の停止では `make down` を使用してください。
+このコマンドは `make clean` に加えて Docker コンテナと名前付き volume を削除し、管理者ユーザー、Firestore のデータ、その他の Emulator データも削除します。通常の停止では `make down` を使用してください。
 
 ### 本番 Firebase を使う場合
 
