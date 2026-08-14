@@ -57,6 +57,14 @@ ci:
 
 admin:
 	@if [ ! -t 0 ]; then printf "make admin requires an interactive terminal\n" >&2; exit 1; fi
+	@if [ -f "$(ADMIN_ENV_FILE)" ]; then \
+		printf '環境ファイル %s を読み込みます。Firebase 本番環境へ接続する可能性があります。続行しますか？ [y/N] ' "$(ADMIN_ENV_FILE)"; \
+		read -r ADMIN_ENV_CONFIRMATION; \
+		case "$$ADMIN_ENV_CONFIRMATION" in \
+			y|Y) ;; \
+			*) printf '中止しました。\n' >&2; exit 1 ;; \
+		esac; \
+	fi
 	@printf "Admin email: "; read -r ADMIN_EMAIL; \
 	printf "Admin password: "; \
 	trap 'stty echo; printf "\n" >&2' INT TERM EXIT; \
