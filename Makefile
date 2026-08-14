@@ -35,7 +35,7 @@ help:
 	@printf "  up     - Start the app with Docker Compose\n"
 	@printf "  updb   - Start Firebase Emulator services only\n"
 	@printf "  down   - Stop the app with Docker Compose\n"
-	@printf "  dev    - Start the app with npm\n"
+	@printf "  dev    - Start Firebase Emulator (Docker) and Next.js locally\n"
 	@printf "  build  - Run Next.js production build\n"
 	@printf "  fmt    - Run Prettier write formatting\n"
 	@printf "  lint   - Run ESLint\n"
