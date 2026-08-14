@@ -15,7 +15,12 @@ sudo apt-get update
 
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1 || ! command -v npx >/dev/null 2>&1; then
   sudo apt-get install -y ca-certificates curl gnupg
-  curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+  node_source_script=$(mktemp)
+  trap 'rm -f "$node_source_script"' EXIT
+  curl --fail --location --silent --show-error \
+    --output "$node_source_script" \
+    https://deb.nodesource.com/setup_24.x
+  sudo -E bash "$node_source_script"
   sudo apt-get update
   sudo apt-get install -y nodejs
 fi
