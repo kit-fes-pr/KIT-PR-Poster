@@ -94,18 +94,23 @@ const [assignmentByYear, assignmentByForm] = await Promise.all([
     : [],
 ]);
 
-const storeDocs = await queryDocs(db.collection('stores'));
-const storeRefs = storeDocs
-  .filter((doc) => {
-    const data = doc.data();
-    return (
-      eventIds.includes(data.eventId) ||
-      teamCodes.has(data.distributedBy) ||
-      teamCodes.has(data.createdByTeamCode)
-    );
-  })
-  .map((doc) => doc.ref);
-
+const storeRefs = [
+  ...new Map(
+    [
+      ...(await queryRefsWhereIn(db.collection('stores'), 'eventId', eventIds)),
+      ...(teamCodes.size
+        ? await queryRefsWhereIn(db.collection('stores'), 'distributedBy', Array.from(teamCodes))
+        : []),
+      ...(teamCodes.size
+        ? await queryRefsWhereIn(
+            db.collection('stores'),
+            'createdByTeamCode',
+            Array.from(teamCodes),
+          )
+        : []),
+    ].map((ref) => [ref.path, ref]),
+  ).values(),
+];
 const mockAreaRefs = await queryRefs(db.collection('areas').where('mockKey', '==', MOCK_KEY));
 const linkedMockAreaRefs = [];
 const teamAreaIdsByPath = new Map(teamDocs.map((doc) => [doc.ref.path, doc.data()?.areaId]));
