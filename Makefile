@@ -72,6 +72,18 @@ dev: updb
 	npm run dev
 
 build:
+	NEXT_PUBLIC_FIREBASE_API_KEY=demo-api-key \
+	NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=demo-kit-pr-poster.firebaseapp.com \
+	NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-kit-pr-poster \
+	NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=demo-kit-pr-poster.appspot.com \
+	NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789 \
+	NEXT_PUBLIC_FIREBASE_APP_ID=demo-app-id \
+	NEXT_PUBLIC_FIREBASE_USE_EMULATORS=true \
+	NEXT_PUBLIC_FIREBASE_EMULATOR_HOST=localhost \
+	FIREBASE_USE_EMULATORS=true \
+	FIREBASE_ADMIN_PROJECT_ID=demo-kit-pr-poster \
+	FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
+	FIRESTORE_EMULATOR_HOST=localhost:8080 \
 	npm run build
 
 fmt:
