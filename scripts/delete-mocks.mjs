@@ -31,6 +31,31 @@ async function queryDocs(query) {
   return snapshot.docs;
 }
 
+function chunk(values, size) {
+  const out = [];
+  for (let i = 0; i < values.length; i += size) {
+    out.push(values.slice(i, i + size));
+  }
+  return out;
+}
+
+async function queryDocsWhereIn(collectionRef, field, values) {
+  const uniqueValues = Array.from(new Set(values)).filter(Boolean);
+  if (uniqueValues.length === 0) return [];
+
+  const docs = [];
+  for (const group of chunk(uniqueValues, 10)) {
+    const snapshot = await collectionRef.where(field, 'in', group).get();
+    docs.push(...snapshot.docs);
+  }
+  return docs;
+}
+
+async function queryRefsWhereIn(collectionRef, field, values) {
+  const docs = await queryDocsWhereIn(collectionRef, field, values);
+  return docs.map((doc) => doc.ref);
+}
+
 async function deleteFormResponses(formRefs) {
   const responseRefs = [];
   for (const formRef of formRefs) {
