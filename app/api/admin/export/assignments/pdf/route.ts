@@ -12,6 +12,8 @@ type PdfRequestBody = {
   rows?: unknown;
 };
 
+const COL_WIDTHS = [80, 447];
+
 function normalizeString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -73,33 +75,21 @@ async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
     legendText: '○ = 班リーダー　□ = 運転手',
     header: `工大祭実行委員会-学外配布${input.year}`,
     sections: groups.map((group) => ({
-      label: group.team,
+      label: `${group.team}　配布日: ${group.rows[0]?.distributionDate || '-'}　配布時間: ${group.rows[0]?.distributionTime || '-'}`,
       count: group.rows.length,
       rows: group.rows,
     })),
     emptySectionLabel: '割り当てなし',
     columns: [
       {
-        title: '配布日',
-        width: 105,
-        getText: (row) => row.distributionDate || '-',
-        maxLines: 1,
-      },
-      {
-        title: '配布時間',
-        width: 75,
-        getText: (row) => row.distributionTime || '-',
-        maxLines: 1,
-      },
-      {
         title: '学年',
-        width: 65,
+        width: COL_WIDTHS[0],
         getText: (row) => (row.grade > 0 ? `${row.grade}年` : '-'),
         maxLines: 1,
       },
       {
         title: '氏名',
-        width: 282,
+        width: COL_WIDTHS[1],
         getText: (row) => {
           const markers = [row.isLeader ? '○' : '', row.isDriver ? '□' : '']
             .filter(Boolean)
