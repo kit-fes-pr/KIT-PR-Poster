@@ -44,12 +44,14 @@ help:
 	@printf "  admin  - Create an admin user in Emulator or production Firebase\n"
 
 up:
-	docker compose up --build
+	@docker compose up --build -d
+	@cleanup_done=0; cleanup() { if [ "$$cleanup_done" -eq 1 ]; then return; fi; cleanup_done=1; docker compose exec -T firebase firebase emulators:export --force /opt/firebase/data || true; docker compose down; }; trap cleanup INT TERM EXIT; log_status=0; docker compose logs -f || log_status=$$?; if [ "$$log_status" -eq 130 ] || [ "$$log_status" -eq 143 ]; then exit 0; fi; exit "$$log_status"
 
 updb:
 	docker compose up -d --build firebase
 
 down:
+	- docker compose exec -T firebase firebase emulators:export --force /opt/firebase/data
 	docker compose down
 
 dev: updb
