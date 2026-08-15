@@ -108,9 +108,9 @@ const storeRefs = storeDocs
 
 const mockAreaRefs = await queryRefs(db.collection('areas').where('mockKey', '==', MOCK_KEY));
 const linkedMockAreaRefs = [];
+const teamAreaIdsByPath = new Map(teamDocs.map((doc) => [doc.ref.path, doc.data()?.areaId]));
 for (const teamRef of teamRefs) {
-  const teamDoc = await teamRef.get();
-  const areaId = teamDoc.data()?.areaId;
+  const areaId = teamAreaIdsByPath.get(teamRef.path);
   if (typeof areaId === 'string' && areaId.startsWith(`${MOCK_KEY}-`)) {
     linkedMockAreaRefs.push(db.collection('areas').doc(areaId));
   }
