@@ -75,7 +75,7 @@ async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
     legendText: '○ = 班リーダー　□ = 運転手',
     header: `工大祭実行委員会-学外配布${input.year}`,
     sections: groups.map((group) => ({
-      label: `${group.team}　配布日: ${group.rows[0]?.distributionDate || '-'}　配布時間: ${group.rows[0]?.distributionTime || '-'}`,
+      label: `${group.team}　配布日: ${group.rows[0]?.distributionDate || '-'}　配布時間: ${group.rows[0]?.distributionTime || '-'}　メンバー数: `,
       count: group.rows.length,
       rows: group.rows,
     })),
