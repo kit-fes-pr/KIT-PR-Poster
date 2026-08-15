@@ -161,9 +161,14 @@ export function formatDistributionSlotDate(key: string): string {
 }
 
 export function formatDistributionSlotTime(key: string): string {
-  if (key.endsWith('_am')) return '午前';
-  if (key.endsWith('_pm')) return '午後';
-  return '-';
+  const match = key.match(/^(\d{4}-\d{2}-\d{2})_(am|pm)$/);
+  if (!match) return '-';
+
+  const [, datePart, period] = match;
+  const date = new Date(`${datePart}T00:00:00Z`);
+  if (isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== datePart) return '-';
+
+  return period === 'am' ? '午前' : '午後';
 }
 
 export function compareAvailabilitySlotKeys(a: string, b: string): number {
