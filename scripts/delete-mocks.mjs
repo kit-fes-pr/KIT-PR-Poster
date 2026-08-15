@@ -71,7 +71,7 @@ const eventIds = [...new Set([EVENT_ID, ...eventDocs.map((doc) => doc.id)])];
 
 const [teamByYear, teamByEvent, mockTeams] = await Promise.all([
   queryDocs(db.collection('teams').where('year', '==', MOCK_YEAR)),
-  queryDocs(db.collection('teams').where('eventId', 'in', eventIds.slice(0, 10))),
+  queryDocsWhereIn(db.collection('teams'), 'eventId', eventIds),
   queryDocs(db.collection('teams').where('mockKey', '==', MOCK_KEY)),
 ]);
 const teamDocs = [...teamByYear, ...teamByEvent, ...mockTeams];
