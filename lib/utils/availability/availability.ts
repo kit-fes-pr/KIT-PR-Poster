@@ -152,6 +152,11 @@ export function formatAvailabilitySlotLabel(key: string): string {
 export function formatDistributionSlotDate(key: string): string {
   const match = key.match(/^(\d{4})-(\d{2})-(\d{2})_(?:am|pm)$/);
   if (!match) return '-';
+
+  const datePart = `${match[1]}-${match[2]}-${match[3]}`;
+  const date = new Date(`${datePart}T00:00:00Z`);
+  if (isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== datePart) return '-';
+
   return `${match[1]}年${Number(match[2])}月${Number(match[3])}日`;
 }
 
