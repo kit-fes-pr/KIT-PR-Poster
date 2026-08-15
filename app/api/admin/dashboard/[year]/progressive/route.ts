@@ -3,6 +3,7 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { loadAreaMap } from '@/lib/server/team-area';
 import { buildMissingTeamAccessWindowPatch } from '@/lib/utils/team/team-access';
+import { compareTeamsByDistributionSlot } from '@/lib/utils/team/team-sort';
 
 /**
  * 段階的データ読み込みAPI - チャンク単位でデータを追加取得
@@ -84,7 +85,26 @@ export async function GET(request: NextRequest, context: { params: Promise<{ yea
         createdAtMs: doc.data().createdAt?.toMillis?.() || 0,
         updatedAtMs: doc.data().updatedAt?.toMillis?.() || 0,
       }))
-      .sort((a, b) => (b.updatedAtMs || b.createdAtMs) - (a.updatedAtMs || a.createdAtMs));
+      .sort((a, b) => {
+        const aData = a.doc.data();
+        const bData = b.doc.data();
+        const teamCompare = compareTeamsByDistributionSlot(
+          {
+            teamId: a.doc.id,
+            teamCode: aData.teamCode,
+            teamName: aData.teamName,
+            timeSlot: aData.timeSlot,
+          },
+          {
+            teamId: b.doc.id,
+            teamCode: bData.teamCode,
+            teamName: bData.teamName,
+            timeSlot: bData.timeSlot,
+          },
+        );
+        if (teamCompare !== 0) return teamCompare;
+        return (b.updatedAtMs || b.createdAtMs) - (a.updatedAtMs || a.createdAtMs);
+      });
 
     const pagedDocs = orderedTeams.slice(offset, offset + limit).map((item) => item.doc);
     const areaMap = await loadAreaMap();

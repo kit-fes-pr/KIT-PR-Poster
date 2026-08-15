@@ -149,6 +149,28 @@ export function formatAvailabilitySlotLabel(key: string): string {
   return `${dateLabel} ${period === 'am' ? '午前' : '午後'}`;
 }
 
+export function formatDistributionSlotDate(key: string): string {
+  const match = key.match(/^(\d{4})-(\d{2})-(\d{2})_(?:am|pm)$/);
+  if (!match) return '-';
+
+  const datePart = `${match[1]}-${match[2]}-${match[3]}`;
+  const date = new Date(`${datePart}T00:00:00Z`);
+  if (isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== datePart) return '-';
+
+  return `${match[1]}年${Number(match[2])}月${Number(match[3])}日`;
+}
+
+export function formatDistributionSlotTime(key: string): string {
+  const match = key.match(/^(\d{4}-\d{2}-\d{2})_(am|pm)$/);
+  if (!match) return '-';
+
+  const [, datePart, period] = match;
+  const date = new Date(`${datePart}T00:00:00Z`);
+  if (isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== datePart) return '-';
+
+  return period === 'am' ? '午前' : '午後';
+}
+
 export function compareAvailabilitySlotKeys(a: string, b: string): number {
   const parse = (value: string) => {
     const match = value.match(/^(\d{4}-\d{2}-\d{2})_(am|pm)$/);

@@ -3,6 +3,7 @@ import { adminAuth } from '@/lib/firebase-admin';
 import { buildSectionedTableReportPdf } from '@/lib/server/pdf/sectioned-table-report';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { formatDate } from '@/lib/utils/dateUtils';
+import { compareAvailabilitySlotKeys } from '@/lib/utils/availability/availability';
 import type { AssignmentExportRow } from '@/types';
 
 export const runtime = 'nodejs';
@@ -24,6 +25,9 @@ function normalizeRows(value: unknown): AssignmentExportRow[] {
     const source = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
     return {
       team: normalizeString(source.team),
+      distributionSlot: normalizeString(source.distributionSlot),
+      distributionDate: normalizeString(source.distributionDate),
+      distributionTime: normalizeString(source.distributionTime),
       grade: Number.isFinite(Number(source.grade)) ? Number(source.grade) : 0,
       name: normalizeString(source.name),
       isLeader: source.isLeader === true,
@@ -35,6 +39,11 @@ function normalizeRows(value: unknown): AssignmentExportRow[] {
 function sortRows(rows: AssignmentExportRow[]): AssignmentExportRow[] {
   const collator = new Intl.Collator('ja');
   return [...rows].sort((a, b) => {
+    const slotCompare = compareAvailabilitySlotKeys(
+      a.distributionSlot || '',
+      b.distributionSlot || '',
+    );
+    if (slotCompare !== 0) return slotCompare;
     const teamCompare = collator.compare(a.team, b.team);
     if (teamCompare !== 0) return teamCompare;
     if (a.isLeader !== b.isLeader) return a.isLeader ? -1 : 1;
@@ -73,7 +82,7 @@ async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
     legendText: '○ = 班リーダー　□ = 運転手',
     header: `工大祭実行委員会-学外配布${input.year}`,
     sections: groups.map((group) => ({
-      label: group.team,
+      label: `${group.team}　配布日: ${group.rows[0]?.distributionDate || '-'}　配布時間: ${group.rows[0]?.distributionTime || '-'}　メンバー数: `,
       count: group.rows.length,
       rows: group.rows,
     })),

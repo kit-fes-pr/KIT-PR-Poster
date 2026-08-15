@@ -3,12 +3,18 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.firebase
+    command: >-
+      sh -c 'mkdir -p /opt/firebase/data && exec firebase emulators:start
+      --project demo-kit-pr-poster --import=/opt/firebase/data
+      --export-on-exit=/opt/firebase/data'
     ports:
       - '4000:4000'
       - '8080:8080'
       - '9099:9099'
     volumes:
-      - firebase-data:/opt/firebase/data
+      - firebase-data:/opt/firebase
+    stop_signal: SIGINT
+    stop_grace_period: 60s
     restart: unless-stopped
 
   web:
@@ -45,3 +51,4 @@ services:
 
 volumes:
   firebase-data:
+    name: kit-pr-poseter_firebase-data
