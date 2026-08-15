@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help init init/mac install clean clean/all up updb down dev build fmt lint test ci admin
+.PHONY: help init init/mac install clean clean/all up updb down dev build fmt lint test ci admin mocks mocks/del
 
 ADMIN_ENV_FILE ?= .env
 
@@ -42,6 +42,8 @@ help:
 	@printf "  test   - Run build verification\n"
 	@printf "  ci     - Run format check, lint, and test\n"
 	@printf "  admin  - Create an admin user in Emulator or production Firebase\n"
+	@printf "  mocks  - Create the 2000-year Emulator mock data\n"
+	@printf "  mocks/del - Delete all 2000-year Emulator data\n"
 
 up:
 	@docker compose up --build -d
@@ -120,3 +122,9 @@ admin:
 	else \
 		node scripts/create-admin.mjs; \
 	fi
+
+mocks:
+	FIREBASE_USE_EMULATORS=true FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 FIRESTORE_EMULATOR_HOST=localhost:8080 node scripts/create-mocks.mjs
+
+mocks/del:
+	FIREBASE_USE_EMULATORS=true FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 FIRESTORE_EMULATOR_HOST=localhost:8080 node scripts/delete-mocks.mjs
