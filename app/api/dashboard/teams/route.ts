@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { loadAreaMap } from '@/lib/server/team-area';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
+import { compareTeamsByDistributionSlot } from '@/lib/utils/team/team-sort';
 import {
   getDashboardEventIdForYear,
   getTeamYearValue,
@@ -78,9 +79,7 @@ export async function GET(request: NextRequest) {
           !team.isOwnTeam && !!team.assignedArea && ownAdjacentAreas.has(team.assignedArea),
       }))
       .sort((a, b) => {
-        const yearCompare = Number(b.year || 0) - Number(a.year || 0);
-        if (yearCompare !== 0) return yearCompare;
-        return a.teamCode.localeCompare(b.teamCode, 'ja');
+        return compareTeamsByDistributionSlot(a, b);
       });
 
     return NextResponse.json({ teams });

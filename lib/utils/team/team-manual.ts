@@ -2,6 +2,7 @@ export type TeamManualRow = {
   teamId: string;
   teamName: string;
   teamCode: string;
+  timeSlot?: string;
 };
 
 export const TEAM_MANUAL_BASE_URL = 'https://kitfes-poster.vercel.app';
@@ -22,10 +23,12 @@ export function normalizeTeamManualRows(value: unknown): TeamManualRow[] {
   return value
     .map((row) => {
       const source = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+      const timeSlot = normalizeString(source.timeSlot);
       return {
         teamId: normalizeString(source.teamId || source.id),
         teamName: normalizeString(source.teamName),
         teamCode: normalizeString(source.teamCode),
+        ...(timeSlot ? { timeSlot } : {}),
       };
     })
     .filter((row) => row.teamName && row.teamCode);

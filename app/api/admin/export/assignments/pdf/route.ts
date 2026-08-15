@@ -3,6 +3,7 @@ import { adminAuth } from '@/lib/firebase-admin';
 import { buildSectionedTableReportPdf } from '@/lib/server/pdf/sectioned-table-report';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
 import { formatDate } from '@/lib/utils/dateUtils';
+import { compareAvailabilitySlotKeys } from '@/lib/utils/availability/availability';
 import type { AssignmentExportRow } from '@/types';
 
 export const runtime = 'nodejs';
@@ -24,6 +25,7 @@ function normalizeRows(value: unknown): AssignmentExportRow[] {
     const source = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
     return {
       team: normalizeString(source.team),
+      distributionSlot: normalizeString(source.distributionSlot),
       distributionDate: normalizeString(source.distributionDate),
       distributionTime: normalizeString(source.distributionTime),
       grade: Number.isFinite(Number(source.grade)) ? Number(source.grade) : 0,
@@ -37,6 +39,11 @@ function normalizeRows(value: unknown): AssignmentExportRow[] {
 function sortRows(rows: AssignmentExportRow[]): AssignmentExportRow[] {
   const collator = new Intl.Collator('ja');
   return [...rows].sort((a, b) => {
+    const slotCompare = compareAvailabilitySlotKeys(
+      a.distributionSlot || '',
+      b.distributionSlot || '',
+    );
+    if (slotCompare !== 0) return slotCompare;
     const teamCompare = collator.compare(a.team, b.team);
     if (teamCompare !== 0) return teamCompare;
     if (a.isLeader !== b.isLeader) return a.isLeader ? -1 : 1;

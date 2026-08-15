@@ -13,6 +13,7 @@ import {
   TEAM_MANUAL_BASE_URL,
   TeamManualRow,
 } from '@/lib/utils/team/team-manual';
+import { compareTeamsByDistributionSlot } from '@/lib/utils/team/team-sort';
 
 export const runtime = 'nodejs';
 
@@ -350,9 +351,7 @@ async function buildPdf(input: { year: string; rows: TeamManualRow[] }) {
   const fontEntry = await loadFontEntry();
   const font = await pdfDoc.embedFont(fontEntry.bytes, { subset: false });
   const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const rows = [...input.rows].sort((a, b) =>
-    new Intl.Collator('ja').compare(a.teamName, b.teamName),
-  );
+  const rows = [...input.rows].sort(compareTeamsByDistributionSlot);
 
   for (const [index, row] of rows.entries()) {
     const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);

@@ -17,6 +17,7 @@ import {
   buildTeamAccessWindowFromTimeSlot,
 } from '@/lib/utils/team/team-access';
 import { normalizeTeamTimeSlot } from '@/lib/utils/team/team';
+import { compareTeamsByDistributionSlot } from '@/lib/utils/team/team-sort';
 import { FirestoreCache } from '@/lib/utils/server-cache';
 import {
   generateAndReserveNextTeamCodeInTransaction,
@@ -222,7 +223,9 @@ export async function GET(request: NextRequest) {
         })
         .filter((team) => (team as Record<string, unknown>).isActive !== false);
       const countsByTeam = await loadMemberCountsByTeam();
-      const teams = attachMemberCounts(teamsWithoutCounts, countsByTeam);
+      const teams = attachMemberCounts(teamsWithoutCounts, countsByTeam).sort(
+        compareTeamsByDistributionSlot,
+      );
 
       return NextResponse.json({ teams });
     }
@@ -272,7 +275,9 @@ export async function GET(request: NextRequest) {
         : undefined;
 
     const countsByTeam = await loadMemberCountsByTeam(inferredYear);
-    const teams = attachMemberCounts(teamsWithoutCounts, countsByTeam);
+    const teams = attachMemberCounts(teamsWithoutCounts, countsByTeam).sort(
+      compareTeamsByDistributionSlot,
+    );
 
     return NextResponse.json({ teams });
   } catch (error) {

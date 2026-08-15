@@ -37,6 +37,7 @@ import { clearDashboardCache } from '@/lib/utils/dashboard/dashboard-cache';
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin';
 import { buildCsvContent, downloadCsvFile } from '@/lib/utils/export/export';
 import { buildNextTeamCode } from '@/lib/utils/team/team-code';
+import { compareTeamsByDistributionSlot } from '@/lib/utils/team/team-sort';
 import { compareJapaneseText, sortByGradeThenKanaThenName } from '@/lib/utils/sort';
 import { generateKana } from '@/lib/kanaUtils';
 import type {
@@ -597,11 +598,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
 
       if (res.ok) {
         const data: { teams: AssignmentTeam[] } = await res.json();
-        setTeams(
-          (data.teams || [])
-            .slice()
-            .sort((a, b) => compareAvailabilitySlotKeys(a.timeSlot || '', b.timeSlot || '')),
-        );
+        setTeams((data.teams || []).slice().sort(compareTeamsByDistributionSlot));
       }
     } catch (err) {
       console.error('チーム取得エラー:', err);
@@ -1062,6 +1059,7 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         const teamLabel = team.teamName || getTeamAreaLabel(team);
         return {
           team: teamLabel,
+          distributionSlot: team.timeSlot,
           distributionDate: formatDistributionSlotDate(team.timeSlot),
           distributionTime: formatDistributionSlotTime(team.timeSlot),
           grade: normalizeGrade(participant.grade),
@@ -1073,6 +1071,11 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       .filter(Boolean) as AssignmentExportRow[];
 
     return rows.sort((a, b) => {
+      const slotCompare = compareAvailabilitySlotKeys(
+        a.distributionSlot || '',
+        b.distributionSlot || '',
+      );
+      if (slotCompare !== 0) return slotCompare;
       const teamCompare = compareJapaneseText(a.team, b.team);
       if (teamCompare !== 0) return teamCompare;
       if (b.grade !== a.grade) return b.grade - a.grade;
