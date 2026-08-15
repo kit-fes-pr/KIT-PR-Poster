@@ -62,7 +62,7 @@ const teams = areas.map((area, index) => {
     timeSlot: slots[index],
     areaId: area.areaId,
     assignedArea: area.areaCode,
-    adjacentAreas: [],
+    adjacentAreas: area.adjacentAreas,
     eventId: EVENT_ID,
     year: MOCK_YEAR,
     isActive: true,
