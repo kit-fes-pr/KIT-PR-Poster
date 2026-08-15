@@ -10,6 +10,8 @@ import {
   buildAvailabilitySlotChoices,
   compareAvailabilitySlotKeys,
   formatAvailabilitySlotLabel,
+  formatDistributionSlotDate,
+  formatDistributionSlotTime,
   normalizeAvailabilitySlots,
   sortAvailabilitySlotKeys,
   toggleAvailabilitySelection,
@@ -1060,6 +1062,8 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
         const teamLabel = team.teamName || getTeamAreaLabel(team);
         return {
           team: teamLabel,
+          distributionDate: formatDistributionSlotDate(team.timeSlot),
+          distributionTime: formatDistributionSlotTime(team.timeSlot),
           grade: normalizeGrade(participant.grade),
           name: participant.name || '',
           isLeader: team.leaderId === participant.responseId,
@@ -1082,9 +1086,11 @@ export default function TeamAssignmentPage({ params }: { params: Promise<{ year:
       return;
     }
 
-    const header = ['チーム', '学年', '氏名', '役割'];
+    const header = ['チーム', '配布日', '配布時間', '学年', '氏名', '役割'];
     const data = buildAssignmentExportRows().map((r) => [
       r.team,
+      r.distributionDate || '-',
+      r.distributionTime || '-',
       r.grade ? `${r.grade}` : '',
       r.name,
       [r.isLeader ? '班リーダー' : '', r.isDriver ? '運転手' : ''].filter(Boolean).join(' / '),

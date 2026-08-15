@@ -6,6 +6,8 @@ import {
   buildAvailabilitySlotChoices,
   buildAvailabilitySlotKeysForDateRange,
   formatAvailabilitySlotLabel,
+  formatDistributionSlotDate,
+  formatDistributionSlotTime,
   isAvailableForAnySlot,
   normalizeAvailabilitySlotValue,
   summarizeAvailabilitySlots,
@@ -68,6 +70,14 @@ describe('availability utils', () => {
     assert.equal(formatAvailabilitySlotLabel(ALL_AVAILABLE_SLOT_KEY), '全て可能');
     assert.equal(formatAvailabilitySlotLabel(UNAVAILABLE_SLOT_KEY), '参加不可');
     assert.match(formatAvailabilitySlotLabel('2026-06-01_am'), /午前$/);
+  });
+
+  test('formatDistributionSlotDate and formatDistributionSlotTime format team distribution slots', () => {
+    assert.equal(formatDistributionSlotDate('2026-06-01_am'), '2026年6月1日');
+    assert.equal(formatDistributionSlotTime('2026-06-01_am'), '午前');
+    assert.equal(formatDistributionSlotTime('2026-06-01_pm'), '午後');
+    assert.equal(formatDistributionSlotDate('invalid'), '-');
+    assert.equal(formatDistributionSlotTime('invalid'), '-');
   });
 
   test('normalizeAvailabilitySlotValue accepts special and date keys only', () => {

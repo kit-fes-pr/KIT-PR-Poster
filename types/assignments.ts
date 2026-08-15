@@ -37,6 +37,8 @@ export interface AssignmentRecord {
 
 export interface AssignmentExportRow {
   team: string;
+  distributionDate?: string;
+  distributionTime?: string;
   grade: number;
   name: string;
   isLeader?: boolean;

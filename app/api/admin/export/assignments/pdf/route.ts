@@ -12,8 +12,6 @@ type PdfRequestBody = {
   rows?: unknown;
 };
 
-const COL_WIDTHS = [80, 447];
-
 function normalizeString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -24,6 +22,8 @@ function normalizeRows(value: unknown): AssignmentExportRow[] {
     const source = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
     return {
       team: normalizeString(source.team),
+      distributionDate: normalizeString(source.distributionDate),
+      distributionTime: normalizeString(source.distributionTime),
       grade: Number.isFinite(Number(source.grade)) ? Number(source.grade) : 0,
       name: normalizeString(source.name),
       isLeader: source.isLeader === true,
@@ -80,14 +80,26 @@ async function buildPdf(input: { year: string; rows: AssignmentExportRow[] }) {
     emptySectionLabel: '割り当てなし',
     columns: [
       {
+        title: '配布日',
+        width: 105,
+        getText: (row) => row.distributionDate || '-',
+        maxLines: 1,
+      },
+      {
+        title: '配布時間',
+        width: 75,
+        getText: (row) => row.distributionTime || '-',
+        maxLines: 1,
+      },
+      {
         title: '学年',
-        width: COL_WIDTHS[0],
+        width: 65,
         getText: (row) => (row.grade > 0 ? `${row.grade}年` : '-'),
         maxLines: 1,
       },
       {
         title: '氏名',
-        width: COL_WIDTHS[1],
+        width: 282,
         getText: (row) => {
           const markers = [row.isLeader ? '○' : '', row.isDriver ? '□' : '']
             .filter(Boolean)
