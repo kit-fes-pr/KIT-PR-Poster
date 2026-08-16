@@ -67,6 +67,10 @@ async function deleteFormResponses(formRefs) {
 const eventDocs = await queryDocs(
   db.collection('distributionEvents').where('year', '==', MOCK_YEAR),
 );
+const eventRefs = [
+  ...eventDocs.map((doc) => doc.ref),
+  db.collection('distributionEvents').doc(EVENT_ID),
+];
 const eventIds = [...new Set([EVENT_ID, ...eventDocs.map((doc) => doc.id)])];
 
 const [teamByYear, teamByEvent, mockTeams] = await Promise.all([
@@ -80,7 +84,7 @@ const teamCodes = new Set(teamDocs.map((doc) => doc.data().teamCode).filter(Bool
 
 const [formByYear, formByEvent, mockForms] = await Promise.all([
   queryDocs(db.collection('forms').where('year', '==', MOCK_YEAR)),
-  queryDocs(db.collection('forms').where('eventId', 'in', eventIds.slice(0, 10))),
+  queryDocsWhereIn(db.collection('forms'), 'eventId', eventIds),
   queryDocs(db.collection('forms').where('mockKey', '==', MOCK_KEY)),
 ]);
 const formDocs = [...formByYear, ...formByEvent, ...mockForms];
@@ -89,9 +93,7 @@ const formIds = [...new Set(formDocs.map((doc) => doc.id))];
 
 const [assignmentByYear, assignmentByForm] = await Promise.all([
   queryRefs(db.collection('assignments').where('year', '==', MOCK_YEAR)),
-  formIds.length
-    ? queryRefs(db.collection('assignments').where('formId', 'in', formIds.slice(0, 10)))
-    : [],
+  formIds.length ? queryRefsWhereIn(db.collection('assignments'), 'formId', formIds) : [],
 ]);
 
 const storeRefs = [
@@ -128,9 +130,7 @@ const deleted = {
   forms: await deleteRefs(formRefs),
   teams: await deleteRefs(teamRefs),
   areas: await deleteRefs([...mockAreaRefs, ...linkedMockAreaRefs]),
-  events: await deleteRefs(
-    await queryRefs(db.collection('distributionEvents').where('year', '==', MOCK_YEAR)),
-  ),
+  events: await deleteRefs(eventRefs),
 };
 
 console.log(JSON.stringify({ success: true, year: MOCK_YEAR, deleted }, null, 2));
