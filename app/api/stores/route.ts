@@ -211,6 +211,9 @@ export async function GET(request: NextRequest) {
     ) as unknown as Store[];
 
     stores = Array.from(new Map(stores.map((store) => [store.storeId, store])).values());
+    if (includeOld) {
+      stores = stores.filter((store) => eventIds.includes(store.eventId));
+    }
     if (includeOld && area) {
       stores = stores.filter((store) => store.areaCode === area);
     }
