@@ -65,6 +65,8 @@ export async function GET(request: NextRequest) {
       ? await getDashboardEventIdForYear(targetYear)
       : 'kodai2025';
     let filterTeamCode: string | null = null;
+    let filterTeamName: string | null = null;
+    let filterAssignedArea: string | null = null;
     let allowedAreas: string[] = [];
     let hasAllowedAreas = false;
 
@@ -84,6 +86,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: '班が見つかりません' }, { status: 404 });
       }
       filterTeamCode = typeof teamData?.teamCode === 'string' ? teamData.teamCode : null;
+      filterTeamName = typeof teamData?.teamName === 'string' ? teamData.teamName : null;
+      filterAssignedArea =
+        typeof teamData?.assignedArea === 'string' ? teamData.assignedArea : null;
     } else if (decodedToken.role === 'team' && scope !== 'all') {
       // チームログイン時の既定表示は自班の担当区域＋周辺区域に限定
       const teamDoc = await adminDb.collection('teams').doc(String(decodedToken.teamId)).get();
@@ -98,6 +103,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: '班が見つかりません' }, { status: 404 });
       }
       filterTeamCode = typeof decodedToken.teamCode === 'string' ? decodedToken.teamCode : null;
+      filterTeamName = typeof teamData?.teamName === 'string' ? teamData.teamName : null;
+      filterAssignedArea =
+        typeof teamData?.assignedArea === 'string' ? teamData.assignedArea : null;
       if (typeof teamData?.assignedArea === 'string' && teamData.assignedArea) {
         const adjacent = Array.isArray(teamData.adjacentAreas)
           ? teamData.adjacentAreas.filter(
@@ -122,6 +130,25 @@ export async function GET(request: NextRequest) {
     const eventIds = includeOld ? oldEventIds : targetEventId ? [targetEventId] : [];
     if (eventIds.length === 0) return NextResponse.json({ stores: [] });
 
+    const eventYears = new Map<string, number>();
+    if (includeOld) {
+      const eventDocs = await Promise.all(
+        eventIds.map((eventId) => adminDb.collection('distributionEvents').doc(eventId).get()),
+      );
+      eventDocs.forEach((eventDoc) => {
+        const eventYear = eventDoc.data()?.year;
+        const normalizedYear =
+          typeof eventYear === 'number'
+            ? eventYear
+            : typeof eventYear === 'string' && /^\d{4}$/.test(eventYear)
+              ? Number(eventYear)
+              : null;
+        if (normalizedYear !== null && Number.isInteger(normalizedYear)) {
+          eventYears.set(eventDoc.id, normalizedYear);
+        }
+      });
+    }
+
     const loadStoreSnapshots = async () => {
       if (eventIds.length <= 10) {
         let query = adminDb.collection('stores').where('eventId', 'in', eventIds);
@@ -141,21 +168,55 @@ export async function GET(request: NextRequest) {
     };
 
     const snapshots = await loadStoreSnapshots();
+    const filterTeamCodes = new Set(
+      filterTeamCode && filterTeamCode.trim() ? [filterTeamCode.trim()] : [],
+    );
+    if (includeOld && requestedTeamId && filterTeamName) {
+      // 班コードは年度ごとに発行されるため、選択中の班と同名・同区域の
+      // 過去年度班コードも集めて、過去の店舗履歴を漏れなく取得する。
+      const matchingTeamsSnapshot = await adminDb
+        .collection('teams')
+        .where('teamName', '==', filterTeamName)
+        .get();
+      matchingTeamsSnapshot.docs.forEach((teamDoc) => {
+        const teamData = teamDoc.data() as Record<string, unknown>;
+        const teamEventId = typeof teamData.eventId === 'string' ? teamData.eventId : '';
+        const sameName = teamData.teamName === filterTeamName;
+        const sameArea = !filterAssignedArea || teamData.assignedArea === filterAssignedArea;
+        const historicalCode =
+          typeof teamData.teamCode === 'string' ? teamData.teamCode.trim() : '';
+        if (eventIds.includes(teamEventId) && sameName && sameArea && historicalCode) {
+          filterTeamCodes.add(historicalCode);
+        }
+      });
+    }
     const historicalTeamSnapshots =
-      includeOld && filterTeamCode
-        ? await Promise.all([
-            adminDb
-              .collection('stores')
-              .where('createdByTeamCode', '==', filterTeamCode.trim())
-              .get(),
-            adminDb.collection('stores').where('distributedBy', '==', filterTeamCode.trim()).get(),
-          ])
+      includeOld && filterTeamCodes.size > 0
+        ? await Promise.all(
+            Array.from(filterTeamCodes).flatMap((teamCode) => [
+              adminDb.collection('stores').where('createdByTeamCode', '==', teamCode).get(),
+              adminDb.collection('stores').where('distributedBy', '==', teamCode).get(),
+            ]),
+          )
         : [];
     let stores = [...snapshots, ...historicalTeamSnapshots].flatMap((snapshot) =>
-      snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      snapshot.docs.map((doc) => {
+        const data = doc.data();
+        const eventId = typeof data.eventId === 'string' ? data.eventId : '';
+        return {
+          id: doc.id,
+          ...data,
+          ...(includeOld && eventYears.has(eventId)
+            ? { distributionYear: eventYears.get(eventId) }
+            : {}),
+        };
+      }),
     ) as unknown as Store[];
 
     stores = Array.from(new Map(stores.map((store) => [store.storeId, store])).values());
+    if (includeOld) {
+      stores = stores.filter((store) => eventIds.includes(store.eventId));
+    }
     if (includeOld && area) {
       stores = stores.filter((store) => store.areaCode === area);
     }
@@ -186,11 +247,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (filterTeamCode && requestedTeamId) {
+    if (requestedTeamId && filterTeamCodes.size > 0) {
       stores = stores.filter(
         (s: Store) =>
-          normalizeTeamCode(s.createdByTeamCode) === normalizeTeamCode(filterTeamCode) ||
-          normalizeTeamCode(s.distributedBy) === normalizeTeamCode(filterTeamCode),
+          filterTeamCodes.has(normalizeTeamCode(s.createdByTeamCode)) ||
+          filterTeamCodes.has(normalizeTeamCode(s.distributedBy)),
       );
     }
 

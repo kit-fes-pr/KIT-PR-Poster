@@ -17,6 +17,7 @@ export interface Store {
   notes?: string;
   registrationMethod: 'preset' | 'manual';
   eventId: string;
+  distributionYear?: number;
   createdAt: Date;
   updatedAt: Date;
 }
