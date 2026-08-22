@@ -255,9 +255,6 @@ export default function DashboardContent({
   );
 
   const totalStores = filteredStoreGroups.length;
-  const completedStores = filteredStores.filter(
-    (s) => s.distributionStatus === 'completed' || s.distributionStatus === 'revisit',
-  ).length;
   const failedStores = filteredStores.filter((s) => s.distributionStatus === 'failed').length;
   const posterPickupGroups = filteredStoreGroups.filter(({ histories }) =>
     histories.some(isPosterPickupStore),
