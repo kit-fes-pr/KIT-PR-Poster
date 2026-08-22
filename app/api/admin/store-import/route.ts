@@ -255,19 +255,22 @@ async function buildPreview(rows: ParsedStoreImportRow[], targetYear: number | n
           .collection('teams')
           .where('eventId', '==', event.eventId)
           .get();
-        return snapshot.docs.map((doc) => {
-          const data = doc.data() as Record<string, unknown>;
-          return {
-            teamId: doc.id,
-            teamCode: String(data.teamCode || ''),
-            teamName: String(data.teamName || ''),
-            assignedArea: String(data.assignedArea || ''),
-            areaId: String(data.areaId || ''),
-            eventId: event.eventId,
-            year: Number(data.year || event.year),
-            timeSlot: String(data.timeSlot || ''),
-          };
-        });
+        return snapshot.docs
+          .map((doc) => {
+            const data = doc.data() as Record<string, unknown>;
+            if (data.isActive === false) return null;
+            return {
+              teamId: doc.id,
+              teamCode: String(data.teamCode || ''),
+              teamName: String(data.teamName || ''),
+              assignedArea: String(data.assignedArea || ''),
+              areaId: String(data.areaId || ''),
+              eventId: event.eventId,
+              year: Number(data.year || event.year),
+              timeSlot: String(data.timeSlot || ''),
+            };
+          })
+          .filter((team): team is NonNullable<typeof team> => team !== null);
       }),
     )
   ).flat();
@@ -566,6 +569,26 @@ export async function POST(request: NextRequest) {
           { error: `${groupKey}: 割り当てるチームを選択してください` },
           { status: 400 },
         );
+      }
+
+      // UIから班指定が届かない場合も、同年度・同区域の有効な既存班を優先する。
+      // ここで新規班を作ると、店舗だけが別の班コードになり班別表示から外れるため。
+      if (assignment.create !== true) {
+        const existingTeamsSnapshot = await adminDb
+          .collection('teams')
+          .where('eventId', '==', firstPayload.eventId)
+          .where('assignedArea', '==', firstPayload.areaCode)
+          .limit(20)
+          .get();
+        const existingTeam = existingTeamsSnapshot.docs.find((teamDoc) => {
+          const teamData = teamDoc.data() as Record<string, unknown>;
+          return teamData.isActive !== false && typeof teamData.teamCode === 'string';
+        });
+        if (existingTeam) {
+          const teamData = existingTeam.data() as Record<string, unknown>;
+          teamCodesByGroup.set(groupKey, String(teamData.teamCode).trim());
+          continue;
+        }
       }
 
       const eventSnapshot = eventSnapshots.get(firstPayload.row.year);

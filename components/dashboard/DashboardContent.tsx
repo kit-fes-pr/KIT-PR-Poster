@@ -35,6 +35,11 @@ type DashboardTeam = {
   isOwnTeam?: boolean;
 };
 
+type StoreGroup = {
+  store: Store;
+  histories: Store[];
+};
+
 const isPosterPickupStore = (store: Store) =>
   store.requiresPosterPickup === true || store.distributionStatus === 'revisit';
 
@@ -174,37 +179,88 @@ export default function DashboardContent({
 
   const filteredStores: Store[] = useMemo(() => {
     const list: Store[] = storesData?.stores || [];
-    const filtered = list.filter((store) => {
-      const displayStatus =
-        store.distributionStatus === 'revisit' ? 'completed' : store.distributionStatus;
+    const groups = includeOld
+      ? Array.from(
+          list
+            .reduce((groupMap, store) => {
+              const key = `${store.storeNameKana || store.storeName}\u0000${store.addressKana || store.address}`;
+              const current = groupMap.get(key);
+              if (current) current.histories.push(store);
+              else groupMap.set(key, { store, histories: [store] });
+              return groupMap;
+            }, new Map<string, StoreGroup>())
+            .values(),
+        ).map((group) => {
+          group.histories.sort((a, b) => (b.distributionYear || 0) - (a.distributionYear || 0));
+          return { ...group, store: group.histories[0] || group.store };
+        })
+      : list.map((store) => ({ store, histories: [store] }));
+    const filtered = groups.filter(({ store, histories }) => {
       const matchesStatus =
         filterStatus === 'all' ||
-        (filterStatus === 'pickup' ? isPosterPickupStore(store) : displayStatus === filterStatus);
+        histories.some((history) => {
+          const displayStatus =
+            history.distributionStatus === 'revisit' ? 'completed' : history.distributionStatus;
+          return filterStatus === 'pickup'
+            ? isPosterPickupStore(history)
+            : displayStatus === filterStatus;
+        });
       const matchesSearch =
         store.storeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         store.address.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesStatus && matchesSearch;
     });
-    return filtered.sort((a, b) => {
-      const aKana = (a.storeNameKana || a.storeName || '').toString();
-      const bKana = (b.storeNameKana || b.storeName || '').toString();
-      const nameCmp = aKana.localeCompare(bKana, 'ja');
-      if (nameCmp !== 0) return nameCmp;
-      const aAddr = (a.addressKana || a.address || '').toString();
-      const bAddr = (b.addressKana || b.address || '').toString();
-      return aAddr.localeCompare(bAddr, 'ja');
-    });
-  }, [storesData, filterStatus, searchQuery]);
+    return filtered
+      .sort((a, b) => {
+        const storeA = a.store;
+        const storeB = b.store;
+        const aKana = (storeA.storeNameKana || storeA.storeName || '').toString();
+        const bKana = (storeB.storeNameKana || storeB.storeName || '').toString();
+        const nameCmp = aKana.localeCompare(bKana, 'ja');
+        if (nameCmp !== 0) return nameCmp;
+        const aAddr = (storeA.addressKana || storeA.address || '').toString();
+        const bAddr = (storeB.addressKana || storeB.address || '').toString();
+        return aAddr.localeCompare(bAddr, 'ja');
+      })
+      .map(({ store }) => store);
+  }, [includeOld, storesData, filterStatus, searchQuery]);
 
-  const totalStores = filteredStores.length;
+  const storeGroups: StoreGroup[] = useMemo(() => {
+    const list: Store[] = storesData?.stores || [];
+    if (!includeOld) return list.map((store) => ({ store, histories: [store] }));
+    return Array.from(
+      list
+        .reduce((groupMap, store) => {
+          const key = `${store.storeNameKana || store.storeName}\u0000${store.addressKana || store.address}`;
+          const current = groupMap.get(key);
+          if (current) current.histories.push(store);
+          else groupMap.set(key, { store, histories: [store] });
+          return groupMap;
+        }, new Map<string, StoreGroup>())
+        .values(),
+    ).map((group) => {
+      const histories = [...group.histories].sort(
+        (a, b) => (b.distributionYear || 0) - (a.distributionYear || 0),
+      );
+      return { store: histories[0] || group.store, histories };
+    });
+  }, [includeOld, storesData]);
+
+  const filteredStoreGroups = useMemo(
+    () =>
+      filteredStores
+        .map((store) => storeGroups.find((group) => group.store.storeId === store.storeId))
+        .filter(Boolean) as StoreGroup[],
+    [filteredStores, storeGroups],
+  );
+
+  const totalStores = filteredStoreGroups.length;
   const completedStores = filteredStores.filter(
     (s) => s.distributionStatus === 'completed' || s.distributionStatus === 'revisit',
   ).length;
   const failedStores = filteredStores.filter((s) => s.distributionStatus === 'failed').length;
-  const posterPickupStores = filteredStores.filter(isPosterPickupStore);
-  const distributedStoreHistory = (storesData?.stores || []).filter(
-    (store: Store) =>
-      store.distributionStatus === 'completed' || store.distributionStatus === 'revisit',
+  const posterPickupGroups = filteredStoreGroups.filter(({ histories }) =>
+    histories.some(isPosterPickupStore),
   );
   const totalDistributedCount = filteredStores.reduce(
     (sum, s) => sum + (Number(s.distributedCount) || 0),
@@ -472,7 +528,7 @@ export default function DashboardContent({
           <div className="rounded-lg bg-white p-4 shadow sm:p-6">
             <h3 className="text-sm font-medium text-gray-500 sm:text-base">回収対象</h3>
             <p className="mt-1 text-2xl font-bold text-yellow-600 sm:text-3xl">
-              {posterPickupStores.length}
+              {posterPickupGroups.length}
             </p>
           </div>
         </div>
@@ -502,17 +558,17 @@ export default function DashboardContent({
           </div>
         )}
 
-        {posterPickupStores.length > 0 && (
+        {posterPickupGroups.length > 0 && (
           <div className="mb-4 rounded-lg bg-white shadow lg:mb-6">
             <div className="border-b border-gray-200 px-4 py-4 sm:px-6">
               <h2 className="text-base font-semibold text-gray-900">掲示協力店舗（回収対象）</h2>
               <p className="mt-1 text-sm text-gray-500">
-                ポスターを掲示してもらえた店舗を確認できます（{posterPickupStores.length}件）
+                ポスターを掲示してもらえた店舗を確認できます（{posterPickupGroups.length}件）
               </p>
             </div>
             <div className="p-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {posterPickupStores.map((store) => (
+                {posterPickupGroups.map(({ store }) => (
                   <div key={store.storeId} className="rounded-lg border border-yellow-200 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -613,16 +669,19 @@ export default function DashboardContent({
 
           <div className="overflow-visible">
             <div className="space-y-2 p-4">
-              {filteredStores.map((store) => (
+              {filteredStoreGroups.map(({ store, histories }) => (
                 <div
                   key={store.storeId}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setMapStoreId(store.storeId)}
+                  onClick={() =>
+                    includeOld ? setDetailsStoreId(store.storeId) : setMapStoreId(store.storeId)
+                  }
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      setMapStoreId(store.storeId);
+                      if (includeOld) setDetailsStoreId(store.storeId);
+                      else setMapStoreId(store.storeId);
                     }
                   }}
                   className={`relative rounded-lg border border-gray-200 p-4 ${
@@ -650,6 +709,11 @@ export default function DashboardContent({
                       </div>
                       {store.notes && (
                         <p className="text-xs text-gray-500 mt-1">備考: {store.notes}</p>
+                      )}
+                      {includeOld && (
+                        <p className="mt-2 text-xs font-medium text-indigo-700">
+                          {histories.length}年度分の配布情報を表示
+                        </p>
                       )}
                     </div>
                     <div
@@ -864,7 +928,84 @@ export default function DashboardContent({
         </Modal>
       )}
 
+      {includeOld &&
+        detailsStoreId &&
+        (() => {
+          const group = storeGroups.find(({ store }) => store.storeId === detailsStoreId);
+          if (!group) return null;
+          return (
+            <Modal
+              open
+              onClose={() => setDetailsStoreId(null)}
+              panelClassName="max-w-2xl"
+              contentClassName="p-6"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">{group.store.storeName}</h2>
+                  <p className="mt-1 text-sm text-gray-500">{group.store.address}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDetailsStoreId(null)}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  閉じる
+                </button>
+              </div>
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold text-gray-900">年度別の配布情報</h3>
+                <div className="mt-3 space-y-3">
+                  {group.histories.map((history) => (
+                    <div
+                      key={history.storeId}
+                      className="rounded-lg border border-gray-200 bg-gray-50 p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-gray-900">
+                          {history.distributionYear ||
+                            history.eventId.match(/(\d{4})$/)?.[1] ||
+                            '-'}
+                          年度
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs ${getStatusColor(history.distributionStatus)}`}
+                        >
+                          {getStatusText(history.distributionStatus)}
+                        </span>
+                      </div>
+                      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                        <div>
+                          <dt className="text-xs text-gray-500">配布枚数</dt>
+                          <dd className="font-medium text-gray-900">
+                            {history.distributedCount || 0}枚
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-gray-500">担当班</dt>
+                          <dd className="font-medium text-gray-900">
+                            {history.distributedBy || history.createdByTeamCode || '-'}
+                          </dd>
+                        </div>
+                      </dl>
+                      {history.failureReason && (
+                        <p className="mt-2 text-sm text-red-700">
+                          配布不可理由: {history.failureReason}
+                        </p>
+                      )}
+                      {history.notes && (
+                        <p className="mt-2 text-sm text-gray-600">備考: {history.notes}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Modal>
+          );
+        })()}
+
       {!readOnly &&
+        !includeOld &&
         detailsStoreId &&
         (() => {
           const store = (storesData?.stores || []).find((s: Store) => s.storeId === detailsStoreId);
