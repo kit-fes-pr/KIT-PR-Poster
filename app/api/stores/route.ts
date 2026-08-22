@@ -174,8 +174,11 @@ export async function GET(request: NextRequest) {
     if (includeOld && requestedTeamId && filterTeamName) {
       // 班コードは年度ごとに発行されるため、選択中の班と同名・同区域の
       // 過去年度班コードも集めて、過去の店舗履歴を漏れなく取得する。
-      const allTeamsSnapshot = await adminDb.collection('teams').get();
-      allTeamsSnapshot.docs.forEach((teamDoc) => {
+      const matchingTeamsSnapshot = await adminDb
+        .collection('teams')
+        .where('teamName', '==', filterTeamName)
+        .get();
+      matchingTeamsSnapshot.docs.forEach((teamDoc) => {
         const teamData = teamDoc.data() as Record<string, unknown>;
         const teamEventId = typeof teamData.eventId === 'string' ? teamData.eventId : '';
         const sameName = teamData.teamName === filterTeamName;
