@@ -161,6 +161,14 @@ function createStoreMarkerElement(store: Store) {
   return marker;
 }
 
+function createCurrentLocationElement() {
+  const marker = document.createElement('div');
+  marker.className =
+    'h-4 w-4 rounded-full border-2 border-white bg-blue-500 shadow ring-2 ring-blue-500/35';
+  marker.setAttribute('aria-label', '現在地');
+  return marker;
+}
+
 function hasStoredLocation(store: Store) {
   return Number.isFinite(store.latitude) && Number.isFinite(store.longitude);
 }
@@ -236,6 +244,7 @@ export function StoreDistributionMap({
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<MapLibreMarker[]>([]);
+  const currentLocationMarkerRef = useRef<MapLibreMarker | null>(null);
   const addModeRef = useRef(addMode);
   const onSelectCreateLocationRef = useRef(onSelectCreateLocation);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -310,6 +319,8 @@ export function StoreDistributionMap({
       cancelled = true;
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
+      currentLocationMarkerRef.current?.remove();
+      currentLocationMarkerRef.current = null;
       mapInstanceRef.current?.remove();
       mapInstanceRef.current = null;
     };
@@ -323,6 +334,44 @@ export function StoreDistributionMap({
     observer.observe(mapRef.current);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (status !== 'ready') return;
+    if (!navigator.geolocation) {
+      setMapMessage('このブラウザでは現在地を取得できません');
+      return;
+    }
+
+    const map = mapInstanceRef.current;
+    const maplibregl = window.maplibregl;
+    if (!map || !maplibregl) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const location: LatLngLiteral = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        const center: [number, number] = [location.lng, location.lat];
+        if (currentLocationMarkerRef.current) {
+          currentLocationMarkerRef.current.setLngLat(center);
+        } else {
+          currentLocationMarkerRef.current = new maplibregl.Marker({
+            element: createCurrentLocationElement(),
+          })
+            .setLngLat(center)
+            .setPopup(new maplibregl.Popup({ offset: 12 }).setText('現在地'))
+            .addTo(map);
+        }
+      },
+      () => {
+        setMapMessage('現在地を表示するにはブラウザの位置情報を許可してください。');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [status]);
 
   useEffect(() => {
     if (status !== 'ready') return;
