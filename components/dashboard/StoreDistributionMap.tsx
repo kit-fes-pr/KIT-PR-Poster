@@ -245,6 +245,8 @@ export function StoreDistributionMap({
   const mapInstanceRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<MapLibreMarker[]>([]);
   const currentLocationMarkerRef = useRef<MapLibreMarker | null>(null);
+  const currentLocationRef = useRef<LatLngLiteral | null>(null);
+  const hasCenteredCurrentLocationRef = useRef(false);
   const addModeRef = useRef(addMode);
   const onSelectCreateLocationRef = useRef(onSelectCreateLocation);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -253,6 +255,8 @@ export function StoreDistributionMap({
   const [locatedStores, setLocatedStores] = useState<StoreWithLocation[]>([]);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
   const [isResolving, setIsResolving] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [isTrackingLocation, setIsTrackingLocation] = useState(false);
   const [mapMessage, setMapMessage] = useState('');
 
   const visibleStores = useMemo(() => {
@@ -277,7 +281,7 @@ export function StoreDistributionMap({
           container: mapRef.current,
           style: openFreeMapStyleUrl,
           center: [defaultCenter.lng, defaultCenter.lat],
-          zoom: 13,
+          zoom: 15,
           attributionControl: false,
         });
         map.addControl(new window.maplibregl.AttributionControl({ compact: true }));
@@ -346,6 +350,7 @@ export function StoreDistributionMap({
     const maplibregl = window.maplibregl;
     if (!map || !maplibregl) return;
 
+    setIsTrackingLocation(true);
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         const location: LatLngLiteral = {
@@ -353,6 +358,11 @@ export function StoreDistributionMap({
           lng: position.coords.longitude,
         };
         const center: [number, number] = [location.lng, location.lat];
+        currentLocationRef.current = location;
+        if (!hasCenteredCurrentLocationRef.current) {
+          setMapView(map, location, 13);
+          hasCenteredCurrentLocationRef.current = true;
+        }
         if (currentLocationMarkerRef.current) {
           currentLocationMarkerRef.current.setLngLat(center);
         } else {
@@ -363,14 +373,19 @@ export function StoreDistributionMap({
             .setPopup(new maplibregl.Popup({ offset: 12 }).setText('現在地'))
             .addTo(map);
         }
+        setIsTrackingLocation(false);
       },
       () => {
+        setIsTrackingLocation(false);
         setMapMessage('現在地を表示するにはブラウザの位置情報を許可してください。');
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
     );
 
-    return () => navigator.geolocation.clearWatch(watchId);
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      setIsTrackingLocation(false);
+    };
   }, [status]);
 
   useEffect(() => {
@@ -460,12 +475,59 @@ export function StoreDistributionMap({
       markersRef.current.push(marker);
     });
 
-    if (visibleStores[0]) {
+    if (visibleStores[0] && !hasCenteredCurrentLocationRef.current) {
       setMapView(map, visibleStores[0].location, visibleStores.length === 1 ? 17 : 13);
     }
   }, [visibleStores]);
 
   const selectedStore = visibleStores.find(({ store }) => store.storeId === selectedStoreId);
+
+  const showCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setMapMessage('このブラウザでは現在地を取得できません');
+      return;
+    }
+    const map = mapInstanceRef.current;
+    if (!map || !window.maplibregl) {
+      setMapMessage('地図の読み込み後に現在地を取得してください');
+      return;
+    }
+
+    setIsLocating(true);
+    setMapMessage('');
+    if (currentLocationRef.current) {
+      map.setCenter([currentLocationRef.current.lng, currentLocationRef.current.lat]);
+      setIsLocating(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const location: LatLngLiteral = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        currentLocationRef.current = location;
+        if (currentLocationMarkerRef.current) {
+          currentLocationMarkerRef.current.setLngLat([location.lng, location.lat]);
+        } else {
+          currentLocationMarkerRef.current = new window.maplibregl!.Marker({
+            element: createCurrentLocationElement(),
+          })
+            .setLngLat([location.lng, location.lat])
+            .setPopup(new window.maplibregl!.Popup({ offset: 12 }).setText('現在地'))
+            .addTo(map);
+        }
+        map.setCenter([location.lng, location.lat]);
+        setIsLocating(false);
+      },
+      () => {
+        setMapMessage('現在地を取得できませんでした。ブラウザの位置情報許可を確認してください。');
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    );
+  };
 
   return (
     <div className="rounded-lg bg-white shadow">
@@ -479,17 +541,27 @@ export function StoreDistributionMap({
             </p>
             {mapMessage && <p className="mt-1 text-xs text-gray-600">{mapMessage}</p>}
           </div>
-          <select
-            value={filterStatus}
-            onChange={(event) => setFilterStatus(event.target.value as MapStatus)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm md:w-44"
-          >
-            <option value="all">すべて</option>
-            <option value="pending">未配布</option>
-            <option value="completed">配布済み</option>
-            <option value="failed">配布不可</option>
-            <option value="pickup">回収対象</option>
-          </select>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={showCurrentLocation}
+              disabled={status !== 'ready' || isLocating || isTrackingLocation}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {isLocating || isTrackingLocation ? '取得中...' : '現在地に戻る'}
+            </button>
+            <select
+              value={filterStatus}
+              onChange={(event) => setFilterStatus(event.target.value as MapStatus)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm md:w-44"
+            >
+              <option value="all">すべて</option>
+              <option value="pending">未配布</option>
+              <option value="completed">配布済み</option>
+              <option value="failed">配布不可</option>
+              <option value="pickup">回収対象</option>
+            </select>
+          </div>
         </div>
         {addMode && (
           <div className="mt-3 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-800">
