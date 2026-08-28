@@ -90,6 +90,17 @@ export default function DistributionSettingsPage({
     () => buildAvailabilitySlotChoices(distributionStartDate, distributionEndDate),
     [distributionStartDate, distributionEndDate],
   );
+  const currentSettingsSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        eventName,
+        distributionStartDate,
+        distributionEndDate,
+        selectedSlots,
+      }),
+    [eventName, distributionEndDate, distributionStartDate, selectedSlots],
+  );
+  const isDirty = hasLoadedRef.current && currentSettingsSnapshot !== lastSavedSnapshotRef.current;
 
   useEffect(() => {
     if (!resolvedParams || !user || authLoading) return;
@@ -565,8 +576,14 @@ export default function DistributionSettingsPage({
                 </div>
 
                 <div className="flex items-center justify-end gap-3 pt-2">
-                  {saveStatus === 'saved' && (
+                  {saveStatus === 'saving' && (
+                    <span className="text-xs text-gray-500">保存中...</span>
+                  )}
+                  {saveStatus === 'saved' && !isDirty && (
                     <span className="text-xs text-gray-500">保存済み</span>
+                  )}
+                  {saveStatus === 'saved' && isDirty && (
+                    <span className="text-xs text-amber-600">未保存の変更があります</span>
                   )}
                   {saveStatus === 'error' && (
                     <span className="text-xs text-red-600">保存できませんでした</span>
