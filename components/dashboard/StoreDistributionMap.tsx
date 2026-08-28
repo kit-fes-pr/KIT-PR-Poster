@@ -162,7 +162,8 @@ function createStoreMarkerElement(store: Store) {
 }
 
 function createCurrentLocationElement() {
-  const marker = document.createElement('div');
+  const marker = document.createElement('button');
+  marker.type = 'button';
   marker.className =
     'h-4 w-4 rounded-full border-2 border-white bg-blue-500 shadow ring-2 ring-blue-500/35';
   marker.setAttribute('aria-label', '現在地');
