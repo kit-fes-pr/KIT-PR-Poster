@@ -80,7 +80,6 @@ export default function DistributionSettingsPage({
   const [teamSlotDrafts, setTeamSlotDrafts] = useState<Record<string, string>>({});
   const [applyingTeamSlots, setApplyingTeamSlots] = useState(false);
   const hasLoadedRef = useRef(false);
-  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedSnapshotRef = useRef<string>('');
 
   useEffect(() => {
@@ -91,6 +90,17 @@ export default function DistributionSettingsPage({
     () => buildAvailabilitySlotChoices(distributionStartDate, distributionEndDate),
     [distributionStartDate, distributionEndDate],
   );
+  const currentSettingsSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        eventName,
+        distributionStartDate,
+        distributionEndDate,
+        selectedSlots,
+      }),
+    [eventName, distributionEndDate, distributionStartDate, selectedSlots],
+  );
+  const isDirty = hasLoadedRef.current && currentSettingsSnapshot !== lastSavedSnapshotRef.current;
 
   useEffect(() => {
     if (!resolvedParams || !user || authLoading) return;
@@ -186,144 +196,134 @@ export default function DistributionSettingsPage({
     });
   }, [allChoices]);
 
-  const persistSettings = useCallback(
-    async (silent = false) => {
-      if (!resolvedParams || !user) return false;
+  const persistSettings = useCallback(async () => {
+    if (!resolvedParams || !user) return false;
 
-      if (!distributionStartDate || !distributionEndDate) {
-        if (!silent) {
-          setError('配布日を入力してください');
-        }
+    if (!distributionStartDate || !distributionEndDate) {
+      setError('配布日を入力してください');
+      setSaveStatus('error');
+      return false;
+    }
+
+    const validSlots = selectedSlots.filter((slot) =>
+      allChoices.some((choice) => choice.key === slot),
+    );
+    if (validSlots.length === 0) {
+      setError('午前/午後を一つ以上選択してください');
+      setSaveStatus('error');
+      return false;
+    }
+
+    try {
+      setError('');
+      setSaveStatus('saving');
+
+      const token = await user.getIdToken();
+      const eventId = eventData?.id || `kodai${resolvedParams.year}`;
+
+      const eventRes = await fetch('/api/admin/events', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: eventId,
+          year: Number(resolvedParams.year),
+          eventName,
+          distributionStartDate,
+          distributionEndDate,
+          distributionAvailabilitySlots: validSlots,
+        }),
+      });
+
+      const eventJson = await eventRes.json().catch(() => null);
+      if (!eventRes.ok) {
+        setError(eventJson?.error || 'イベント設定の保存に失敗しました');
         setSaveStatus('error');
         return false;
       }
 
-      const validSlots = selectedSlots.filter((slot) =>
-        allChoices.some((choice) => choice.key === slot),
-      );
-      if (validSlots.length === 0) {
-        if (!silent) {
-          setError('午前/午後を一つ以上選択してください');
-        }
-        setSaveStatus('error');
-        return false;
-      }
+      setEventData(eventJson.data as EventSummary);
+      setSelectedSlots(validSlots);
 
-      try {
-        if (!silent) {
-          setError('');
-        }
-        setSaveStatus('saving');
-
-        const token = await user.getIdToken();
-        const eventId = eventData?.id || `kodai${resolvedParams.year}`;
-
-        const eventRes = await fetch('/api/admin/events', {
+      if (currentForm) {
+        const carUsageVisibleFromGrade =
+          currentForm.fields.find((field) => field.fieldId === 'carUsage')?.visibleFromGrade ?? 1;
+        const formRes = await fetch(`/api/forms/${currentForm.formId}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            id: eventId,
-            year: Number(resolvedParams.year),
-            eventName,
-            distributionStartDate,
-            distributionEndDate,
-            distributionAvailabilitySlots: validSlots,
+            title: currentForm.title,
+            description: currentForm.description || '',
+            isActive: currentForm.isActive,
+            fields: [
+              {
+                fieldId: 'availability',
+                type: 'checkbox',
+                label: '参加可能日時',
+                placeholder: '参加可能な日時を選択してください',
+                required: true,
+                options: buildFormAvailabilityOptions(validSlots),
+                order: 0,
+              },
+              {
+                fieldId: 'carUsage',
+                type: 'radio',
+                label: '車の運転ができますか',
+                required: true,
+                visibleFromGrade: carUsageVisibleFromGrade,
+                options: ['運転できる', '免許はあるが運転しない', '免許を持っていない'],
+                order: 1,
+              },
+              {
+                fieldId: 'remarks',
+                type: 'textarea',
+                label: '備考',
+                placeholder: 'その他連絡事項があればご記入ください',
+                required: false,
+                order: 2,
+              },
+            ],
           }),
         });
 
-        const eventJson = await eventRes.json().catch(() => null);
-        if (!eventRes.ok) {
-          setError(eventJson?.error || 'イベント設定の保存に失敗しました');
+        const formJson = await formRes.json().catch(() => null);
+        if (!formRes.ok) {
+          setError(formJson?.error || 'フォームの選択肢同期に失敗しました');
           setSaveStatus('error');
           return false;
         }
-
-        setEventData(eventJson.data as EventSummary);
-        setSelectedSlots(validSlots);
-
-        if (currentForm) {
-          const carUsageVisibleFromGrade =
-            currentForm.fields.find((field) => field.fieldId === 'carUsage')?.visibleFromGrade ?? 1;
-          const formRes = await fetch(`/api/forms/${currentForm.formId}`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              title: currentForm.title,
-              description: currentForm.description || '',
-              isActive: currentForm.isActive,
-              fields: [
-                {
-                  fieldId: 'availability',
-                  type: 'checkbox',
-                  label: '参加可能日時',
-                  placeholder: '参加可能な日時を選択してください',
-                  required: true,
-                  options: buildFormAvailabilityOptions(validSlots),
-                  order: 0,
-                },
-                {
-                  fieldId: 'carUsage',
-                  type: 'radio',
-                  label: '車の運転ができますか',
-                  required: true,
-                  visibleFromGrade: carUsageVisibleFromGrade,
-                  options: ['運転できる', '免許はあるが運転しない', '免許を持っていない'],
-                  order: 1,
-                },
-                {
-                  fieldId: 'remarks',
-                  type: 'textarea',
-                  label: '備考',
-                  placeholder: 'その他連絡事項があればご記入ください',
-                  required: false,
-                  order: 2,
-                },
-              ],
-            }),
-          });
-
-          const formJson = await formRes.json().catch(() => null);
-          if (!formRes.ok) {
-            setError(formJson?.error || 'フォームの選択肢同期に失敗しました');
-            setSaveStatus('error');
-            return false;
-          }
-        }
-
-        lastSavedSnapshotRef.current = JSON.stringify({
-          eventName,
-          distributionStartDate,
-          distributionEndDate,
-          selectedSlots: validSlots,
-        });
-        setSaveStatus('saved');
-        return true;
-      } catch (err) {
-        console.error(err);
-        setError('イベント設定の保存に失敗しました');
-        setSaveStatus('error');
-        return false;
-      } finally {
       }
-    },
-    [
-      allChoices,
-      currentForm,
-      distributionEndDate,
-      distributionStartDate,
-      eventData?.id,
-      eventName,
-      resolvedParams,
-      selectedSlots,
-      user,
-    ],
-  );
+
+      lastSavedSnapshotRef.current = JSON.stringify({
+        eventName,
+        distributionStartDate,
+        distributionEndDate,
+        selectedSlots: validSlots,
+      });
+      setSaveStatus('saved');
+      return true;
+    } catch (err) {
+      console.error(err);
+      setError('イベント設定の保存に失敗しました');
+      setSaveStatus('error');
+      return false;
+    }
+  }, [
+    allChoices,
+    currentForm,
+    distributionEndDate,
+    distributionStartDate,
+    eventData?.id,
+    eventName,
+    resolvedParams,
+    selectedSlots,
+    user,
+  ]);
 
   const getSavedSnapshot = useCallback(() => {
     try {
@@ -365,20 +365,33 @@ export default function DistributionSettingsPage({
 
   const handleDistributionStartDateChange = (value: string) => {
     setDistributionStartDate(value);
-    if (!hasLoadedRef.current || teams.length === 0) return;
-    const saved = getSavedSnapshot();
-    if (value !== saved.distributionStartDate) {
-      openTeamSlotModalForDateChange(value, distributionEndDate || value);
-    }
   };
 
   const handleDistributionEndDateChange = (value: string) => {
     setDistributionEndDate(value);
-    if (!hasLoadedRef.current || teams.length === 0) return;
-    const saved = getSavedSnapshot();
-    if (value !== saved.distributionEndDate) {
-      openTeamSlotModalForDateChange(distributionStartDate || value, value);
+  };
+
+  const handleBasicInfoSave = () => {
+    if (!distributionStartDate || !distributionEndDate) {
+      void persistSettings();
+      return;
     }
+
+    if (!hasLoadedRef.current || teams.length === 0) {
+      void persistSettings();
+      return;
+    }
+
+    const saved = getSavedSnapshot();
+    const dateChanged =
+      distributionStartDate !== saved.distributionStartDate ||
+      distributionEndDate !== saved.distributionEndDate;
+    if (dateChanged) {
+      openTeamSlotModalForDateChange(distributionStartDate, distributionEndDate);
+      return;
+    }
+
+    void persistSettings();
   };
 
   const cancelTeamSlotChange = () => {
@@ -404,7 +417,7 @@ export default function DistributionSettingsPage({
     try {
       setApplyingTeamSlots(true);
       setError('');
-      const saved = await persistSettings(false);
+      const saved = await persistSettings();
       if (!saved) return;
 
       const token = await user.getIdToken();
@@ -487,43 +500,6 @@ export default function DistributionSettingsPage({
     );
   };
 
-  useEffect(() => {
-    if (!hasLoadedRef.current || !resolvedParams || !user || authLoading) return;
-    if (teamSlotModalOpen) return;
-
-    const snapshot = JSON.stringify({
-      eventName,
-      distributionStartDate,
-      distributionEndDate,
-      selectedSlots,
-    });
-
-    if (snapshot === lastSavedSnapshotRef.current) return;
-
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
-    }
-
-    autosaveTimerRef.current = setTimeout(() => {
-      void persistSettings(true);
-    }, 700);
-
-    return () => {
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current);
-      }
-    };
-  }, [
-    eventName,
-    distributionStartDate,
-    distributionEndDate,
-    selectedSlots,
-    resolvedParams,
-    user,
-    authLoading,
-    persistSettings,
-  ]);
-
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -565,11 +541,6 @@ export default function DistributionSettingsPage({
           </div>
         )}
 
-        <p className="mt-4 text-xs text-gray-500">
-          自動保存:{' '}
-          {saveStatus === 'saving' ? '保存中' : saveStatus === 'saved' ? '保存済み' : '保存エラー'}
-        </p>
-
         <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
           <div className="space-y-6">
             <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -602,6 +573,29 @@ export default function DistributionSettingsPage({
                     onChange={(e) => handleDistributionEndDateChange(e.target.value)}
                     className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-indigo-500"
                   />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  {saveStatus === 'saving' && (
+                    <span className="text-xs text-gray-500">保存中...</span>
+                  )}
+                  {saveStatus === 'saved' && !isDirty && (
+                    <span className="text-xs text-gray-500">保存済み</span>
+                  )}
+                  {saveStatus === 'saved' && isDirty && (
+                    <span className="text-xs text-amber-600">未保存の変更があります</span>
+                  )}
+                  {saveStatus === 'error' && (
+                    <span className="text-xs text-red-600">保存できませんでした</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleBasicInfoSave}
+                    disabled={saveStatus === 'saving' || teamSlotModalOpen}
+                    className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {saveStatus === 'saving' ? '保存中...' : '保存'}
+                  </button>
                 </div>
               </div>
             </div>
