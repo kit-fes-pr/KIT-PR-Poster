@@ -301,7 +301,6 @@ export default function DistributionSettingsPage({
       setError('イベント設定の保存に失敗しました');
       setSaveStatus('error');
       return false;
-    } finally {
     }
   }, [
     allChoices,
