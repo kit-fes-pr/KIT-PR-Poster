@@ -247,6 +247,7 @@ export function StoreDistributionMap({
   const currentLocationMarkerRef = useRef<MapLibreMarker | null>(null);
   const currentLocationRef = useRef<LatLngLiteral | null>(null);
   const hasCenteredCurrentLocationRef = useRef(false);
+  const locationWatchIdRef = useRef<number | null>(null);
   const addModeRef = useRef(addMode);
   const onSelectCreateLocationRef = useRef(onSelectCreateLocation);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -325,6 +326,10 @@ export function StoreDistributionMap({
       markersRef.current = [];
       currentLocationMarkerRef.current?.remove();
       currentLocationMarkerRef.current = null;
+      if (locationWatchIdRef.current !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(locationWatchIdRef.current);
+        locationWatchIdRef.current = null;
+      }
       mapInstanceRef.current?.remove();
       mapInstanceRef.current = null;
     };
@@ -338,55 +343,6 @@ export function StoreDistributionMap({
     observer.observe(mapRef.current);
     return () => observer.disconnect();
   }, []);
-
-  useEffect(() => {
-    if (status !== 'ready') return;
-    if (!navigator.geolocation) {
-      setMapMessage('このブラウザでは現在地を取得できません');
-      return;
-    }
-
-    const map = mapInstanceRef.current;
-    const maplibregl = window.maplibregl;
-    if (!map || !maplibregl) return;
-
-    setIsTrackingLocation(true);
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const location: LatLngLiteral = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-        const center: [number, number] = [location.lng, location.lat];
-        currentLocationRef.current = location;
-        if (!hasCenteredCurrentLocationRef.current) {
-          setMapView(map, location, 13);
-          hasCenteredCurrentLocationRef.current = true;
-        }
-        if (currentLocationMarkerRef.current) {
-          currentLocationMarkerRef.current.setLngLat(center);
-        } else {
-          currentLocationMarkerRef.current = new maplibregl.Marker({
-            element: createCurrentLocationElement(),
-          })
-            .setLngLat(center)
-            .setPopup(new maplibregl.Popup({ offset: 12 }).setText('現在地'))
-            .addTo(map);
-        }
-        setIsTrackingLocation(false);
-      },
-      () => {
-        setIsTrackingLocation(false);
-        setMapMessage('現在地を表示するにはブラウザの位置情報を許可してください。');
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
-    );
-
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-      setIsTrackingLocation(false);
-    };
-  }, [status]);
 
   useEffect(() => {
     if (status !== 'ready') return;
@@ -482,6 +438,55 @@ export function StoreDistributionMap({
 
   const selectedStore = visibleStores.find(({ store }) => store.storeId === selectedStoreId);
 
+  const updateCurrentLocationMarker = (location: LatLngLiteral, shouldCenter: boolean) => {
+    const map = mapInstanceRef.current;
+    const maplibregl = window.maplibregl;
+    if (!map || !maplibregl) return;
+
+    const center: [number, number] = [location.lng, location.lat];
+    currentLocationRef.current = location;
+    if (shouldCenter) {
+      map.setCenter(center);
+      hasCenteredCurrentLocationRef.current = true;
+    }
+    if (currentLocationMarkerRef.current) {
+      currentLocationMarkerRef.current.setLngLat(center);
+    } else {
+      currentLocationMarkerRef.current = new maplibregl.Marker({
+        element: createCurrentLocationElement(),
+      })
+        .setLngLat(center)
+        .setPopup(new maplibregl.Popup({ offset: 12 }).setText('現在地'))
+        .addTo(map);
+    }
+  };
+
+  const stopLocationTracking = () => {
+    if (locationWatchIdRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(locationWatchIdRef.current);
+      locationWatchIdRef.current = null;
+    }
+    setIsTrackingLocation(false);
+  };
+
+  const startLocationTracking = () => {
+    if (!navigator.geolocation || locationWatchIdRef.current !== null) return;
+    locationWatchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        updateCurrentLocationMarker(
+          { lat: position.coords.latitude, lng: position.coords.longitude },
+          false,
+        );
+      },
+      () => {
+        setMapMessage('現在地の追跡に失敗しました。位置情報を確認してください。');
+        stopLocationTracking();
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    );
+    setIsTrackingLocation(true);
+  };
+
   const showCurrentLocation = () => {
     if (!navigator.geolocation) {
       setMapMessage('このブラウザでは現在地を取得できません');
@@ -496,7 +501,8 @@ export function StoreDistributionMap({
     setIsLocating(true);
     setMapMessage('');
     if (currentLocationRef.current) {
-      map.setCenter([currentLocationRef.current.lng, currentLocationRef.current.lat]);
+      updateCurrentLocationMarker(currentLocationRef.current, true);
+      startLocationTracking();
       setIsLocating(false);
       return;
     }
@@ -507,18 +513,8 @@ export function StoreDistributionMap({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
-        currentLocationRef.current = location;
-        if (currentLocationMarkerRef.current) {
-          currentLocationMarkerRef.current.setLngLat([location.lng, location.lat]);
-        } else {
-          currentLocationMarkerRef.current = new window.maplibregl!.Marker({
-            element: createCurrentLocationElement(),
-          })
-            .setLngLat([location.lng, location.lat])
-            .setPopup(new window.maplibregl!.Popup({ offset: 12 }).setText('現在地'))
-            .addTo(map);
-        }
-        map.setCenter([location.lng, location.lat]);
+        updateCurrentLocationMarker(location, true);
+        startLocationTracking();
         setIsLocating(false);
       },
       () => {
@@ -544,11 +540,15 @@ export function StoreDistributionMap({
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
-              onClick={showCurrentLocation}
-              disabled={status !== 'ready' || isLocating || isTrackingLocation}
+              onClick={isTrackingLocation ? stopLocationTracking : showCurrentLocation}
+              disabled={status !== 'ready' || isLocating}
               className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
-              {isLocating || isTrackingLocation ? '取得中...' : '現在地に戻る'}
+              {isLocating
+                ? '取得中...'
+                : isTrackingLocation
+                  ? '現在地の追跡を停止'
+                  : '現在地に戻る'}
             </button>
             <select
               value={filterStatus}
