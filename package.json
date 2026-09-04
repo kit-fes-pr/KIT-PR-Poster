@@ -13,6 +13,7 @@
     "test:build": "rm -rf .test-dist && tsc -p tsconfig.test.json",
     "test:run": "node --test \".test-dist/tests/*.test.js\" \".test-dist/tests/**/*.test.js\"",
     "test": "npm run test:build && npm run test:run",
+    "cleanup:stores-before-2026": "node scripts/delete-stores-before-year.mjs",
     "ci": "npm run format:check && npm run lint && npm run test",
     "prepare": "node -e \"if (require('fs').existsSync('.git') && require('fs').existsSync('node_modules/husky')) { process.exit(require('child_process').spawnSync('husky', { stdio: 'inherit', shell: true }).status || 0); }\""
   },
