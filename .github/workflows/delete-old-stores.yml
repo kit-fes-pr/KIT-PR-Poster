@@ -10,8 +10,9 @@ on:
         default: true
       confirmation:
         description: '削除実行時は DELETE_BEFORE_2026 と入力'
-        required: true
+        required: false
         type: string
+        default: ''
 
 permissions:
   contents: read
