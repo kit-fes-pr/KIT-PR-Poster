@@ -42,7 +42,8 @@ function createDb() {
 }
 
 async function main() {
-  if (process.env.CONFIRM !== 'DELETE_BEFORE_2026') {
+  const dryRun = isDryRun();
+  if (!dryRun && process.env.CONFIRM !== 'DELETE_BEFORE_2026') {
     throw new Error('Set CONFIRM=DELETE_BEFORE_2026 to run this cleanup');
   }
 
