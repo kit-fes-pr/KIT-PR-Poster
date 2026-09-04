@@ -144,6 +144,18 @@ make down
 
 `make down` では Docker volume を削除しないため、ユーザーや Firestore のデータは残ります。
 
+### GitHub Actionsで2026年度以前の店舗を削除
+
+`.github/workflows/delete-old-stores.yml` を `workflow_dispatch` から実行できます。店舗の年度は `stores.eventId` が参照する `distributionEvents.year` で判定され、2025年度以前のイベントに紐づく店舗だけが対象です。2026年度以降、年度不明、イベント未登録の店舗は削除しません。
+
+初回は `dry_run` を `true` のまま実行してください。実行ログの `candidates` に、削除候補の店舗ID・店舗名・年度・イベントIDが一覧表示されます。内容を確認してから、実際に削除する場合は `dry_run` を `false` にし、確認欄へ `DELETE_BEFORE_2026` と入力します。GitHub Environment `production` に次のSecretsを登録してください。
+
+- `FIREBASE_ADMIN_PROJECT_ID`
+- `FIREBASE_ADMIN_CLIENT_EMAIL`
+- `FIREBASE_ADMIN_PRIVATE_KEY`
+
+削除済みのFirestoreドキュメントはこの処理では復元できないため、必要に応じてFirestoreのバックアップを先に取得してください。
+
 ## 7. ローカル環境を初期化する
 
 依存関係や生成物だけを削除し、Firebase のデータを残す場合:
