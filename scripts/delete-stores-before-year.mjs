@@ -22,8 +22,9 @@ function isDryRun() {
 
 function createDb() {
   const useEmulators = process.env.FIREBASE_USE_EMULATORS === 'true';
-  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID?.trim() || 'demo-kit-pr-poster';
-
+  const projectId = useEmulators
+    ? process.env.FIREBASE_ADMIN_PROJECT_ID?.trim() || 'demo-kit-pr-poster'
+    : requireEnv('FIREBASE_ADMIN_PROJECT_ID');
   if (useEmulators) {
     process.env.FIRESTORE_EMULATOR_HOST ||= 'localhost:8080';
     process.env.FIREBASE_AUTH_EMULATOR_HOST ||= 'localhost:9099';
