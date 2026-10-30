@@ -21,14 +21,22 @@ export function useRealtimeUpdates({
   const { mutate } = useSWRConfig();
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
+  // Callers often create new array literals on every render. Comparing them by
+  // reference causes unsubscribe/subscribe loops and unnecessary Firestore reads.
+  // Re-subscribe only when the actual query configuration changes.
+  const filtersKey = JSON.stringify(filters);
+  const swrKeysKey = JSON.stringify(swrKeys);
+
   useEffect(() => {
     if (!enabled) return;
 
     try {
+      const stableFilters = JSON.parse(filtersKey) as RealtimeOptions['filters'];
+      const stableSWRKeys = JSON.parse(swrKeysKey) as string[];
       let q = query(collection(db, collectionName));
 
       // フィルタを適用
-      filters.forEach((filter) => {
+      stableFilters?.forEach((filter) => {
         q = query(q, where(filter.field, filter.operator, filter.value));
       });
 
@@ -55,7 +63,7 @@ export function useRealtimeUpdates({
             console.log(`リアルタイム更新検出: ${collectionName}`);
 
             // 関連するSWRキャッシュを無効化
-            swrKeys.forEach((key) => {
+            stableSWRKeys.forEach((key) => {
               mutate(key);
             });
 
@@ -67,7 +75,7 @@ export function useRealtimeUpdates({
           console.error('リアルタイム更新エラー:', error);
           // エラー時は5秒後にSWRを再検証
           setTimeout(() => {
-            swrKeys.forEach((key) => mutate(key));
+            stableSWRKeys.forEach((key) => mutate(key));
           }, 5000);
         },
       );
@@ -84,7 +92,7 @@ export function useRealtimeUpdates({
         console.log(`リアルタイム更新停止: ${collectionName}`);
       }
     };
-  }, [enabled, collectionName, filters, swrKeys, mutate]);
+  }, [enabled, collectionName, filtersKey, swrKeysKey, mutate]);
 
   return {
     isListening: !!unsubscribeRef.current,
