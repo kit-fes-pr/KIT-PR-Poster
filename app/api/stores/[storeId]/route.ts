@@ -3,6 +3,7 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { generateKana } from '@/lib/kanaUtils';
 import { FieldValue } from 'firebase-admin/firestore';
 import { hasAdminPrivileges } from '@/lib/utils/admin/auth';
+import { isFirestoreQuotaExceeded } from '@/lib/utils/stores/quota-errors';
 
 function parseOptionalCoordinate(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -135,6 +136,12 @@ export async function PUT(
     });
   } catch (error) {
     console.error('Update store error:', error);
+    if (isFirestoreQuotaExceeded(error)) {
+      return NextResponse.json(
+        { error: 'データベースの利用上限に達した可能性があります。変更内容を保持してください。', code: 'DATABASE_QUOTA_EXCEEDED' },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: '店舗情報の更新に失敗しました' }, { status: 500 });
   }
 }
@@ -172,6 +179,12 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Delete store error:', error);
+    if (isFirestoreQuotaExceeded(error)) {
+      return NextResponse.json(
+        { error: 'データベースの利用上限に達した可能性があります。時間をおいて再度お試しください。', code: 'DATABASE_QUOTA_EXCEEDED' },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: '店舗の削除に失敗しました' }, { status: 500 });
   }
 }
