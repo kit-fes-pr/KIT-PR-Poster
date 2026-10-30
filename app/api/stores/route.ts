@@ -266,7 +266,10 @@ export async function GET(request: NextRequest) {
     console.error('Get stores error:', error);
     if (isFirestoreQuotaExceeded(error)) {
       return NextResponse.json(
-        { error: 'データベースの利用上限に達した可能性があります。時間をおいて確認してください。', code: 'DATABASE_QUOTA_EXCEEDED' },
+        {
+          error: 'データベースの利用上限に達した可能性があります。時間をおいて確認してください。',
+          code: 'DATABASE_QUOTA_EXCEEDED',
+        },
         { status: 503 },
       );
     }
@@ -329,7 +332,10 @@ export async function POST(request: NextRequest) {
       console.error('Team lookup for store creation failed:', error);
       if (isFirestoreQuotaExceeded(error)) {
         return NextResponse.json(
-          { error: 'データベースの利用上限に達した可能性があります。入力内容を保持して再度お試しください。', code: 'DATABASE_QUOTA_EXCEEDED' },
+          {
+            error: 'データベースの利用上限に達した可能性があります。入力内容を保持して再度お試しください。',
+            code: 'DATABASE_QUOTA_EXCEEDED',
+          },
           { status: 503 },
         );
       }
@@ -391,7 +397,10 @@ export async function POST(request: NextRequest) {
     console.error('Create store error:', error);
     if (isFirestoreQuotaExceeded(error)) {
       return NextResponse.json(
-        { error: 'Firestoreの利用上限に達した可能性があります。店舗情報は保存できていない可能性があります。入力内容を保持してください。', code: 'DATABASE_QUOTA_EXCEEDED' },
+        {
+          error: 'Firestoreの利用上限に達した可能性があります。店舗情報は保存できていない可能性があります。入力内容を保持してください。',
+          code: 'DATABASE_QUOTA_EXCEEDED',
+        },
         { status: 503 },
       );
     }
