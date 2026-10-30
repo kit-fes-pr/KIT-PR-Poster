@@ -138,7 +138,10 @@ export async function PUT(
     console.error('Update store error:', error);
     if (isFirestoreQuotaExceeded(error)) {
       return NextResponse.json(
-        { error: 'データベースの利用上限に達した可能性があります。変更内容を保持してください。', code: 'DATABASE_QUOTA_EXCEEDED' },
+        {
+          error: 'データベースの利用上限に達した可能性があります。変更内容を保持してください。',
+          code: 'DATABASE_QUOTA_EXCEEDED',
+        },
         { status: 503 },
       );
     }
@@ -181,7 +184,10 @@ export async function DELETE(
     console.error('Delete store error:', error);
     if (isFirestoreQuotaExceeded(error)) {
       return NextResponse.json(
-        { error: 'データベースの利用上限に達した可能性があります。時間をおいて再度お試しください。', code: 'DATABASE_QUOTA_EXCEEDED' },
+        {
+          error: 'データベースの利用上限に達した可能性があります。時間をおいて再度お試しください。',
+          code: 'DATABASE_QUOTA_EXCEEDED',
+        },
         { status: 503 },
       );
     }
