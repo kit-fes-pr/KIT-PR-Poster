@@ -264,6 +264,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ stores });
   } catch (error) {
     console.error('Get stores error:', error);
+    if (isFirestoreQuotaExceeded(error)) {
+      return NextResponse.json(
+        { error: 'データベースの利用上限に達した可能性があります。時間をおいて確認してください。', code: 'DATABASE_QUOTA_EXCEEDED' },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: '店舗情報の取得に失敗しました' }, { status: 500 });
   }
 }
