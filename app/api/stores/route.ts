@@ -398,7 +398,8 @@ export async function POST(request: NextRequest) {
     if (isFirestoreQuotaExceeded(error)) {
       return NextResponse.json(
         {
-          error: 'Firestoreの利用上限に達した可能性があります。店舗情報は保存できていない可能性があります。入力内容を保持してください。',
+          error:
+            'Firestoreの利用上限に達した可能性があります。店舗情報は保存できていない可能性があります。入力内容を保持してください。',
           code: 'DATABASE_QUOTA_EXCEEDED',
         },
         { status: 503 },
