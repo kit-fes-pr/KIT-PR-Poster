@@ -9,8 +9,8 @@ import {
   parseDashboardYear,
   teamBelongsToDashboardYear,
 } from '@/lib/server/dashboard-year';
-import { geocodeAddress } from '@/lib/server/geocoding';
 import { validateTeamForStoreCreate } from '@/lib/utils/stores/store-route';
+import { isFirestoreQuotaExceeded } from '@/lib/utils/stores/quota-errors';
 
 function parseOptionalCoordinate(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -313,20 +313,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '店名と住所は必須です' }, { status: 400 });
     }
 
-    if (parsedLatitude === undefined || parsedLongitude === undefined) {
-      const geocodedLocation = await geocodeAddress(String(address));
-      if (geocodedLocation) {
-        parsedLatitude = geocodedLocation.lat;
-        parsedLongitude = geocodedLocation.lng;
-      }
-    }
-
+    // Do not block the critical write path on an external geocoding service.
+    // Coordinates can be resolved separately when opening the map.
     // チームの担当区域を解決（areaCode が指定されない場合の既定値に使用）
     let teamDoc;
     try {
       teamDoc = await adminDb.collection('teams').doc(String(decodedToken.teamId)).get();
     } catch (error) {
       console.error('Team lookup for store creation failed:', error);
+      if (isFirestoreQuotaExceeded(error)) {
+        return NextResponse.json(
+          { error: 'データベースの利用上限に達した可能性があります。入力内容を保持して再度お試しください。', code: 'DATABASE_QUOTA_EXCEEDED' },
+          { status: 503 },
+        );
+      }
       return NextResponse.json({ error: '班情報の取得に失敗しました' }, { status: 500 });
     }
 
@@ -383,6 +383,12 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Create store error:', error);
+    if (isFirestoreQuotaExceeded(error)) {
+      return NextResponse.json(
+        { error: 'Firestoreの利用上限に達した可能性があります。店舗情報は保存できていない可能性があります。入力内容を保持してください。', code: 'DATABASE_QUOTA_EXCEEDED' },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: '店舗の登録に失敗しました' }, { status: 500 });
   }
 }
